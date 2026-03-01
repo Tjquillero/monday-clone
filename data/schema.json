@@ -1,0 +1,19 @@
+{
+  "id": "1c9e8840-50a8-4919-ae1f-f0273015c548",
+  "group_id": "41bdd7d8-f199-45da-b781-5a00e5ccde05",
+  "parent_id": null,
+  "name": "1.09 CORTE DE TRONCOS DE MADERA EN PLAYA (LONG MAX DE 8 m)",
+  "description": null,
+  "values": {
+    "cant": 1,
+    "code": "1.09",
+    "unit": "UND",
+    "budget": 1805.0699300699296,
+    "item_type": "financial",
+    "unit_price": 2244.2080928174714
+  },
+  "position": 8,
+  "created_at": "2026-02-22T17:27:10.478093+00:00",
+  "updated_at": "2026-02-22T17:27:10.478093+00:00",
+  "personnel_id": null
+}

@@ -1,0 +1,544 @@
+'use client';
+
+import { useState } from 'react';
+import { 
+  Search, Bell, Settings, Plus, Layout, Calendar, Users, 
+  BarChart3, CheckSquare2, Circle, AlertCircle, Clock, Star, 
+  ChevronDown, Filter, MoreHorizontal, UserPlus, Zap
+} from 'lucide-react';
+import BoardView from '@/components/BoardView';
+import CalendarView from '@/components/CalendarView';
+import ChartView from '@/components/ChartView';
+import GanttView from '@/components/GanttView';
+import AssessmentView from '@/components/AssessmentView';
+import ItemModal from '@/components/modals/ItemModal';
+import { Item, Group, Column } from '@/types/monday';
+import { motion, AnimatePresence } from 'framer-motion';
+import { supabase } from '@/lib/supabaseClient';
+import { useEffect } from 'react';
+import {
+  DndContext,
+  DragOverlay,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragOverEvent,
+  defaultDropAnimationSideEffects,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+
+export default function Dashboard() {
+  const [activeGroup, setActiveGroup] = useState('this_week');
+  const [currentView, setCurrentView] = useState<'board' | 'calendar' | 'chart' | 'gantt' | 'assessment'>('board');
+  const [selectedItem, setSelectedItem] = useState<{ groupId: string, item: Item } | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeId, setActiveId] = useState<string | number | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Column definitions
+  const [columns, setColumns] = useState<Column[]>([]);
+
+  // State defined with useState for interactivity
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch initial data from Supabase
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      
+      // 1. Fetch Board (Assuming first board for now)
+      const { data: boardData } = await supabase.from('boards').select('*').limit(1).single();
+      
+      if (boardData) {
+        // 2. Fetch Columns
+        const { data: cols } = await supabase
+          .from('board_columns')
+          .select('*')
+          .eq('board_id', boardData.id)
+          .order('position');
+        
+        if (cols) setColumns(cols);
+
+        // 3. Fetch Groups and Items
+        const { data: groupsData } = await supabase
+          .from('groups')
+          .select(`
+            *,
+            items (*)
+          `)
+          .eq('board_id', boardData.id)
+          .order('position');
+
+        if (groupsData) {
+          // Transform sub-items (nested in same table with parent_id)
+          const processedGroups = groupsData.map((g: any) => ({
+            ...g,
+            items: g.items.filter((i: any) => !i.parent_id).map((parent: any) => ({
+              ...parent,
+              subItems: g.items.filter((child: any) => child.parent_id === parent.id)
+            }))
+          }));
+          setGroups(processedGroups);
+        }
+      }
+      setIsLoading(false);
+    };
+
+    fetchData();
+
+    // 4. Setup Real-time subscriptions
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+        fetchData(); // Simplificación: recargar todo en cada cambio
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const handleAddItem = async (groupId: string, name: string) => {
+    // 1. Get current board for the group
+    const { data: group } = await supabase.from('groups').select('board_id').eq('id', groupId).single();
+    if (!group) return;
+
+    // 2. Initialize values based on columns
+    const initialValues: Record<string, any> = {};
+    columns.forEach(col => {
+      if (col.type === 'status') initialValues[col.id] = 'Not Started';
+      else if (col.type === 'priority') initialValues[col.id] = 'Low';
+      else if (col.type === 'people') initialValues[col.id] = 'Desconocido';
+      else if (col.type === 'date') initialValues[col.id] = new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
+      else initialValues[col.id] = '';
+    });
+
+    // 3. Insert into Supabase
+    await supabase.from('items').insert({
+      group_id: groupId,
+      name: name,
+      values: initialValues,
+      position: 999 // Simplified position logic
+    });
+    
+    // Real-time will handle the state update
+  };
+
+  const handleUpdateItemValue = async (groupId: string, itemId: number | string, columnId: string, value: any) => {
+    // Optimistic update (optional but better for UX)
+    setGroups(prev => prev.map(group => {
+      if (group.id === groupId) {
+        return {
+          ...group,
+          items: group.items.map(item => {
+            if (item.id === itemId) {
+              return { ...item, values: { ...item.values, [columnId]: value } };
+            }
+            return item;
+          })
+        };
+      }
+      return group;
+    }));
+
+    await supabase.from('items').update({
+       values: { ...groups.find(g => g.id === groupId)?.items.find(i => i.id === itemId)?.values, [columnId]: value }
+    }).eq('id', itemId);
+  };
+
+  const handleUpdateItem = async (groupId: string, itemId: number | string, field: string, value: any) => {
+     await supabase.from('items').update({ [field]: value }).eq('id', itemId);
+     
+     if (selectedItem && selectedItem.item.id === itemId) {
+         setSelectedItem(prev => prev ? { ...prev, item: { ...prev.item, [field]: value } } : null);
+     }
+  };
+
+  const handleAddColumn = (type: string) => {
+    const newColumn = {
+      id: `col-${Date.now()}`,
+      title: type === 'text' ? 'Texto' : type === 'number' ? 'Número' : 'Nueva Columna',
+      type: type,
+      width: 150
+    };
+    setColumns([...columns, newColumn]);
+    
+    // Initialize this column for all existing items
+    setGroups(prevGroups => prevGroups.map(group => ({
+      ...group,
+      items: group.items.map(item => ({
+        ...item,
+        values: { ...item.values, [newColumn.id]: type === 'number' ? 0 : '' }
+      }))
+    })));
+  };
+
+  const handleOpenItem = (groupId: string, item: any) => {
+    setSelectedItem({ groupId, item });
+    setIsModalOpen(true);
+  };
+
+  const handleModalUpdate = (field: string, value: any) => {
+    if (selectedItem) {
+        handleUpdateItem(selectedItem.groupId, selectedItem.item.id, field, value);
+    }
+  };
+
+  const handleAddGroup = async () => {
+    const { data: boardData } = await supabase.from('boards').select('id').limit(1).single();
+    if (!boardData) return;
+
+    await supabase.from('groups').insert({
+      board_id: boardData.id,
+      title: 'Nuevo Grupo',
+      color: '#c4c4c4',
+      position: groups.length
+    });
+  };
+
+  const handleUpdateGroup = async (groupId: string, field: string, value: string) => {
+    await supabase.from('groups').update({ [field]: value }).eq('id', groupId);
+  };
+
+  const findContainer = (id: string | number) => {
+    // If it's a group ID, return it
+    if (groups.some(g => g.id === id)) return id;
+    
+    // Otherwise look for the item inside groups
+    const group = groups.find(g => g.items.some(item => item.id === id));
+    return group ? group.id : null;
+  };
+
+  const handleDragStart = (event: any) => {
+    setActiveId(event.active.id);
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeId = active.id;
+    const overId = over.id;
+
+    const activeContainer = findContainer(activeId);
+    const overContainer = findContainer(overId);
+
+    if (!activeContainer || !overContainer || activeContainer === overContainer) return;
+
+    setGroups((prev) => {
+      const activeItems = prev.find(g => g.id === activeContainer)?.items || [];
+      const overItems = prev.find(g => g.id === overContainer)?.items || [];
+
+      const activeIndex = activeItems.findIndex(i => i.id === activeId);
+      const overIndex = overItems.findIndex(i => i.id === overId);
+
+      let newIndex;
+      if (prev.some(g => g.id === overId)) {
+        newIndex = overItems.length + 1;
+      } else {
+        const isBelowLastItem = over && activeIndex > overIndex;
+        const modifier = isBelowLastItem ? 1 : 0;
+        newIndex = overIndex >= 0 ? overIndex + modifier : overItems.length + 1;
+      }
+
+      const itemToMove = activeItems[activeIndex];
+
+      return prev.map(group => {
+        if (group.id === activeContainer) {
+          return { ...group, items: group.items.filter(i => i.id !== activeId) };
+        }
+        if (group.id === overContainer) {
+          const newItems = [...group.items];
+          newItems.splice(newIndex, 0, itemToMove);
+          return { ...group, items: newItems };
+        }
+        return group;
+      });
+    });
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeId = active.id;
+    const overId = over.id;
+
+    const activeContainer = findContainer(activeId);
+    const overContainer = findContainer(overId);
+
+    if (!activeContainer || !overContainer) return;
+
+    if (activeId !== overId) {
+      setGroups((prev) => {
+        return prev.map(group => {
+          if (group.id === activeContainer) {
+            const activeItems = group.items;
+            const activeIndex = activeItems.findIndex(i => i.id === activeId);
+            const overIndex = activeItems.findIndex(i => i.id === overId);
+
+            if (activeIndex !== overIndex) {
+               return { ...group, items: arrayMove(activeItems, activeIndex, overIndex) };
+            }
+          }
+          return group;
+        });
+      });
+    }
+
+    setActiveId(null);
+  };
+
+  const handleAddSubItem = async (groupId: string, parentId: number | string) => {
+    const initialValues: Record<string, any> = {};
+    columns.forEach(col => {
+      if (col.type === 'status') initialValues[col.id] = 'Not Started';
+      else if (col.type === 'priority') initialValues[col.id] = 'Low';
+      else if (col.type === 'people') initialValues[col.id] = 'Desconocido';
+      else if (col.type === 'date') initialValues[col.id] = new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
+      else initialValues[col.id] = '';
+    });
+
+    await supabase.from('items').insert({
+      group_id: groupId,
+      parent_id: parentId,
+      name: 'Nuevo sub-ítem',
+      values: initialValues,
+      position: 0
+    });
+  };
+
+  const handleUpdateSubItemValue = async (groupId: string, parentId: number | string, subItemId: number | string, columnId: string, value: any) => {
+    // Current item data for merge
+    const currentValues = groups
+      .find(g => g.id === groupId)?.items
+      .find(i => i.id === parentId)?.subItems
+      ?.find(s => s.id === subItemId)?.values || {};
+
+    await supabase.from('items').update({
+      values: { ...currentValues, [columnId]: value }
+    }).eq('id', subItemId);
+  };
+
+  // Logic for real-time filtering
+  const filteredGroups = groups.map(group => ({
+    ...group,
+    items: group.items.filter(item => {
+      const searchTerms = [
+        item.name,
+        ...Object.values(item.values).map(v => String(v))
+      ].join(' ').toLowerCase();
+      return searchTerms.includes(searchQuery.toLowerCase());
+    })
+  })).filter(group => group.items.length > 0 || searchQuery === '');
+
+  return (
+    <div className="p-8 w-full max-w-[1600px] mx-auto font-sans text-[#323338]">
+      {/* Board Header */}
+      <div className="mb-8">
+         <div className="flex items-center space-x-2 text-2xl font-bold mb-1">
+            <h1 className="cursor-pointer hover:bg-gray-100 rounded px-2 py-1 -ml-2">Tablero Principal</h1>
+            <Star className="w-5 h-5 text-yellow-400 cursor-pointer" />
+            <div className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full font-normal">Público</div>
+         </div>
+         <div className="flex items-center text-sm text-gray-500 space-x-4">
+            <button className="hover:underline">Añadir descripción</button>
+            <span>•</span>
+            <div className="flex -space-x-2">
+               <div className="w-6 h-6 rounded-full bg-blue-500 border-2 border-white"></div>
+               <div className="w-6 h-6 rounded-full bg-red-500 border-2 border-white"></div>
+               <div className="w-6 h-6 rounded-full bg-green-500 border-2 border-white relative flex items-center justify-center text-[10px] text-white font-bold">+2</div>
+            </div>
+            <button className="flex items-center text-blue-600 hover:bg-blue-50 px-2 py-1 rounded">
+               <UserPlus className="w-3 h-3 mr-1" /> Invitar / 2
+            </button>
+         </div>
+      </div>
+
+      {/* View Tabs */}
+      <div className="border-b border-gray-200 flex items-center space-x-6 mb-6">
+         <button 
+           onClick={() => setCurrentView('board')}
+           className={`pb-2 font-medium text-sm flex items-center transition-colors border-b-2 ${currentView === 'board' ? 'border-[#0073ea] text-[#0073ea]' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+         >
+            <Layout className="w-4 h-4 mr-2" />
+            Tabla Principal
+         </button>
+         <button 
+           onClick={() => setCurrentView('calendar')}
+           className={`pb-2 font-medium text-sm flex items-center transition-colors border-b-2 ${currentView === 'calendar' ? 'border-[#0073ea] text-[#0073ea]' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+         >
+            <Calendar className="w-4 h-4 mr-2" />
+            Calendario
+         </button>
+            <button 
+              onClick={() => setCurrentView('chart')}
+              className={`flex items-center px-4 py-3 text-sm font-medium border-b-2 transition-colors ${currentView === 'chart' ? 'border-[#0073ea] text-[#0073ea]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            >
+               <BarChart3 className="w-4 h-4 mr-2" /> Gráfico
+            </button>
+            <button 
+              onClick={() => setCurrentView('gantt')}
+              className={`flex items-center px-4 py-3 text-sm font-medium border-b-2 transition-colors ${currentView === 'gantt' ? 'border-[#0073ea] text-[#0073ea]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            >
+               <Clock className="w-4 h-4 mr-2" /> Cronograma (Gantt)
+            </button>
+            <button 
+              onClick={() => setCurrentView('assessment')}
+              className={`flex items-center px-4 py-3 text-sm font-medium border-b-2 transition-colors ${currentView === 'assessment' ? 'border-[#0073ea] text-[#0073ea]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            >
+               <Zap className="w-4 h-4 mr-2" /> Evaluación
+            </button>
+         <button className="ml-auto pb-2 text-gray-500 hover:text-gray-800 font-medium text-sm flex items-center">
+            <Plus className="w-4 h-4 mr-1" />
+            Añadir Vista
+         </button>
+      </div>
+
+      {/* Actions Bar */}
+      <div className="flex items-center justify-between mb-6">
+         <div className="flex items-center space-x-3">
+             <button className="bg-[#0073ea] hover:bg-[#0060b9] text-white px-4 py-1.5 rounded text-sm font-medium flex items-center transition-colors">
+                Nuevo Elemento <ChevronDown className="w-4 h-4 ml-2 border-l border-blue-400 pl-1" />
+             </button>
+             <div className="relative group/search">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within/search:text-[#0073ea] transition-colors" />
+                <input 
+                  type="text" 
+                  placeholder="Buscar en el tablero..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 pr-4 py-1.5 text-sm border border-gray-300 rounded hover:border-gray-400 focus:outline-none focus:border-[#0073ea] focus:ring-1 focus:ring-[#0073ea] transition-all w-64"
+                />
+             </div>
+             <button className="flex items-center px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded">
+                <UserPlus className="w-4 h-4 mr-2" /> Persona
+             </button>
+             <button className="flex items-center px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded">
+                <Filter className="w-4 h-4 mr-2" /> Filtrar
+             </button>
+         </div>
+         <div className="flex items-center space-x-2">
+            <button className="p-1.5 hover:bg-gray-100 rounded"><MoreHorizontal className="w-5 h-5 text-gray-500" /></button>
+         </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="bg-white rounded-lg min-h-[500px] relative">
+        {isLoading && (
+          <div className="absolute inset-0 bg-white/70 backdrop-blur-sm z-50 flex flex-col items-center justify-center rounded-lg">
+             <div className="w-12 h-12 border-4 border-[#0073ea] border-t-transparent rounded-full animate-spin mb-4" />
+             <p className="text-sm font-bold text-gray-500 animate-pulse">Sincronizando con la nube...</p>
+          </div>
+        )}
+        <AnimatePresence mode="wait">
+          {currentView === 'board' && (
+            <motion.div
+              key="board"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.2 }}
+            >
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDragEnd={handleDragEnd}
+              >
+                <BoardView 
+                  groups={filteredGroups} 
+                  columns={columns}
+                  onAddItem={handleAddItem}
+                  onUpdateItem={handleUpdateItem}
+                  onUpdateItemValue={handleUpdateItemValue}
+                  onOpenItem={handleOpenItem}
+                  onAddSubItem={handleAddSubItem}
+                  onUpdateSubItemValue={handleUpdateSubItemValue}
+                  onAddGroup={handleAddGroup}
+                  onUpdateGroup={handleUpdateGroup}
+                  onAddColumn={handleAddColumn}
+                />
+              </DndContext>
+            </motion.div>
+          )}
+          {currentView === 'calendar' && (
+            <motion.div
+              key="calendar"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.2 }}
+            >
+              <CalendarView groups={filteredGroups} />
+            </motion.div>
+          )}
+          {currentView === 'chart' && (
+            <motion.div
+              key="chart"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.2 }}
+            >
+              <ChartView groups={filteredGroups} />
+            </motion.div>
+          )}
+          {currentView === 'gantt' && (
+            <motion.div
+              key="gantt"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.2 }}
+            >
+              <GanttView groups={filteredGroups} />
+            </motion.div>
+          )}
+          {currentView === 'assessment' && (
+            <motion.div
+              key="assessment"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.2 }}
+            >
+              <AssessmentView groups={filteredGroups} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Item Details Modal */}
+      <ItemModal 
+        item={selectedItem?.item || null}
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onUpdateValue={(colId, val) => selectedItem && handleUpdateItemValue(selectedItem.groupId, selectedItem.item.id, colId, val)}
+        onUpdateGeneric={handleModalUpdate}
+      />
+    </div>
+  );
+}

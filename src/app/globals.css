@@ -1,3 +1,10 @@
+@import "react-grid-layout/css/styles.css";
+@import "react-resizable/css/styles.css";
+/* 
+ * Tailwind CSS v4 Configuration
+ * Note: The @theme directive is valid in v4 but may be flagged as 
+ * "Unknown at rule" by some editors. This is a false positive and does not affect the build.
+ */
 @import "tailwindcss";
 
 :root {
@@ -8,8 +15,24 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: "Figtree", "Roboto", "Helvetica", "Arial", sans-serif;
+  --font-mono: "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "Liberation Mono", "Courier New", monospace;
+
+  /* Mantenix Design System */
+  --color-primary: #2d7a5e;
+  --color-primary-foreground: #ffffff;
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+  --color-secondary: #f1f5f9;
+  --color-secondary-foreground: #0f172a;
+  --color-muted: #f1f5f9;
+  --color-muted-foreground: #64748b;
+  --color-accent: #f1f5f9;
+  --color-accent-foreground: #0f172a;
+  
+  --radius-lg: 0.75rem;
+  --radius-md: calc(var(--radius-lg) - 2px);
+  --radius-sm: calc(var(--radius-lg) - 4px);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23,4 +46,76 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+@layer utilities {
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #e2e8f0;
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #cbd5e1;
+  }
+}
+
+/* React Grid Layout Styles */
+.react-grid-layout {
+  position: relative;
+  transition: height 200ms ease;
+}
+.react-grid-item {
+  transition: all 200ms ease;
+  transition-property: left, top;
+}
+.react-grid-item.cssTransforms {
+  transition-property: transform;
+}
+.react-grid-item.resizing {
+  z-index: 1000;
+  will-change: width, height;
+}
+.react-grid-item.react-draggable-dragging {
+  transition: none;
+  z-index: 1003;
+  will-change: transform;
+}
+.react-grid-item.dropping {
+  visibility: hidden;
+}
+.react-grid-placeholder {
+  background: rgba(45, 122, 94, 0.1);
+  border-radius: 12px;
+  border: 2px dashed #2d7a5e;
+  margin: 0;
+  padding: 0;
+  z-index: 2;
+  user-select: none;
+}
+.react-resizable-handle {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  bottom: 0;
+  right: 0;
+  cursor: se-resize;
+}
+.react-resizable-handle::after {
+  content: "";
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid #cbd5e1;
+  border-bottom: 2px solid #cbd5e1;
+}
+.react-grid-item:hover .react-resizable-handle::after {
+  border-color: #2d7a5e;
 }
