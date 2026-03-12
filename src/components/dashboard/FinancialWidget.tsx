@@ -89,8 +89,7 @@ export default function FinancialWidget({ groups, columns, activeSiteId = 'all',
 
     const efficiencyRate = totalItems > 0 ? (efficientItems / totalItems) * 100 : 0;
     
-    // Use Acta as base for balance if present, otherwise Budget
-    const baseForSpending = totalActa > 0 ? totalActa : totalBudget;
+    const baseForSpending = totalBudget;
     const spendingRate = baseForSpending > 0 ? (totalExecutedCost / baseForSpending) * 100 : 0;
     const requiredPeople = totalRequiredManDays / 25;
 

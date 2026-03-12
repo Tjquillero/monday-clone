@@ -177,6 +177,8 @@ export default function CentralizedFinancialDashboard({
                     onDeleteItems={onDeleteItems}
                     onAddGroup={onAddGroup}
                     onAddSite={onAddSite}
+                    totalActa={totalActa}
+                    onUpdateActa={onUpdateActa}
                     valorActaPorSitio={valorActaPorSitio}
                     onUpdateValorActaPorSitio={onUpdateValorActaPorSitio}
                 />

@@ -458,7 +458,7 @@ export default function FinancialTableView({
 
                                             {/* Items */}
                                             {items.map((item: any) => {
-                                                const itemRowKey = `${majorCat}|${subCat}|${item.name}`;
+                                                const itemRowKey = `${majorCat}|${subCat}|${item.name || ''}|${item.id}`;
                                                 return (
                                                 <tr key={itemRowKey} className="hover:bg-gray-50 transition-colors group text-[10px] border-b border-gray-50">
                                                     <td className="px-4 py-1.5 pl-10 group/row relative font-semibold text-gray-700">
@@ -635,85 +635,7 @@ export default function FinancialTableView({
                          <td className="px-2 py-1.5 text-center font-bold text-[10px]">5%</td>
                          <td className="px-2 py-1.5"></td><td className="px-2 py-1.5 text-right font-bold text-rose-300 text-[11px]">{currencyFormatter.format((totalBudget - totalExecuted) * 0.05)}</td>
                      </tr>
-
-                     {/* VALOR ACTA FACTURADO */}
-                     <tr className="bg-slate-900 text-white border-t border-slate-700">
-                         <td colSpan={2} className="px-6 py-3 font-bold text-right uppercase text-[11px] flex items-center justify-end gap-2 w-full pr-6">
-                            <span className="text-emerald-400 mr-2">VALOR ACTA FACTURADO:</span>
-                            {onUpdateActa ? (
-                              <div className="w-32 inline-block">
-                                 <EditableCell 
-                                     value={totalActa}
-                                     type="number"
-                                     onSave={(val: any) => onUpdateActa(val)}
-                                     className="bg-slate-800 text-emerald-400 font-black text-sm px-2 py-1.5 rounded focus:bg-slate-700 border border-slate-700"
-                                     align="right"
-                                 />
-                              </div>
-                            ) : (
-                                <span className="text-emerald-400 font-black text-sm">{currencyFormatter.format(currentActa || 0)}</span>
-                            )}
-                         </td>
-                         <td className="px-2 py-3 bg-slate-900"></td><td className="px-2 py-3 bg-slate-900"></td>
-                         <td className="px-2 py-3 text-right font-black text-white text-[12px]">{currencyFormatter.format(totalBudget * 1.30)}</td>
-                         <td className="px-2 py-3 text-center font-bold text-[10px]">Total</td>
-                         <td className="px-2 py-3 bg-slate-900"></td><td className="px-2 py-3 bg-slate-900"></td>
-                         <td className="px-2 py-3 text-right font-black text-white text-[12px]">{currencyFormatter.format(currentActa || (totalExecuted * 1.30))}</td>
-                         <td className="px-2 py-3 text-center font-bold text-[10px]">Total</td>
-                         <td className="px-2 py-3 bg-slate-900"></td><td className="px-2 py-3 bg-slate-900"></td>
-                     </tr>
-
-                     {/* COSTO / FACTURACION & UTILIDAD */}
-                     <tr className="bg-slate-800 border-t border-slate-700">
-                         <td colSpan={2} className="px-6 py-2 font-bold text-right text-[10px] text-slate-300 pr-6">UB / COSTO DIRECTO</td>
-                         <td className="px-2 py-2"></td><td className="px-2 py-2"></td>
-                         <td className="px-2 py-2 text-right font-bold text-blue-300">
-                            {currentActa > 0 ? (((currentActa - totalBudget) / totalBudget) * 100).toFixed(2) : 0}%
-                         </td>
-                         <td className="px-2 py-2"></td><td className="px-2 py-2"></td><td className="px-2 py-2"></td>
-                         <td className="px-2 py-2 text-right font-bold text-blue-300">
-                            {totalExecuted > 0 ? (((currentActa - totalExecuted) / totalExecuted) * 100).toFixed(2) : 0}%
-                         </td>
-                         <td className="px-2 py-2"></td><td className="px-2 py-2"></td><td className="px-2 py-2"></td>
-                     </tr>
-                     <tr className="bg-slate-800">
-                         <td colSpan={2} className="px-6 py-2 font-bold text-right text-[10px] text-slate-300 pr-6">COSTO / FACTURACION</td>
-                         <td className="px-2 py-2"></td><td className="px-2 py-2"></td>
-                         <td className="px-2 py-2 text-right font-bold text-white">
-                            {currentActa > 0 ? ((totalBudget / currentActa) * 100).toFixed(2) : 0}%
-                         </td>
-                         <td className="px-2 py-2"></td><td className="px-2 py-2"></td><td className="px-2 py-2"></td>
-                         <td className="px-2 py-2 text-right font-bold text-white">
-                            {currentActa > 0 ? ((totalExecuted / currentActa) * 100).toFixed(2) : 0}%
-                         </td>
-                         <td className="px-2 py-2"></td><td className="px-2 py-2"></td><td className="px-2 py-2"></td>
-                     </tr>
-                     <tr className="bg-slate-900 border-t-2 border-slate-700">
-                         <td colSpan={2} className="px-6 py-4 font-black text-right uppercase text-[12px] flex items-center justify-end w-full pr-6 text-white">
-                            UTILIDAD SOBRE ACTA
-                         </td>
-                         <td className="px-2 py-4"></td><td className="px-2 py-4"></td>
-                         <td className="px-2 py-4 text-right">
-                             {/* Budget Utility */}
-                         </td>
-                         <td className="px-2 py-4"></td><td className="px-2 py-4"></td><td className="px-2 py-4"></td>
-                         <td colSpan={2} className="px-2 py-4 text-center">
-                             {/* Utility Logic: > 70 Green, 65-70 Yellow, <65 Red */}
-                             {(() => {
-                                 const utilityPct = currentActa > 0 ? (((currentActa - totalExecuted) / currentActa) * 100) : 0;
-                                 let colorClass = utilityPct >= 70 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' 
-                                                : utilityPct >= 65 ? 'bg-amber-500/20 text-amber-400 border-amber-500/50' 
-                                                : 'bg-rose-500/20 text-rose-400 border-rose-500/50';
-                                 return (
-                                     <div className={`inline-block px-4 py-1.5 rounded-lg border-2 font-black text-lg ${colorClass}`}>
-                                         {utilityPct.toFixed(2)}%
-                                     </div>
-                                 );
-                             })()}
-                         </td>
-                         <td className="px-2 py-4"></td><td className="px-2 py-4"></td>
-                     </tr>
-                </tfoot>
+                 </tfoot>
             </table>
                 </div>
             </div>

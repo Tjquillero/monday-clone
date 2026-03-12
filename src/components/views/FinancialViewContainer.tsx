@@ -147,19 +147,60 @@ export default function FinancialViewContainer() {
                  return;
              }
 
-             const { error } = await supabase.from('groups').insert({ 
+             // 1. Create the new group
+             const { data: newGroup, error: groupError } = await supabase.from('groups').insert({ 
                  board_id: board.id, 
                  title: siteName, 
                  color: '#3b82f6', 
                  position: groups?.length || 0 
-             });
+             }).select().single();
 
-             if (error) {
-                 alert(`Error al crear sitio: ${error.message}`);
+             if (groupError) {
+                 alert(`Error al crear sitio: ${groupError.message}`);
                  return;
              }
 
+             // 2. Initialize with rubros from first site (Plaza Puerto Colombia or similar)
+             // This solves the visibility problem permanently
+             const referenceGroup = groups?.find(g => g.items.some(isFinancialItem));
+             
+             if (referenceGroup && newGroup) {
+                 // Copy unique rubros (items) to the new site
+                 const itemsToCopy = referenceGroup.items.filter(isFinancialItem);
+                 
+                 if (itemsToCopy.length > 0) {
+                     const copies = itemsToCopy.map(i => ({
+                         board_id: board.id,
+                         group_id: newGroup.id,
+                         name: i.name,
+                         position: i.position,
+                         values: {
+                             ...i.values,
+                             item_type: 'financial',
+                             cant: 0,           // Initialize quantities to 0
+                             executed_qty: 0,
+                             unit_price: i.values.unit_price || 0 // Keep the estimated price
+                         }
+                     }));
+
+                     const { error: copyError } = await supabase.from('items').insert(copies);
+                     if (copyError) {
+                         console.error('Error initializing site items:', copyError);
+                     }
+                 }
+             } else if (newGroup) {
+                // If no reference exists, create at least one dummy item to ensure visibility
+                await supabase.from('items').insert({
+                    board_id: board.id,
+                    group_id: newGroup.id,
+                    name: 'INICIO DE PROYECTO',
+                    values: { rubro: 'INICIO', category: 'GENERAL', item_type: 'financial', cant: 0, unit_price: 0 },
+                    position: 0
+                });
+             }
+
              await queryClient.invalidateQueries({ queryKey: ['groups', board.id] });
+             await queryClient.invalidateQueries({ queryKey: ['board'] }); // Refresh for settings
         }}
         totalActa={totalActa}
         onUpdateActa={(val) => handleUpdateBoardSettings({ totalActa: val })}

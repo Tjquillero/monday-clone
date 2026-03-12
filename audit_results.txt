@@ -1,0 +1,115 @@
+Items: 646
+Groups: 4
+Boards: 1
+Sample items:
+[
+  {
+    "id": "55d3fa81-7331-4aa3-a6b2-9138714aad1e",
+    "group_id": "41bdd7d8-f199-45da-b781-5a00e5ccde05",
+    "parent_id": null,
+    "name": "4.10 SUMINISTRO, TRANSPORTE Y SIEMBRA DE CHEFFLERA ARBORICOLA TRINETTE (CHEFLERA SENSACIÓN) H PROM 40CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA.",
+    "description": null,
+    "values": {
+      "cant": 1,
+      "code": "4.10",
+      "unit": "M2",
+      "budget": 92560.54131054127,
+      "item_type": "financial",
+      "unit_price": 92560.54131054127
+    },
+    "position": 69,
+    "created_at": "2026-02-22T17:27:11.671438+00:00",
+    "updated_at": "2026-02-22T17:27:11.671438+00:00",
+    "personnel_id": null,
+    "groups": {
+      "title": "PRESUPUESTO GENERAL"
+    }
+  },
+  {
+    "id": "ec8e9997-1701-4c54-b283-02645f6d0bcf",
+    "group_id": "41bdd7d8-f199-45da-b781-5a00e5ccde05",
+    "parent_id": null,
+    "name": "4.10 SUMINISTRO, TRANSPORTE Y SIEMBRA DE CHEFFLERA ARBORICOLA TRINETTE (CHEFLERA SENSACIÓN) H PROM 40CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA.",
+    "description": null,
+    "values": {
+      "cant": 1,
+      "code": "4.10",
+      "unit": "M2",
+      "budget": 92560.54131054127,
+      "item_type": "financial",
+      "unit_price": 92560.54131054127
+    },
+    "position": 69,
+    "created_at": "2026-02-22T17:27:17.59382+00:00",
+    "updated_at": "2026-02-22T17:27:17.59382+00:00",
+    "personnel_id": null,
+    "groups": {
+      "title": "PRESUPUESTO GENERAL"
+    }
+  },
+  {
+    "id": "1c9e8840-50a8-4919-ae1f-f0273015c548",
+    "group_id": "41bdd7d8-f199-45da-b781-5a00e5ccde05",
+    "parent_id": null,
+    "name": "1.09 CORTE DE TRONCOS DE MADERA EN PLAYA (LONG MAX DE 8 m)",
+    "description": null,
+    "values": {
+      "cant": 1,
+      "code": "1.09",
+      "unit": "UND",
+      "budget": 1805.0699300699296,
+      "item_type": "financial",
+      "unit_price": 2244.2080928174714
+    },
+    "position": 8,
+    "created_at": "2026-02-22T17:27:10.478093+00:00",
+    "updated_at": "2026-02-22T17:27:10.478093+00:00",
+    "personnel_id": null,
+    "groups": {
+      "title": "PRESUPUESTO GENERAL"
+    }
+  },
+  {
+    "id": "b920306d-a461-4dfa-bfbf-40c3a1d68035",
+    "group_id": "41bdd7d8-f199-45da-b781-5a00e5ccde05",
+    "parent_id": null,
+    "name": "4.55999999999999 SUMINISTRO, TRANSPORTE Y SIEMBRA DE  ROYSTENEA REGIA (PALMA REAL) 9-10M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA.",
+    "description": null,
+    "values": {
+      "cant": 10,
+      "unit": "ARBOLADA (10 UND)",
+      "budget": 105069562.6133126,
+      "item_type": "financial",
+      "unit_price": 10506956.26133126
+    },
+    "position": 115,
+    "created_at": "2026-02-22T17:27:18.155361+00:00",
+    "updated_at": "2026-02-22T17:27:18.155361+00:00",
+    "personnel_id": null,
+    "groups": {
+      "title": "PRESUPUESTO GENERAL"
+    }
+  },
+  {
+    "id": "70e0b9ac-629f-40ab-85be-0462ae2c1c23",
+    "group_id": "41bdd7d8-f199-45da-b781-5a00e5ccde05",
+    "parent_id": null,
+    "name": "2.08 SUMINISTRO Y APLICACIÓN DE FUNGICIDAS E INSECTICIDAS SEGÚN CONTROL FITOSANITARIO DE ARBOLES Y PALMAS, INCLUYE TODOS LOS INSUMOS, HERRAMIENTAS Y EQUIPOS PARA EL CORRECTO CONTROL Y EJECUCIÓN DE LA ACTIVIDAD.",
+    "description": null,
+    "values": {
+      "cant": 1,
+      "code": "2.08",
+      "unit": "UND-MES",
+      "budget": 1746.147371147371,
+      "item_type": "financial",
+      "unit_price": 2113.4734203155826
+    },
+    "position": 22,
+    "created_at": "2026-02-22T17:27:10.478093+00:00",
+    "updated_at": "2026-02-22T17:27:10.478093+00:00",
+    "personnel_id": null,
+    "groups": {
+      "title": "PRESUPUESTO GENERAL"
+    }
+  }
+]
