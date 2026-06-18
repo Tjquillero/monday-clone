@@ -20,7 +20,7 @@ export default function PlanningPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center space-x-1 border-b border-slate-200 mb-8 bg-white/50 backdrop-blur-sm sticky top-0 z-20">
+        <div className="flex items-center space-x-1 border-b border-slate-200 mb-8 bg-slate-500/50 backdrop-blur-sm sticky top-0 z-20">
             <button 
                 onClick={() => setActiveTab('personnel')}
                 className={`flex items-center px-6 py-4 text-sm font-bold border-b-2 transition-all ${activeTab === 'personnel' ? 'border-primary text-primary bg-primary/5' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}

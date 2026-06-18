@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Group, Column, Acta, ActaDetail } from '@/types/monday';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { Group, Item, Column, Acta, ActaDetail } from '@/types/monday';
 import { useActas, useActaDetails, useActaMutations, useActaDetailsByBoard } from '@/hooks/useActas';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Calendar, FileText, ChevronRight, Save, X, Edit, DollarSign, Check, Maximize2, Minimize2, Eraser } from 'lucide-react';
@@ -13,6 +13,7 @@ const ActasHotTable = dynamic(() => import('./ActasHotTable'), { ssr: false });
 
 import { motion, AnimatePresence } from 'framer-motion';
 import BudgetSeeder from './BudgetSeeder';
+import { EditableCell, MatrixQtyInput } from './ActasModuleComponents';
 
 interface ActasModuleProps {
     groups: Group[];
@@ -20,129 +21,6 @@ interface ActasModuleProps {
     onAddSite?: () => void;
 }
 
-
-
-const EditableCell = ({ value, type, onSave, className = '', step = 'any', align = 'center', renderValue }: any) => {
-    const ref = useRef<HTMLInputElement>(null);
-    const editing = useRef(false);
-
-    // Sync display value when parent changes and not editing
-    React.useEffect(() => {
-        if (!editing.current && ref.current) {
-            ref.current.value = renderValue ? renderValue(value) : String(value ?? '');
-        }
-    }, [value, renderValue]);
-
-    const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-        editing.current = true;
-        // Show raw value for editing
-        const raw = type === 'number' ? (value === 0 ? '' : String(value)) : String(value ?? '');
-        e.target.value = raw;
-        e.target.select();
-    };
-
-    const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-        editing.current = false;
-        let finalVal: any = e.target.value;
-        if (type === 'number') {
-            finalVal = e.target.value === '' ? 0 : parseFloat(e.target.value.replace(',', '.')) || 0;
-        }
-        // Reset display
-        e.target.value = renderValue ? renderValue(finalVal) : String(finalVal ?? '');
-        // Only save if changed
-        const currentVal = type === 'number' ? parseFloat(String(value || 0)) : value;
-        if (finalVal !== currentVal) {
-            onSave(finalVal);
-        }
-    };
-
-    return (
-        <input
-            ref={ref}
-            type="text"
-            inputMode={type === 'number' ? 'decimal' : 'text'}
-            defaultValue={renderValue ? renderValue(value) : String(value ?? '')}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-            onKeyDown={(e) => {
-                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                if (e.key === 'Escape') {
-                    editing.current = false;
-                    (e.target as HTMLInputElement).value = renderValue ? renderValue(value) : String(value ?? '');
-                    (e.target as HTMLInputElement).blur();
-                }
-            }}
-            className={`w-full bg-transparent border border-transparent hover:border-blue-300 focus:border-blue-500 focus:bg-white focus:outline-none rounded transition-all py-0.5 px-1 cursor-text text-${align} ${className}`}
-        />
-    );
-};
-
-// ── Minimal quantity input for the ACTA DETALLADA matrix ────────────────────
-function MatrixQtyInput({ defaultValue, onCommit }: { defaultValue: number; onCommit: (v: number) => void }) {
-    const ref = useRef<HTMLInputElement>(null);
-    const editing = useRef(false);
-
-    const renderValue = (v: number) => v === 0 ? '' : v.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-    useEffect(() => {
-        if (!editing.current && ref.current) {
-            ref.current.value = renderValue(defaultValue);
-        }
-    }, [defaultValue]);
-
-    return (
-        <input
-            ref={ref}
-            type="text"
-            inputMode="decimal"
-            defaultValue={renderValue(defaultValue)}
-            placeholder="—"
-            onFocus={(e) => {
-                editing.current = true;
-                e.target.value = defaultValue === 0 ? '' : String(defaultValue);
-                e.target.select();
-                e.target.style.background = '#dbeafe';
-                e.target.style.outline = '2px solid #3b82f6';
-                e.target.style.color = '#1e40af';
-            }}
-            onBlur={(e) => {
-                let rawStr = e.target.value;
-                if (rawStr.includes(',') && rawStr.includes('.')) {
-                    rawStr = rawStr.replace(/\./g, '').replace(',', '.');
-                } else if (rawStr.includes(',')) {
-                    rawStr = rawStr.replace(',', '.');
-                }
-                const cleanStr = rawStr.replace(/[^\d.-]/g, '');
-                const v = parseFloat(cleanStr) || 0;
-                
-                editing.current = false;
-                e.target.value = renderValue(v);
-                e.target.style.background = 'transparent';
-                e.target.style.outline = 'none';
-                e.target.style.color = '#1d4ed8';
-                
-                if (v !== defaultValue) {
-                    console.log('[MatrixQtyInput] commit:', v);
-                    onCommit(v);
-                }
-            }}
-            onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === 'Tab') (e.target as HTMLInputElement).blur();
-                if (e.key === 'Escape') { 
-                    editing.current = false;
-                    (e.target as HTMLInputElement).value = renderValue(defaultValue); 
-                    (e.target as HTMLInputElement).blur(); 
-                }
-            }}
-            style={{
-                display: 'block', width: '100%', height: '28px', border: 'none', outline: 'none',
-                padding: '0 6px', textAlign: 'right', fontSize: '8px',
-                fontWeight: 700, color: '#1e293b', background: 'transparent',
-                boxSizing: 'border-box', cursor: 'text',
-            }}
-        />
-    );
-}
 
 
 export default function ActasModule({ groups, boardId, onAddSite }: ActasModuleProps) {
@@ -201,15 +79,6 @@ export default function ActasModule({ groups, boardId, onAddSite }: ActasModuleP
                 onBack={() => setSelectedActaId(null)}
                 handleUpdateItemValue={async (groupId, itemId, columnId, value) => {
                     updateItem.mutate({ itemId, updates: { [columnId]: value }, isValuesUpdate: true });
-                }}
-                handleUpdateActaDetail={(groupId, itemId, qty) => {
-                    upsertActaDetail.mutate({
-                        acta_id: selectedActa.id,
-                        item_id: itemId,
-                        group_id: groupId,
-                        quantity: qty,
-                        value: qty * (groups.flatMap(g => g.items).find(i => String(i.id) === itemId)?.values?.unit_price || 0)
-                    });
                 }}
                 onAddResource={() => {
                     addItem.mutate({
@@ -327,7 +196,6 @@ function ActaDetailView({
     groups, 
     onBack, 
     handleUpdateItemValue, 
-    handleUpdateActaDetail,
     onAddResource,
     onDeleteResource,
     onAddSite
@@ -336,7 +204,6 @@ function ActaDetailView({
     groups: Group[], 
     onBack: () => void,
     handleUpdateItemValue: (groupId: string, itemId: string | number, columnId: string, value: any) => void,
-    handleUpdateActaDetail: (groupId: string, itemId: string, qty: number) => void,
     onAddResource: () => void,
     onDeleteResource: (itemId: string | number) => void,
     onAddSite?: () => void
@@ -384,52 +251,93 @@ function ActaDetailView({
 
     // 1. Prepare Data: Consolidate unique items across all groups (budget reference)
     const tableData = useMemo(() => {
+        const extractCode = (i: Item) => {
+            if (i.values.code) return String(i.values.code).trim();
+            const match = i.name.match(/^NP\s*([0-9.]+)/i);
+            if (match) return `NP ${match[1]}`.trim();
+            if (/^NP\s*$/i.test(i.name)) return 'NP';
+            return null;
+        };
+
+        const isWorkActivity = (i: Item) => {
+            const rubro = String(i.values?.rubro || '').toUpperCase();
+            if (i.values?.item_type === 'activity') return false;
+            if (rubro === 'INSUMOS' || rubro === 'COSTOS') return false;
+            
+            const code = extractCode(i);
+            if (!code) return false;
+            return /^\d/.test(code) || /^NP/i.test(code);
+        };
+
         const uniqueItemsMap = new Map<string, any>();
         
-        // Identify all unique items from all groups
         (groups || []).forEach(g => {
             g.items.forEach(i => {
-                // Filter for financial items only
-                if (i.values?.item_type === 'financial' && !uniqueItemsMap.has(i.name)) {
-                    // Extract code/name once
-                    // Extract code/name — ALWAYS try regex from name first (most reliable)
-                    // values.code may be a parent category code like '3' while name is '3.12 Desc'
-                    let cleanName = i.name;
-                    let extractedCode = '';
-
-                    // Normalize: collapse \r\n and extra whitespace into single spaces
-                    const normalizedName = i.name.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
-
-                    const codeMatch1 = normalizedName.match(/^(\d+(?:[.,]\d+)*)[\s.\-:]*\s*(.+)$/);
-                    if (codeMatch1) {
-                        extractedCode = codeMatch1[1].replace(/\.$/, '');
-                        cleanName = codeMatch1[2].trim();
+                if (isWorkActivity(i)) {
+                    const extractedCode = extractCode(i);
+                    const cleanName = i.name.replace(/^NP\s*[0-9.]+\s*-\s*/i, '')
+                                          .replace(/^NP\s*[0-9.]+\s*/i, '')
+                                          .replace(/^[0-9.]+\s*-\s*/i, '')
+                                          .replace(/^[0-9.]+\s*/i, '')
+                                          .trim();
+                    
+                    const existing = uniqueItemsMap.get(cleanName);
+                    const qty = parseFloat(i.values?.cant || 0);
+                    
+                    if (existing) {
+                        const currentQty = parseFloat(existing.values.cant || 0);
+                        existing.values.cant = (currentQty + qty).toString();
+                        if (!existing.allGroupIds.includes(g.id)) {
+                            existing.allGroupIds.push(g.id);
+                        }
                     } else {
-                        // Fallback: use values.code if regex found nothing
-                        extractedCode = ((i.values as any)?.code ?? '').toString().trim().replace(/\.$/, '');
-                        cleanName = normalizedName; // use normalized even for fallback
+                        uniqueItemsMap.set(cleanName, {
+                            ...i,
+                            cleanName,
+                            code: extractedCode,
+                            originalName: i.name,
+                            groupId: g.id,
+                            groupName: g.title,
+                            allGroupIds: [g.id],
+                            values: { ...i.values }
+                        });
                     }
-                    uniqueItemsMap.set(i.name, {
-                        ...i,
-                        name: cleanName,       // ← overrides i.name so row.name is code-free
-                        cleanName,
-                        code: extractedCode,
-                        originalName: i.name,
-                        groupId: g.id,
-                        groupName: g.title
-                    });
                 }
             });
         });
 
         const sortedItems = Array.from(uniqueItemsMap.values()).sort((a, b) => {
-            const parseCode = (c: string) => (c || '999').replace(/,/g, '.').split('.').map(Number);
-            const partsA = parseCode(a.code);
-            const partsB = parseCode(b.code);
-            for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
-                const valA = partsA[i] || 0;
-                const valB = partsB[i] || 0;
-                if (valA !== valB) return valA - valB;
+            const isNumA = /^\d/.test(a.code);
+            const isNumB = /^\d/.test(b.code);
+            
+            if (isNumA && !isNumB) return -1;
+            if (!isNumA && isNumB) return 1;
+            
+            const parseCodeSegments = (c: string) => {
+                const parts = (c || '').replace(/NP\s*/i, '').replace(/,/g, '.').split('.');
+                return parts.map(p => {
+                    const n = Number(p);
+                    return isNaN(n) ? p : n;
+                });
+            };
+
+            const segmentsA = parseCodeSegments(a.code);
+            const segmentsB = parseCodeSegments(b.code);
+            
+            for (let i = 0; i < Math.max(segmentsA.length, segmentsB.length); i++) {
+                const segA = segmentsA[i];
+                const segB = segmentsB[i];
+                
+                if (segA === undefined) return -1;
+                if (segB === undefined) return 1;
+                
+                if (typeof segA === 'number' && typeof segB === 'number') {
+                    if (segA !== segB) return segA - segB;
+                } else {
+                    const strA = String(segA);
+                    const strB = String(segB);
+                    if (strA !== strB) return strA.localeCompare(strB);
+                }
             }
             return 0;
         });
@@ -452,34 +360,51 @@ function ActaDetailView({
                 generalGroupId = g.id;
             }
             g.items.forEach(i => {
-                itemOriginalNameById.set(String(i.id), i.name);
-                itemNormNameById.set(String(i.id), normName(i.name));
+                const idStr = String(i.id);
+                itemOriginalNameById.set(idStr, i.name);
+                itemNormNameById.set(idStr, normName(i.name));
             });
             if ((selectedSiteId === 'all' || g.id === selectedSiteId) && g.title.toUpperCase() !== 'PRESUPUESTO GENERAL') {
                 relevantGroupIdsFiltered.add(g.id);
             }
         });
 
-        // Always include the fallback group so we can read generic items saved there
-        if (generalGroupId) {
-            relevantGroupIdsFiltered.add(generalGroupId);
-        }
-        const previousActasIdsSet = new Set(previousActasIds);
+        if (generalGroupId) relevantGroupIdsFiltered.add(generalGroupId);
 
-        // Map values for each sorted item based on selectedSiteId (or consolidated)
+        const previousActasIdsSet = new Set(previousActasIds);
+        const detailsByNormTarget = new Map<string, any[]>();
+        const prevDetailsByNormTarget = new Map<string, any[]>();
+
+        if (details && details.length > 0) {
+            details.forEach(d => {
+                const normTarget = itemNormNameById.get(String(d.item_id)) || String(d.item_id);
+                if (!detailsByNormTarget.has(normTarget)) detailsByNormTarget.set(normTarget, []);
+                detailsByNormTarget.get(normTarget)!.push(d);
+
+                if (relevantGroupIdsFiltered.has(d.group_id)) {
+                     const siteKey = `site|${normTarget}`;
+                     if (!detailsByNormTarget.has(siteKey)) detailsByNormTarget.set(siteKey, []);
+                     detailsByNormTarget.get(siteKey)!.push(d);
+                }
+            });
+        }
+
+        if (allBoardDetails && previousActasIdsSet.size > 0) {
+            allBoardDetails.forEach(d => {
+                if (relevantGroupIdsFiltered.has(d.group_id) && previousActasIdsSet.has(d.acta_id)) {
+                    const normTarget = itemNormNameById.get(String(d.item_id)) || String(d.item_id);
+                    if (!prevDetailsByNormTarget.has(normTarget)) prevDetailsByNormTarget.set(normTarget, []);
+                    prevDetailsByNormTarget.get(normTarget)!.push(d);
+                }
+            });
+        }
+
         return sortedItems.map(item => {
             const targetNorm = normName(item.originalName);
-            // Find all matching instances across site groups
-            const itemInstances = (groups || []).filter(g => 
-                (selectedSiteId === 'all' || g.id === selectedSiteId) &&
-                g.title.toUpperCase() !== 'PRESUPUESTO GENERAL'
-            ).map(g => g.items.find(i => i.name === item.originalName)).filter(Boolean);
-
             const unitPrice = item.values?.unit_price || 0;
             const budgetQty = parseFloat(item.values?.cant || 0);
             const budgetTotal = unitPrice * budgetQty;
 
-             // Current Acta values (Consolidated for selected sites)
              let currentQty = 0;
              let currentValue = 0;
              let manualPrevQty = 0;
@@ -487,35 +412,20 @@ function ActaDetailView({
              let hasManualPrev = false;
              
              if (details) {
-                 // Filter for current site execution quantities (group_id MUST match site)
-                 const relevantDetails = details.filter(d => 
-                     relevantGroupIdsFiltered.has(d.group_id) && 
-                     (
-                         itemNormNameById.get(d.item_id) === targetNorm ||
-                         d.item_id === String(item.id) 
-                     )
-                 );
+                 const siteKey = `site|${targetNorm}`;
+                 const siteFallbackKey = `site|${String(item.id)}`;
+                 const relevantDetails = [...(detailsByNormTarget.get(siteKey) || []), ...(detailsByNormTarget.get(siteFallbackKey) || [])];
                  
                  currentQty = relevantDetails.reduce((sum, d) => sum + (d.quantity || 0), 0);
                  currentValue = relevantDetails.reduce((sum, d) => sum + (d.value || 0), 0);
 
-                 // For manual overrides (previous_qty), search ALL details for this item
-                 // regardless of group_id — the override may be stored in the fallback
-                 // PRESUPUESTO GENERAL group whose ID may differ between the prop and DB.
-                 const prevOverrideDetails = details.filter(d => 
-                     itemNormNameById.get(d.item_id) === targetNorm ||
-                     d.item_id === String(item.id)
-                 );
-                 prevOverrideDetails.forEach(d => {
-                     if (d.previous_qty !== undefined && d.previous_qty !== null) {
-                         manualPrevQty = Math.max(manualPrevQty, d.previous_qty);
-                         hasManualPrev = true;
-                     }
-                     if (d.previous_value !== undefined && d.previous_value !== null) {
-                         manualPrevVal = Math.max(manualPrevVal, d.previous_value);
-                         hasManualPrev = true;
-                     }
-                 });
+                relevantDetails.forEach(d => {
+                    if (d.previous_qty !== undefined && d.previous_qty !== null) {
+                        manualPrevQty = d.previous_qty;
+                        manualPrevVal = d.previous_value || 0;
+                        hasManualPrev = true;
+                    }
+                });
              }
 
              const currentPct = budgetQty > 0 ? (currentQty / budgetQty) * 100 : 0;
@@ -528,19 +438,9 @@ function ActaDetailView({
                   // Use manual overrides if present
                   previousQty = manualPrevQty;
                   previousValue = manualPrevVal;
-              } else if (allBoardDetails && previousActasIds.length > 0) {
-                  const prevDetails = allBoardDetails.filter(d => 
-                     relevantGroupIdsFiltered.has(d.group_id) && 
-                     previousActasIdsSet.has(d.acta_id) &&
-                     (
-                         itemNormNameById.get(d.item_id) === targetNorm ||
-                         d.item_id === String(item.id) 
-                     )
-                  );
+              } else if (allBoardDetails && previousActasIdsSet.size > 0) {
+                  const prevDetails = [...(prevDetailsByNormTarget.get(targetNorm) || []), ...(prevDetailsByNormTarget.get(String(item.id)) || [])];
                   
-                  // Sort by acta execution date if possible or assume the overrides are additive?
-                  // An override in Acta 1 sets the baseline. So the true accumulation is the sum of ALL actual quantities,
-                  // PLUS the maximum manual override baseline found in previous actas.
                   let baselinePrevQty = 0;
                   let baselinePrevVal = 0;
                   
@@ -591,7 +491,7 @@ function ActaDetailView({
         return parseFloat(normalized) || 0;
     };
 
-    const getRowColor = (code: string) => {
+    const getRowColor = useCallback((code: string) => {
         if (!code) return '';
         const firstMatch = code.match(/^(\d+)/);
         if (!firstMatch) return '';
@@ -610,9 +510,9 @@ function ActaDetailView({
         if (first === '11') return 'bg-stone-100 hover:bg-stone-200';
         if (first === '12') return 'bg-neutral-100 hover:bg-neutral-200';
         return '';
-    };
+    }, []);
 
-    const handleUpdate = (item: any, field: 'qty' | 'val' | 'pct' | 'prevQty' | 'prevVal' | 'unitPrice' | 'budgetTotal', value: number) => {
+    const handleUpdate = useCallback((item: any, field: 'qty' | 'val' | 'pct' | 'prevQty' | 'prevVal' | 'unitPrice' | 'budgetTotal', value: number) => {
         let newQty = item.currentQty;
         let newVal = item.currentValue;
         // Only send a manual override if explicitly edited or previously set. Otherwise leave undefined to let DB stay null.
@@ -649,17 +549,18 @@ function ActaDetailView({
             }
         }
 
+        const normName = (s: string) => (s || '')
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[\r\n]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+        const originalName = item.originalName || item.name;
+        const targetNorm = normName(originalName);
+
         if (selectedSiteId !== 'all') {
             // Single site mode (or Matrix cell edit) — save directly to that site group
             const siteGroup = groups.find(g => g.id === selectedSiteId);
-            const normName = (s: string) => (s || '')
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                .replace(/[\r\n]+/g, ' ')
-                .replace(/\s+/g, ' ')
-                .trim()
-                .toLowerCase();
-            const originalName = item.originalName || item.name;
-            const targetNorm = normName(originalName);
             
             // Try to find by exact normalized name first, then fallback to original ID
             let siteItem = siteGroup?.items.find(i => normName(i.name) === targetNorm);
@@ -708,18 +609,30 @@ function ActaDetailView({
                     previous_value: newPrevVal
                 };
                 console.log('[DEBUG] Attempting to upsert single site detail:', JSON.stringify(payload, null, 2));
-                upsertActaDetail.mutate(payload, {
-                    onSuccess: () => {
-                        console.log('[DEBUG] Successfully upserted single site detail:', payload.item_id);
-                    },
-                    onError: (err, variables, context) => {
-                        console.error(`[DEBUG] Error upserting single site detail for item_id: ${variables.item_id}.`, {
-                            error: err,
-                            payload: variables,
-                            context: context
-                        });
-                        alert('Error al guardar. Revisa la consola del desarrollador para más detalles.');
-                    }
+                upsertActaDetail.mutate(payload);
+
+                // SYNC TO MONDAY: Update executed_qty in the main items table
+                // Calculate previous quantity for this specific item in this specific group
+                const previousActasIdsSet = new Set(previousActasIds);
+                const variantPrevDetails = allBoardDetails?.filter(d => 
+                    d.group_id === effectiveGroupId && 
+                    String(d.item_id) === effectiveItemId && 
+                    previousActasIdsSet.has(d.acta_id)
+                ) || [];
+                
+                let vBaselineQty = (newPrevQty !== undefined && newPrevQty !== null) ? newPrevQty : 0;
+                if (newPrevQty === undefined || newPrevQty === null) {
+                    variantPrevDetails.forEach(d => {
+                        if (d.previous_qty !== undefined && d.previous_qty !== null && d.previous_qty > vBaselineQty) vBaselineQty = d.previous_qty;
+                    });
+                }
+                const variantPreviousQty = vBaselineQty + variantPrevDetails.reduce((sum, d) => sum + (d.quantity || 0), 0);
+                const variantAccumulatedQty = variantPreviousQty + newQty;
+
+                updateItem.mutate({ 
+                    itemId: effectiveItemId, 
+                    updates: { executed_qty: variantAccumulatedQty }, 
+                    isValuesUpdate: true 
                 });
             } else {
                 console.error('[handleUpdate] Falla crítica: No se encontró el ítem ni en el sitio local ni en PRESUPUESTO GENERAL.', { selectedSiteId, targetNorm, itemId: item.id });
@@ -727,103 +640,160 @@ function ActaDetailView({
             }
         } else {
             // "All sites" mode (Summary table edit) — distribute proportionally
-            const normName = (s: string) => (s || '')
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                .replace(/[\r\n]+/g, ' ')
-                .replace(/\s+/g, ' ')
-                .trim()
-                .toLowerCase();
-            const originalName = item.originalName || item.name;
-            const targetNorm = normName(originalName);
             
-            const findItemInGroup = (g: any) => 
-                g.items.find((i: any) => normName(i.name) === targetNorm) || 
-                g.items.find((i: any) => String(i.id) === String(item.id));
+            const findAllItemsInGroup = (g: any) => 
+                g.items.filter((i: any) => normName(i.name) === targetNorm || String(i.id) === String(item.id));
 
             let siteGroups = groups.filter(g =>
                 g.title.toUpperCase() !== 'PRESUPUESTO GENERAL' &&
-                findItemInGroup(g)
+                findAllItemsInGroup(g).length > 0
             );
 
             if (siteGroups.length === 0) {
                 console.warn('[handleUpdate] No se encontraron grupos de sitio para este ítem. Guardando en PRESUPUESTO GENERAL como respaldo.');
-                siteGroups = groups.filter(g => g.title.toUpperCase() === 'PRESUPUESTO GENERAL' && findItemInGroup(g));
+                siteGroups = groups.filter(g => g.title.toUpperCase() === 'PRESUPUESTO GENERAL' && findAllItemsInGroup(g).length > 0);
                 if (siteGroups.length === 0) {
                     console.error('[handleUpdate] Ítem no encontrado en ningún grupo de la matriz.');
                     return;
                 }
             }
 
-            const totalBudgetQty = siteGroups.reduce((sum, g) => {
-                const siteItem = findItemInGroup(g);
-                return sum + (parseFloat((siteItem?.values as any)?.cant || '0') || 0);
+            // 1. Calculate the TOTAL budget quantity for all matching items across all groups
+            const globalMatchingBudgetQty = siteGroups.reduce((acc, g) => {
+                const matches = findAllItemsInGroup(g);
+                return acc + matches.reduce((sum: number, m: any) => sum + (parseFloat((m.values as any)?.cant || '0') || 0), 0);
             }, 0);
 
             siteGroups.forEach(g => {
-                const siteItem = findItemInGroup(g);
-                if (!siteItem) return;
+                const matches = findAllItemsInGroup(g);
+                if (matches.length === 0) return;
 
-                let groupQty = newQty;
-                let groupVal = newVal;
-                let groupPrevQty = newPrevQty;
-                let groupPrevVal = newPrevVal;
+                // For each group, we distribute the values further if there are multiple matches in the SAME group
+                matches.forEach((siteItem: any) => {
+                    let groupQty = newQty;
+                    let groupVal = newVal;
+                    let groupPrevQty = newPrevQty;
+                    let groupPrevVal = newPrevVal;
 
-                if (siteGroups.length > 1 && totalBudgetQty > 0) {
-                    const siteBudgetQty = parseFloat((siteItem.values as any)?.cant || '0') || 0;
-                    const weight = siteBudgetQty / totalBudgetQty;
-                    groupQty = newQty * weight;
-                    groupVal = newVal * weight;
-                    // Only apply weight if a manual override was actively provided
-                    if (groupPrevQty !== undefined && groupPrevQty !== null) {
-                        groupPrevQty = Number(((groupPrevQty as number) * weight).toFixed(4));
+                    // Proportional distribution logic
+                    if (globalMatchingBudgetQty > 0) {
+                        const itemBudgetQty = parseFloat((siteItem.values as any)?.cant || '0') || 0;
+                        const weight = itemBudgetQty / globalMatchingBudgetQty;
+                        groupQty = newQty * weight;
+                        groupVal = newVal * weight;
+                        
+                        if (groupPrevQty !== undefined && groupPrevQty !== null) {
+                            groupPrevQty = Number(((groupPrevQty as number) * weight).toFixed(4));
+                        }
+                        if (groupPrevVal !== undefined && groupPrevVal !== null) {
+                            groupPrevVal = Number(((groupPrevVal as number) * weight).toFixed(2));
+                        }
+                    } else {
+                        // If no budget available, distribute equally
+                        const totalMatchCount = siteGroups.reduce((acc, sg) => acc + findAllItemsInGroup(sg).length, 0);
+                        const weight = 1 / totalMatchCount;
+                        groupQty = newQty * weight;
+                        groupVal = newVal * weight;
+                        if (groupPrevQty !== undefined && groupPrevQty !== null) groupPrevQty = (groupPrevQty as number) * weight;
+                        if (groupPrevVal !== undefined && groupPrevVal !== null) groupPrevVal = (groupPrevVal as number) * weight;
                     }
-                    if (groupPrevVal !== undefined && groupPrevVal !== null) {
-                        groupPrevVal = Number(((groupPrevVal as number) * weight).toFixed(2));
+
+                    // Safety catch for NaN
+                    if (Number.isNaN(groupPrevQty)) groupPrevQty = undefined;
+                    if (Number.isNaN(groupPrevVal)) groupPrevVal = undefined;
+
+                    if (field === 'unitPrice') {
+                        updateItem.mutate({ itemId: String(siteItem.id), updates: { unit_price: newUnitPrice }, isValuesUpdate: true });
+                    } else if (field === 'budgetTotal') {
+                         if (item.unitPrice > 0) {
+                             const newCant = value / item.unitPrice;
+                             updateItem.mutate({ itemId: String(siteItem.id), updates: { cant: newCant / matches.length }, isValuesUpdate: true });
+                         } else if (item.budgetQty > 0) {
+                             const newUp = value / item.budgetQty;
+                             updateItem.mutate({ itemId: String(siteItem.id), updates: { unit_price: newUp }, isValuesUpdate: true });
+                         }
                     }
-                }
 
-                // Safety catch for NaN
-                if (Number.isNaN(groupPrevQty)) groupPrevQty = undefined;
-                if (Number.isNaN(groupPrevVal)) groupPrevVal = undefined;
+                    const payload = {
+                        acta_id:  acta.id,
+                        item_id:  String(siteItem.id),
+                        group_id: g.id,
+                        quantity: groupQty,
+                        value:    groupVal,
+                        previous_qty: groupPrevQty,
+                        previous_value: groupPrevVal
+                    };
+                    
+                    console.log('[DEBUG] Upserting detail for item variant:', siteItem.name, 'in group:', g.title);
+                    upsertActaDetail.mutate(payload);
 
-                if (field === 'unitPrice') {
-                    updateItem.mutate({ itemId: String(siteItem.id), updates: { unit_price: newUnitPrice }, isValuesUpdate: true });
-                } else if (field === 'budgetTotal') {
-                     if (item.unitPrice > 0) {
-                         const newCant = value / item.unitPrice;
-                         updateItem.mutate({ itemId: String(siteItem.id), updates: { cant: newCant }, isValuesUpdate: true });
-                     } else if (item.budgetQty > 0) {
-                         const newUp = value / item.budgetQty;
-                         updateItem.mutate({ itemId: String(siteItem.id), updates: { unit_price: newUp }, isValuesUpdate: true });
-                     }
-                }
-
-                const payload = {
-                    acta_id:  acta.id,
-                    item_id:  String(siteItem.id),
-                    group_id: g.id,
-                    quantity: groupQty,
-                    value:    groupVal,
-                    previous_qty: groupPrevQty,
-                    previous_value: groupPrevVal
-                };
-                console.log('[DEBUG] Attempting to upsert ALL sites detail:', JSON.stringify(payload, null, 2));
-                upsertActaDetail.mutate(payload, {
-                    onSuccess: () => {
-                        console.log('[DEBUG] Successfully upserted ALL sites detail:', payload.item_id);
-                    },
-                    onError: (err, variables, context) => {
-                        console.error(`[DEBUG] Error upserting ALL sites detail for item_id: ${variables.item_id}.`, {
-                            error: err,
-                            payload: variables,
-                            context: context
+                    // SYNC TO MONDAY: Calculate accumulated and push to items table
+                    const previousActasIdsSet = new Set(previousActasIds);
+                    const variantPrevDetails = allBoardDetails?.filter(d => 
+                        d.group_id === g.id && 
+                        String(d.item_id) === String(siteItem.id) && 
+                        previousActasIdsSet.has(d.acta_id)
+                    ) || [];
+                    
+                    let vBaselineQty = (groupPrevQty !== undefined && groupPrevQty !== null) ? groupPrevQty : 0;
+                    if (groupPrevQty === undefined || groupPrevQty === null) {
+                         variantPrevDetails.forEach(d => {
+                            if (d.previous_qty !== undefined && d.previous_qty !== null && d.previous_qty > vBaselineQty) vBaselineQty = d.previous_qty;
                         });
-                        alert('Error al guardar. Revisa la consola del desarrollador para más detalles.');
                     }
+                    const variantPreviousQty = vBaselineQty + variantPrevDetails.reduce((sum, d) => sum + (d.quantity || 0), 0);
+                    const variantAccumulatedQty = variantPreviousQty + groupQty;
+
+                    updateItem.mutate({ 
+                        itemId: String(siteItem.id), 
+                        updates: { executed_qty: variantAccumulatedQty }, 
+                        isValuesUpdate: true 
+                    });
                 });
             });
         }
-    };
+    }, [selectedSiteId, groups, acta.id, upsertActaDetail, updateItem, allBoardDetails, previousActasIds]);
+
+
+    const handleUpdateActaDetail = useCallback((groupId: string, itemId: string, qty: number) => {
+        const item = tableData.find(i => String(i.id) === itemId);
+        if (!item) return;
+        const value = qty * item.unitPrice;
+        
+        upsertActaDetail.mutate({
+            acta_id: acta.id,
+            item_id: itemId,
+            group_id: groupId,
+            quantity: qty,
+            value: value
+        });
+
+        // SYNC TO MONDAY: Update executed_qty
+        const previousActasIdsSet = new Set(previousActasIds);
+        const variantPrevDetails = allBoardDetails?.filter(d => 
+            d.group_id === groupId && 
+            String(d.item_id) === itemId && 
+            previousActasIdsSet.has(d.acta_id)
+        ) || [];
+        
+        // Check for manual overrides in any of the current acta details (in case it was set globally)
+        // But here we are in matrix mode, usually no manual override unless set elsewhere.
+        // We'll trust the calculated previous from allBoardDetails.
+        let vBaselineQty = 0;
+        variantPrevDetails.forEach(d => {
+            if (d.previous_qty !== undefined && d.previous_qty !== null && d.previous_qty > vBaselineQty) vBaselineQty = d.previous_qty;
+        });
+
+        const variantPreviousQty = vBaselineQty + variantPrevDetails.reduce((sum, d) => sum + (d.quantity || 0), 0);
+        const variantAccumulatedQty = variantPreviousQty + qty;
+
+        updateItem.mutate({ 
+            itemId, 
+            updates: { executed_qty: variantAccumulatedQty }, 
+            isValuesUpdate: true 
+        });
+    }, [tableData, acta.id, upsertActaDetail, allBoardDetails, previousActasIds, updateItem]);
+
 
 
 
@@ -834,7 +804,7 @@ function ActaDetailView({
             {/* Toolbar (Back button, View Selector) */}
             <div className={`flex items-center justify-between px-6 py-4 border-b border-gray-100 ${isCanvasMode ? 'bg-slate-900 text-white' : 'bg-slate-50'}`}>
                 <div className="flex items-center gap-4">
-                     <button onClick={onBack} className={`p-2 rounded-xl transition-colors ${isCanvasMode ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-200 text-slate-500'}`}>
+                     <button onClick={onBack} className={`p-2 rounded-xl transition-colors ${isCanvasMode ? 'hover:bg-slate-800 text-[var(--text-primary)]' : 'hover:bg-slate-200 text-slate-500'}`}>
                         <ChevronRight className="rotate-180" />
                     </button>
                     <span className={`font-bold text-sm ${isCanvasMode ? 'text-slate-500' : 'text-slate-400'}`}>Volver al listado</span>
@@ -975,63 +945,12 @@ function ActaDetailView({
                             </thead>
                             <tbody className="divide-y divide-gray-300 text-[8px]">
                                 {(() => {
-                                    // 1. Identify Unique Items across ALL groups (including General Budget)
-                                    const uniqueItemsMap = new Map<string, any>();
-                                    
-                                    groups.forEach(g => {
-                                        g.items.forEach(i => {
-                                            // Filter out general budget items that belong only to Sabana/Resumen, not Actas
-                                            const isGeneralItem = i.name.endsWith(' - General') || 
-                                                ['Nómina', 'Insumos', 'Transporte', 'Caja Menor'].some(t => i.name.includes(t) && i.name.includes('General'));
-
-                                            if (i.values?.item_type === 'financial' && !isGeneralItem && !uniqueItemsMap.has(i.name)) {
-                                                let cleanName = i.name;
-                                                let extractedCode = '';
-
-                                                // Normalize: collapse \r\n and whitespace
-                                                const normName = i.name.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
-
-                                                const codeMatchM = normName.match(/^(\d+(?:[.,]\d+)*)[\s.\-:]*\s*(.+)$/);
-                                                if (codeMatchM) {
-                                                    extractedCode = codeMatchM[1].replace(/\.$/, '');
-                                                    cleanName = codeMatchM[2].trim();
-                                                } else {
-                                                    extractedCode = ((i.values as any)?.code ?? '').toString().trim().replace(/\.$/, '');
-                                                    cleanName = normName;
-                                                }
-
-                                                uniqueItemsMap.set(i.name, {
-                                                    id: i.id,
-                                                    groupId: g.id,
-                                                    name: cleanName,
-                                                    originalName: i.name, // Keep for lookup
-                                                    code: extractedCode,
-                                                    unit: i.values?.unit || 'UND',
-                                                    unitPrice: i.values?.unit_price || 0,
-                                                });
-                                            }
-                                        });
-                                    });
-
-                                    const uniqueItems = Array.from(uniqueItemsMap.values()).sort((a, b) => {
-                                        const parseCode = (c: string) => c.replace(/,/g, '.').split('.').map(Number);
-                                        const partsA = parseCode(a.code || '999');
-                                        const partsB = parseCode(b.code || '999');
-                                        
-                                        for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
-                                            const valA = partsA[i] || 0;
-                                            const valB = partsB[i] || 0;
-                                            if (valA !== valB) return valA - valB;
-                                        }
-                                        return 0;
-                                    });
-
-                                    return uniqueItems.map((uItem, idx) => {
+                                    return tableData.map((uItem, idx) => {
                                         let rowTotalQty = 0;
                                         let rowTotalVal = 0;
 
                                         return (
-                                        <tr key={idx} className={`hover:bg-yellow-50 transition-colors h-8 group/row ${getRowColor(uItem.code) || (idx % 2 === 0 ? 'bg-white' : 'bg-slate-50')}`}>
+                                        <tr key={`${uItem.id}-${uItem.code}`} className={`hover:bg-yellow-50 transition-colors h-8 group/row ${getRowColor(uItem.code) || (idx % 2 === 0 ? 'bg-white' : 'bg-slate-50')}`}>
                                             {/* Fixed Item Info */}
 											<td className={`px-1 py-1 font-bold text-center sticky left-0 z-10 border-r border-slate-300 w-[60px] text-[8px] ${getRowColor(uItem.code) || (idx % 2 === 0 ? 'bg-white' : 'bg-slate-50')}`}>
                                                 <div className="flex items-center justify-center gap-1 group/actions relative w-full h-full">
@@ -1078,7 +997,7 @@ function ActaDetailView({
                                                 <span className="text-slate-700 line-clamp-2 leading-tight text-left">{uItem.name}</span>
                                             </td>
 											<td className={`px-1 py-1 text-center text-slate-500 border-r border-slate-300 w-[60px] text-[8px] ${getRowColor(uItem.code) || (idx % 2 === 0 ? 'bg-white' : 'bg-slate-50')}`}>
-												{uItem.unit}
+												{uItem.unit || (uItem.values as any)?.unit}
 											</td>
 											<td className={`px-1 py-1 text-right text-slate-500 border-r border-slate-300 w-[100px] text-[8px] ${getRowColor(uItem.code) || (idx % 2 === 0 ? 'bg-white' : 'bg-slate-50')}`}>-</td>
 											<td className={`px-1 py-1 text-right font-mono text-slate-600 border-r border-slate-300 w-[130px] text-[8px] ${getRowColor(uItem.code) || (idx % 2 === 0 ? 'bg-white' : 'bg-slate-50')}`}>
@@ -1088,9 +1007,10 @@ function ActaDetailView({
                                             {/* Dynamic Site Cells */}
                                             {filteredGroups.map(group => {
                                                 const normName = (s: string) => (s || '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
-                                                const targetNorm = normName(uItem.originalName);
+                                                const originalName = uItem.originalName || uItem.name;
+                                                const targetNorm = normName(originalName);
                                                 const groupItem = group.items.find(i => normName(i.name) === targetNorm);
-                                                if (!groupItem) console.warn('[Matrix] No groupItem for:', group.title, '|', uItem.originalName?.slice(0, 40));
+                                                
                                                 // Use site item id when found, otherwise fall back to the reference item id
                                                 const effectiveItemId = String(groupItem?.id ?? uItem.id);
                                                 let currentQty = 0;
@@ -1106,11 +1026,11 @@ function ActaDetailView({
                                                 rowTotalVal += currentValue;
 
                                                 return (
-                                                    <React.Fragment key={`${group.id}-${idx}-${currentQty}`}>
+                                                    <React.Fragment key={`${group.id}-${uItem.id}`}>
                                                          <td className={`p-0 border-r border-slate-300 w-[100px] ${getRowColor(uItem.code) || (idx % 2 === 0 ? 'bg-white' : 'bg-slate-50')}`}>
                                                              {acta.status === 'draft' ? (
                                                                  <MatrixQtyInput
-                                                                     key={`qty-${group.id}-${effectiveItemId}-${currentQty}`}
+                                                                     key={`qty-${group.id}-${effectiveItemId}`}
                                                                      defaultValue={currentQty}
                                                                      onCommit={(v) => handleUpdateActaDetail(group.id, effectiveItemId, v)}
                                                                  />
@@ -1407,13 +1327,14 @@ function ActaDetailView({
                                     onCellChange={(row: any, field: any, value: any) => handleUpdate(row, field, value)}
                                     actaName={acta.name}
                                     onDelete={(row: any) => {
-                                        // Delete the item from ALL groups that contain it (matched by originalName)
+                                        // Delete ALL items from ALL groups that contain it (matched by originalName)
                                         const originalName = row.originalName || row.name;
                                         (groups || []).forEach(g => {
-                                            const match = g.items.find(i => i.name === originalName);
-                                            if (match) deleteItem.mutate(match.id);
+                                            const matches = g.items.filter(i => i.name === originalName);
+                                            matches.forEach(m => deleteItem.mutate(m.id));
                                         });
                                     }}
+
                                 />
                             </div>
 

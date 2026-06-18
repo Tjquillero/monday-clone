@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import GanttView from '@/components/GanttView';
+import TacticalOperationsView from '@/components/TacticalOperationsView';
 import { useBoard, useBoardGroups, useBoardColumns, useTaskDependencies } from '@/hooks/useBoardData';
 import { useBoardMutations } from '@/hooks/useBoardMutations';
 import { isActivityItem } from '@/utils/itemUtils';
@@ -21,12 +21,11 @@ export default function GanttViewContainer({ searchQuery, selectedGroupId, filte
   const { data: board } = useBoard();
   const { data: groups, isLoading } = useBoardGroups(board?.id);
   const { data: columns } = useBoardColumns(board?.id);
-  const { data: taskDependencies } = useTaskDependencies(board?.id);
   const { addItem, updateItem, deleteItem } = useBoardMutations(board?.id);
 
+  // Filter logic remains the same
   const activityGroups = useMemo(() => {
     if (!groups || !columns) return [];
-
     const statusColId = columns.find(c => c.type === 'status')?.id;
     const priorityColId = columns.find(c => c.type === 'priority')?.id;
 
@@ -37,42 +36,39 @@ export default function GanttViewContainer({ searchQuery, selectedGroupId, filte
         items: g.items
           .filter(isActivityItem)
           .filter(item => {
-            // 1. Busqueda por Texto
             const searchTerms = [
               item.name,
               item.description || '',
               ...Object.values(item.values || {}).map(v => String(v))
             ].join(' ').toLowerCase();
             const matchesSearch = searchTerms.includes(searchQuery.toLowerCase());
-
-            // 2. Filtro de Estado
             const itemStatus = statusColId ? item.values[statusColId] : null;
             const matchesStatus = filters.status.length === 0 || (itemStatus && filters.status.includes(itemStatus));
-
-            // 3. Filtro de Prioridad
             const itemPriority = priorityColId ? item.values[priorityColId] : null;
             const matchesPriority = filters.priority.length === 0 || (itemPriority && filters.priority.includes(itemPriority));
-
-            // 4. Filtro por Persona
             const itemPersonId = item.personnel_id;
             const matchesPerson = filters.person.length === 0 || (itemPersonId && filters.person.includes(itemPersonId));
-
             return matchesSearch && matchesStatus && matchesPriority && matchesPerson;
           })
       }))
       .filter(g => g.items.length > 0 || (searchQuery === '' && filters.status.length === 0 && filters.priority.length === 0 && !selectedGroupId));
   }, [groups, columns, searchQuery, selectedGroupId, filters]);
 
-  if (isLoading) return <div className="p-8 text-center text-gray-500">Cargando cronograma...</div>;
+  if (isLoading) return (
+    <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <div className="w-10 h-10 border-4 border-[#3B7EF8] border-t-transparent rounded-full animate-spin shadow-[0_0_15px_rgba(59,126,248,0.3)]" />
+        <p className="text-[10px] font-black text-[#3B7EF8] uppercase tracking-[0.2em] animate-pulse">Sincronizando Inteligencia Operativa...</p>
+    </div>
+  );
 
   return (
-    <GanttView 
-      groups={activityGroups} 
-      onOpenItem={onOpenItem} 
-      onAddItem={(groupId, name) => addItem.mutate({ groupId, name, initialValues: {} })}
-      onDeleteItem={(itemId) => deleteItem.mutate(itemId)}
-      onUpdateItemValue={(groupId, itemId, columnId, value) => updateItem.mutate({ itemId, updates: { [columnId]: value }, isValuesUpdate: true })}
-      dependencies={taskDependencies || []}
-    />
+    <div className="h-full min-h-0 bg-[var(--bg-primary)]">
+      <TacticalOperationsView 
+        groups={activityGroups} 
+        columns={columns || []}
+        onOpenItem={onOpenItem}
+        onUpdateItemValue={(groupId, itemId, columnId, value) => updateItem.mutate({ itemId, updates: { [columnId]: value }, isValuesUpdate: true })}
+      />
+    </div>
   );
 }

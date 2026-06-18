@@ -30,13 +30,14 @@ interface BoardViewContainerProps {
     priority: string[];
     person: string[];
   };
-  onOpenItem: (groupId: string, item: any) => void;
+  onOpenItem: (groupId: string, item: any, tab?: any) => void;
 }
 
 export default function BoardViewContainer({ searchQuery, selectedGroupId, filters, onOpenItem }: BoardViewContainerProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const isAdmin = (user?.user_metadata as any)?.role === 'admin' || user?.email === 'admin@mantenix.com';
+  const role = (user?.user_metadata as any)?.role?.toLowerCase();
+  const isAdmin = role === 'admin' || user?.email === 'admin@mantenix.com' || user?.email === 'tjho145@hotmail.com';
 
   const { data: board, isLoading: boardLoading } = useBoard();
   const { data: columns } = useBoardColumns(board?.id);
@@ -61,6 +62,7 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
     const priorityColId = columns.find(c => c.type === 'priority')?.id;
 
     return groups
+      .filter(g => !g.title.toUpperCase().includes('PRESUPUESTO'))
       .filter(g => !selectedGroupId || g.id === selectedGroupId)
       .map(g => ({
         ...g,
@@ -95,7 +97,7 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
 
   // Handlers
   const handleAddItem = (groupId: string, name: string, template?: any) => {
-    const initialValues: any = { ...template };
+    const initialValues: any = { ...template, item_type: 'activity' };
     columns?.forEach(col => {
       if (col.type === 'status') initialValues[col.id] = 'Not Started';
       else if (col.type === 'priority') initialValues[col.id] = 'Low';
@@ -183,7 +185,7 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
              group_id: groupId,
              parent_id: parentId,
              name: 'Nuevo sub-ítem',
-             values: { unit: 'M2', cant: 0 },
+             values: { unit: 'M2', cant: 0, item_type: 'activity' },
              position: 0
            });
            queryClient.invalidateQueries({ queryKey: ['groups', board?.id] });
@@ -194,8 +196,8 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
            await supabase.from('groups').insert({ board_id: board?.id, title: 'Nuevo Grupo', color: '#c4c4c4' });
            queryClient.invalidateQueries({ queryKey: ['groups', board?.id] });
         }}
-        onUpdateGroup={async (groupId, field, value) => {
-           await supabase.from('groups').update({ [field]: value }).eq('id', groupId);
+        onUpdateGroup={async (groupId, updates) => {
+           await supabase.from('groups').update(updates).eq('id', groupId);
            queryClient.invalidateQueries({ queryKey: ['groups', board?.id] });
         }}
         onAddColumn={async (type) => {

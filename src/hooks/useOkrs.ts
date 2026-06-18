@@ -124,7 +124,7 @@ export function useOkrs() {
         return 0;
       }
 
-      const boardIds = links.map(l => l.board_id).filter(Boolean);
+      const boardIds = links.map((l: any) => l.board_id).filter(Boolean);
       let totalProgress = 0;
 
       // 2. Calculate progress for each board
@@ -134,10 +134,10 @@ export function useOkrs() {
           .select('values')
           .eq('group_id', (
             await supabase.from('groups').select('id').eq('board_id', boardId)
-          ).data?.map(g => g.id) || []);
+          ).data?.map((g: any) => g.id) || []);
 
         if (items && items.length > 0) {
-          const doneItems = items.filter(i => 
+          const doneItems = items.filter((i: any) => 
             i.values?.status === 'Done' || 
             i.values?.status === 'Completado' ||
             Object.values(i.values).includes('Done')

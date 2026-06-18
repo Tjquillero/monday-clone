@@ -1,0 +1,16 @@
+{
+  "python.analysis.indexing": false,
+  "python.languageServer": "None",
+  "files.exclude": {
+    "**/.next": true,
+    "**/node_modules": true,
+    "**/.swc": true,
+    "**/tsconfig.tsbuildinfo": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/.next": true,
+    "**/dist": true
+  },
+  "css.lint.unknownAtRules": "ignore"
+}

@@ -119,7 +119,7 @@ function KanbanColumn({ status, items, statusCol, onOpenItem }: { status: string
         
         {items.length === 0 && !isOver && (
           <div className="h-full flex flex-col items-center justify-center py-12 opacity-30 grayscale pointer-events-none">
-             <Icon size={32} className="text-slate-300 mb-2" />
+             <Icon size={32} className="text-[var(--text-primary)] mb-2" />
              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Sin tareas</p>
           </div>
         )}

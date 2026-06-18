@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, Plus, Layout, Check, ChevronRight, Sparkles, FolderPlus,
-  Briefcase, Sun, BarChart
+  Briefcase, Sun, BarChart, Terminal, Zap, Cpu
 } from 'lucide-react';
 import { useTemplates } from '@/hooks/useTemplates';
 
@@ -35,148 +35,125 @@ export default function NewBoardModal({ isOpen, onClose, onCreate }: NewBoardMod
   };
 
   const getTemplateEmoji = (name: string) => {
-    if (name.includes('Construcción')) return '🏗️';
-    if (name.includes('Mantenimiento')) return '🛠️';
-    if (name.includes('Playa')) return '🏖️';
-    if (name.includes('Financiero')) return '💰';
-    return '✨';
+    if (name.includes('Construcción')) return <BarChart size={18} />;
+    if (name.includes('Mantenimiento')) return <Cpu size={18} />;
+    return <Layout size={18} />;
   };
 
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
           <motion.div 
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-[var(--bg-primary)]/80 backdrop-blur-md"
+            onClick={onClose}
+          />
+          
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 30 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="bg-white w-full max-w-4xl rounded-[3rem] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.3)] overflow-hidden border border-white flex flex-col md:flex-row h-[600px]"
+            exit={{ opacity: 0, scale: 0.95, y: 30 }}
+            className="relative bg-[var(--bg-primary)] w-full max-w-5xl rounded-[40px] shadow-[0_40px_120px_rgba(0,0,0,0.8)] overflow-hidden border border-[var(--border-color)] flex flex-col md:flex-row h-[650px]"
           >
-            {/* Sidebar info */}
-            <div className="md:w-[320px] bg-slate-900 p-10 text-white flex flex-col relative overflow-hidden">
-               <div className="absolute top-0 right-0 w-64 h-64 bg-primary/20 blur-[100px] -translate-y-1/2 translate-x-1/2" />
+            {/* Sidebar Technical Info */}
+            <div className="md:w-[350px] bg-[var(--bg-secondary)] p-12 text-white flex flex-col relative overflow-hidden border-r border-[var(--border-color)]">
+               <div className="absolute top-0 right-0 w-80 h-80 bg-[#3B7EF8]/10 blur-[120px] -translate-y-1/2 translate-x-1/2" />
                <div className="relative z-10 flex-1">
-                  <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center mb-8 backdrop-blur-md">
-                     <Layout className="text-white w-6 h-6" />
+                  <div className="w-14 h-14 bg-[#3B7EF8]/10 rounded-2xl flex items-center justify-center mb-10 border border-[#3B7EF8]/20 shadow-2xl">
+                     <Terminal className="text-[#3B7EF8] w-7 h-7" />
                   </div>
-                  <h2 className="text-3xl font-black mb-6 leading-tight">Crea tu nuevo espacio de trabajo</h2>
-                  <p className="text-slate-400 text-sm font-medium leading-relaxed">
-                    Personaliza tu flujo de trabajo desde cero o utiliza una de nuestras plantillas optimizadas para resultados inmediatos.
+                  <span className="text-[10px] font-black uppercase tracking-[0.5em] text-[#3B7EF8] mb-4 block">System Initialize</span>
+                  <h2 className="text-4xl font-black mb-8 leading-[1.1] tracking-tighter uppercase italic">Nuevo<br/>Proyecto.</h2>
+                  <p className="text-slate-500 text-sm font-medium leading-relaxed max-w-[220px]">
+                    Despliegue un nuevo entorno operativo con configuraciones pre-establecidas o arquitectura limpia.
                   </p>
                </div>
-               <div className="relative z-10 space-y-4">
-                  <div className="flex items-center gap-3 text-xs font-bold text-slate-500">
-                     <div className={`w-2 h-2 rounded-full ${step >= 1 ? 'bg-primary' : 'bg-slate-700'}`} />
-                     Nombre del Tablero
-                  </div>
-                  <div className="flex items-center gap-3 text-xs font-bold text-slate-500">
-                     <div className={`w-2 h-2 rounded-full ${step >= 2 ? 'bg-primary' : 'bg-slate-700'}`} />
-                     Seleccionar Plantilla
-                  </div>
+               
+               <div className="relative z-10 space-y-6">
+                  <StepIndicator active={step >= 1} label="Identificación" />
+                  <StepIndicator active={step >= 2} label="Arquitectura" />
                </div>
             </div>
 
             {/* Content area */}
-            <div className="flex-1 flex flex-col bg-white overflow-hidden">
-              <div className="flex items-center justify-end p-6">
-                <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors">
+            <div className="flex-1 flex flex-col bg-[var(--bg-primary)] overflow-hidden">
+              <div className="flex items-center justify-end p-8">
+                <button onClick={onClose} className="p-3 bg-slate-500/5 hover:bg-rose-500/10 rounded-2xl text-slate-600 hover:text-rose-500 border border-[var(--border-color)] transition-all">
                   <X size={24} />
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-10 pb-10 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto px-12 pb-12 custom-scrollbar">
                 {step === 1 ? (
                   <motion.div 
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="space-y-8"
+                    initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
+                    className="space-y-12"
                   >
                     <div>
-                      <h3 className="text-2xl font-black text-slate-800 mb-2">¿Cómo se llamará tu tablero?</h3>
-                      <p className="text-slate-400 text-sm font-medium">Puedes cambiar esto más adelante en la configuración.</p>
+                      <h3 className="text-3xl font-black text-white uppercase italic tracking-tight mb-4">¿Nombre del Entorno?</h3>
+                      <p className="text-slate-500 font-medium tracking-tight">Especifique el descriptor de su nuevo flujo operativo.</p>
                     </div>
                     
                     <div className="space-y-4">
-                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nombre del Proyecto</label>
+                       <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest pl-1">Descriptor</label>
                        <input
                         autoFocus
                         value={boardName}
                         onChange={(e) => setBoardName(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleNext()}
-                        placeholder="Ej: Plan Maestro 2026, Renovación de Playa..."
-                        className="w-full text-2xl font-bold text-slate-800 placeholder:text-slate-200 border-none focus:ring-0 p-0"
+                        placeholder="Ej: PLAN_MAESTRO_2026"
+                        className="w-full text-4xl font-black text-white placeholder:text-slate-900 border-none focus:ring-0 p-0 bg-transparent uppercase italic tracking-tighter"
                       />
                     </div>
 
                     <button 
                       onClick={handleNext}
                       disabled={!boardName.trim()}
-                      className="group flex items-center gap-3 bg-slate-900 text-white px-8 py-4 rounded-2xl font-black hover:bg-slate-800 transition-all active:scale-95 disabled:opacity-50"
+                      className="group flex items-center gap-4 bg-[#3B7EF8] text-white px-10 py-5 rounded-[2rem] text-xs font-black uppercase tracking-widest hover:bg-[#3B7EF8]/90 transition-all active:scale-95 disabled:opacity-30 shadow-2xl shadow-[#3B7EF8]/30 mt-8"
                     >
-                      Continuar
-                      <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                      Continuar a Estructura
+                      <ChevronRight size={18} className="group-hover:translate-x-2 transition-transform" />
                     </button>
                   </motion.div>
                 ) : (
                   <motion.div 
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="space-y-8"
+                    initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
+                    className="space-y-10"
                   >
                     <div>
-                      <h3 className="text-2xl font-black text-slate-800 mb-2">Elige un punto de partida</h3>
-                      <p className="text-slate-400 text-sm font-medium">Selecciona una plantilla o empieza desde cero.</p>
+                      <h3 className="text-3xl font-black text-white uppercase italic tracking-tight mb-4">Seleccione Estructura</h3>
+                      <p className="text-slate-500 font-medium tracking-tight">Utilice una receta pre-configurada para una implementación rápida.</p>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <button
-                        onClick={() => setSelectedTemplateId(undefined)}
-                        className={`p-5 rounded-2xl text-left transition-all duration-300 border-2 flex flex-col h-full ${
-                          !selectedTemplateId 
-                            ? 'bg-primary/5 border-primary shadow-lg shadow-primary/5 scale-[1.02]' 
-                            : 'bg-white border-slate-100 hover:border-slate-300'
-                        }`}
-                      >
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-4 text-xl ${
-                          !selectedTemplateId ? 'bg-primary text-white' : 'bg-slate-100 shadow-inner'
-                        }`}>
-                          <Layout size={20} />
-                        </div>
-                        <p className="font-black text-slate-800 text-sm mb-1">Desde cero</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase leading-tight">Tablero vacío y flexible</p>
-                      </button>
+                      <TemplateCard 
+                         isSelected={!selectedTemplateId} 
+                         onClick={() => setSelectedTemplateId(undefined)}
+                         icon={<Layout size={20} />}
+                         title="CLEAN_BUILD"
+                         desc="Tablero desde cero"
+                      />
 
-                      {templates.map((template) => {
-                        const isSelected = selectedTemplateId === template.id;
-                        return (
-                          <button
-                            key={template.id}
-                            onClick={() => setSelectedTemplateId(template.id)}
-                            className={`p-5 rounded-2xl text-left transition-all duration-300 border-2 flex flex-col h-full ${
-                              isSelected 
-                                ? 'bg-primary/5 border-primary shadow-lg shadow-primary/5 scale-[1.02]' 
-                                : 'bg-white border-slate-100 hover:border-slate-300'
-                            }`}
-                          >
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-4 text-xl ${
-                              isSelected ? 'bg-primary text-white' : 'bg-slate-100 shadow-inner'
-                            }`}>
-                              {getTemplateEmoji(template.name)}
-                            </div>
-                            <p className="font-black text-slate-800 text-sm mb-1">{template.name}</p>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase leading-tight truncate w-full">Optimizado para {template.name.split(' ')[0]}</p>
-                          </button>
-                        );
-                      })}
+                      {templates.map((template) => (
+                        <TemplateCard 
+                           key={template.id}
+                           isSelected={selectedTemplateId === template.id}
+                           onClick={() => setSelectedTemplateId(template.id)}
+                           icon={getTemplateEmoji(template.name)}
+                           title={template.name.toUpperCase().replace(' ', '_')}
+                           desc={`Optimizado para ${template.name.split(' ')[0]}`}
+                        />
+                      ))}
                     </div>
 
-                    <div className="flex items-center justify-between pt-6 border-t border-slate-100">
-                       <button onClick={() => setStep(1)} className="text-sm font-black text-slate-400 hover:text-slate-800">Atrás</button>
+                    <div className="flex items-center justify-between pt-10 border-t border-[var(--border-color)] mt-auto">
+                       <button onClick={() => setStep(1)} className="text-xs font-black text-slate-600 hover:text-white uppercase tracking-widest transition-colors">Volver</button>
                        <button 
                         onClick={handleCreate}
-                        className="flex items-center gap-3 bg-primary text-white px-10 py-4 rounded-2xl font-black hover:shadow-2xl hover:shadow-primary/30 transition-all active:scale-95 shadow-xl shadow-primary/20"
+                        className="flex items-center gap-4 bg-[#10B981] text-white px-12 py-5 rounded-[2rem] text-xs font-black uppercase tracking-widest hover:bg-emerald-400 hover:shadow-[0_0_30px_rgba(16,185,129,0.4)] transition-all active:scale-95 shadow-xl shadow-emerald-500/20"
                       >
-                        Crear Tablero
+                        Inicializar Tablero
                         <Sparkles size={18} />
                       </button>
                     </div>
@@ -188,5 +165,36 @@ export default function NewBoardModal({ isOpen, onClose, onCreate }: NewBoardMod
         </div>
       )}
     </AnimatePresence>
+  );
+}
+
+function StepIndicator({ active, label }: { active: boolean, label: string }) {
+  return (
+    <div className="flex items-center gap-4 group">
+       <div className={`w-3 h-3 rounded-full border-2 transition-all duration-500 ${active ? 'bg-[#3B7EF8] border-[#3B7EF8] shadow-[0_0_15px_#3B7EF8]' : 'bg-transparent border-slate-800'}`} />
+       <span className={`text-[11px] font-black uppercase tracking-[0.2em] transition-colors ${active ? 'text-white' : 'text-slate-700'}`}>{label}</span>
+    </div>
+  );
+}
+
+function TemplateCard({ isSelected, onClick, icon, title, desc }: any) {
+  return (
+    <button
+      onClick={onClick}
+      className={`p-6 rounded-[2rem] text-left transition-all duration-500 border-2 flex flex-col h-full relative group ${
+        isSelected 
+          ? 'bg-[#3B7EF8]/5 border-[#3B7EF8] shadow-[0_0_40px_rgba(59,126,248,0.15)] scale-[1.03]' 
+          : 'bg-[var(--bg-secondary)]/30 border-[var(--border-color)] hover:border-slate-800'
+      }`}
+    >
+      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-6 transition-all duration-500 shadow-xl ${
+        isSelected ? 'bg-[var(--bg-secondary)] text-[#3B7EF8] border border-[#3B7EF8]/30 shadow-[0_0_20px_rgba(59,126,248,0.2)]' : 'bg-[var(--bg-secondary)] text-slate-600 border border-[var(--border-color)] shadow-inner'
+      }`}>
+        {icon}
+      </div>
+      <p className={`font-black text-sm mb-2 uppercase italic tracking-tight ${isSelected ? 'text-white font-mono' : 'text-slate-400'}`}>{title}</p>
+      <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest leading-none">{desc}</p>
+      {isSelected && <div className="absolute top-4 right-4 text-[#3B7EF8] animate-pulse"><Zap size={14} fill="currentColor" /></div>}
+    </button>
   );
 }

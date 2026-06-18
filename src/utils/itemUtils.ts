@@ -9,7 +9,10 @@ export const isFinancialItem = (i: Item): boolean => {
   if (i.item_type === 'financial') return true;
   if (i.item_type === 'activity') return false;
   
-  // Fallback: only if explicitly marked as financial
+  // If it has a rubro, it's likely a financial/budget item
+  if (i.values?.rubro) return true;
+
+  // Default to false (assume activity) to avoid breaking execution views
   return false; 
 };
 

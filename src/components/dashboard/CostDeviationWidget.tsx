@@ -127,7 +127,7 @@ export default function CostDeviationWidget({ groups, columns, activeSiteId: pro
                 <div className="flex bg-slate-50 p-1.5 rounded-2xl border border-slate-100 shadow-inner">
                     <button 
                         onClick={() => setInternalActiveSiteId('all')} 
-                        className={`px-4 py-2 rounded-xl text-xs font-black shadow-sm transition-all duration-300 ${activeSiteId === 'all' ? 'bg-white text-slate-800 ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'}`}
+                        className={`px-4 py-2 rounded-xl text-xs font-black shadow-sm transition-all duration-300 ${activeSiteId === 'all' ? 'bg-white text-slate-800 ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-500/50'}`}
                     >
                         TODOS
                     </button>
@@ -135,7 +135,7 @@ export default function CostDeviationWidget({ groups, columns, activeSiteId: pro
                         <button
                             key={group.id}
                             onClick={() => setInternalActiveSiteId(group.id)}
-                            className={`px-4 py-2 rounded-xl text-xs font-black transition-all duration-300 ${activeSiteId === group.id ? 'bg-white text-emerald-700 shadow-md ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'}`}
+                            className={`px-4 py-2 rounded-xl text-xs font-black transition-all duration-300 ${activeSiteId === group.id ? 'bg-white text-emerald-700 shadow-md ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-500/50'}`}
                         >
                             {group.title.toUpperCase()}
                         </button>
@@ -173,7 +173,7 @@ export default function CostDeviationWidget({ groups, columns, activeSiteId: pro
             <div className="w-full md:w-1/3 overflow-y-auto pr-2 custom-scrollbar space-y-3">
                  <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2 border-b border-slate-100 pb-2">Detalle de Inversión</h4>
                  {data.map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 hover:shadow-md transition-shadow">
+                    <div key={item.name} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 hover:shadow-md transition-shadow">
                         <div className="flex items-center gap-2 overflow-hidden">
                              <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
                              <span className="text-xs font-bold text-slate-700 truncate">{item.name}</span>

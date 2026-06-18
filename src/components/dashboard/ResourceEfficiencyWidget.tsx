@@ -359,7 +359,7 @@ export default function ResourceEfficiencyWidget({ boardId, groups, activityTemp
                     <button
                         key={group.id}
                         onClick={() => setActiveSiteId(group.id)}
-                        className={`px-5 py-2.5 rounded-xl text-xs font-black whitespace-nowrap transition-all duration-300 ${activeSiteId === group.id ? 'bg-white text-emerald-700 shadow-md ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'}`}
+                        className={`px-5 py-2.5 rounded-xl text-xs font-black whitespace-nowrap transition-all duration-300 ${activeSiteId === group.id ? 'bg-white text-emerald-700 shadow-md ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-500/50'}`}
                     >
                         {group.title.toUpperCase()}
                     </button>
@@ -414,7 +414,7 @@ export default function ResourceEfficiencyWidget({ boardId, groups, activityTemp
                     </div>
  
                     {/* Wage Input */}
-                    <div className="flex items-center gap-3 bg-white/5 border border-white/10 px-4 py-2 rounded-xl backdrop-blur-md">
+                    <div className="flex items-center gap-3 bg-slate-500/5 border border-[var(--border-color)] px-4 py-2 rounded-xl backdrop-blur-md">
                         <DollarSign size={14} className="text-emerald-400" />
                         <span className="text-[10px] font-black uppercase tracking-wider text-white/60 whitespace-nowrap">Jornal Promedio:</span>
                         <input
@@ -521,7 +521,7 @@ export default function ResourceEfficiencyWidget({ boardId, groups, activityTemp
                             </tr>
                             <tr className="bg-slate-900 text-white font-black">
                                 <td colSpan={6} className="p-5 text-right uppercase text-[10px] tracking-[0.2em] border-r border-slate-700">Cant. Personal Requerido:</td>
-                                <td className="p-5 text-right text-xl text-emerald-400 bg-white/5 border-r border-slate-700">
+                                <td className="p-5 text-right text-xl text-emerald-400 bg-slate-500/5 border-r border-slate-700">
                                     {(calculations.totalJornales / WORKING_DAYS_MONTH).toFixed(1)}
                                 </td>
                                 <td colSpan={2} className="border-r border-slate-700"></td>

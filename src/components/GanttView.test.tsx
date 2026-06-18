@@ -73,8 +73,8 @@ describe('GanttView Component', () => {
     expect(getByText(/Cronograma de Actividades/i)).toBeInTheDocument();
   });
 
-  it('shows the "Vista en vivo" indicator', () => {
+  it('shows the "System Online" indicator', () => {
     const { getByText } = render(<GanttView groups={mockGroups} />);
-    expect(getByText(/Vista en vivo/i)).toBeInTheDocument();
+    expect(getByText(/System Online/i)).toBeInTheDocument();
   });
 });

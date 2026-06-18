@@ -51,10 +51,10 @@ export default function OkrsView() {
         {okrs.length === 0 ? (
           <div className="col-span-full py-20 bg-white rounded-[2rem] border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center">
              <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6">
-                <Target className="w-10 h-10 text-slate-200" />
+                <Target className="w-10 h-10 text-[var(--text-primary)]" />
              </div>
              <p className="text-xl font-bold text-slate-400">No hay objetivos creados</p>
-             <p className="text-slate-300 max-w-xs mt-2">Crea tu primer OKR para empezar a medir el éxito de tus proyectos.</p>
+             <p className="text-[var(--text-primary)] max-w-xs mt-2">Crea tu primer OKR para empezar a medir el éxito de tus proyectos.</p>
           </div>
         ) : (
           okrs.map((okr, index) => (
@@ -79,10 +79,10 @@ export default function OkrsView() {
                           <Users size={12} className="text-emerald-500" />
                        )}
                     </h3>
-                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mt-1">OKR ESTRATÉGICO</p>
+                    <p className="text-[10px] font-black text-[var(--text-primary)] uppercase tracking-widest mt-1">OKR ESTRATÉGICO</p>
                   </div>
                 </div>
-                <button className="text-slate-300 hover:text-slate-600 p-1">
+                <button className="text-[var(--text-primary)] hover:text-slate-600 p-1">
                    <MoreVertical size={20} />
                 </button>
               </div>

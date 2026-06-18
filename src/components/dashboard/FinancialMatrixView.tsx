@@ -95,11 +95,7 @@ export default function FinancialMatrixView({
   const [viewMode, setViewMode] = useState<'budget' | 'execution'>('execution');
   const [confirmDeleteSubSub, setConfirmDeleteSubSub] = useState<{name: string, itemIds: string[] } | null>(null);
 
-  useEffect(() => {
-      if (typeof window !== 'undefined') {
-          localStorage.removeItem('costCategories');
-      }
-  }, []);
+  // Removed legacy useEffect that cleared costCategories
   
   const currentMonth = useMemo(() => {
       return new Date().toLocaleString('es-ES', { month: 'long' });
@@ -108,52 +104,79 @@ export default function FinancialMatrixView({
   const hierarchicalData = useMemo(() => {
     const data: { [major: string]: { [sub: string]: { [subSub: string]: ItemSummary[] } } } = {};
     
+    // Helper to normalize strings for comparison
+    const norm = (s: string) => (s || '').trim().toUpperCase();
+
     groups.forEach(group => {
       group.items.forEach((item: any) => {
-        const parts = item.name.split('|').map((s: string) => s.trim());
-        let major = 'SIN CATEGORÍA';
-        let sub = 'General';
-        let subSub = 'Detalle';
-        let itemName = item.name;
+        // Preference: check values first (rubro, category, sub_category)
+        let major = norm(item.values?.rubro || 'SIN CATEGORÍA');
+        let sub = norm(item.values?.category || 'General');
+        let subSub = norm(item.values?.sub_category || 'Detalle');
+        let itemName = (item.name || '').trim();
 
-        if (parts.length >= 3) {
-           major = parts[0];
-           sub = parts[1];
-           subSub = parts[2];
-           itemName = parts.slice(3).join(' | ') || subSub;
-        } else if (parts.length === 2) {
-           major = parts[0];
-           sub = parts[1];
-           itemName = sub;
+        // Fallback: If values are missing, try parsing the name string (Rubro | Cat | SubCat | Name)
+        const parts = item.name.split('|').map((s: string) => s.trim());
+        if (!item.values?.rubro && parts.length >= 2) {
+           major = norm(parts[0]);
+           sub = parts.length >= 2 ? norm(parts[1]) : 'GENERAL';
+           subSub = parts.length >= 3 ? norm(parts[2]) : 'GLOBAL';
+           itemName = parts.length > 3 ? parts.slice(3).join(' | ') : (parts.length === 3 ? parts[2] : parts[1]);
         }
+
+        // FILTER: Remove "SIN CATEGORÍA" items as requested
+        if (major === 'SIN CATEGORÍA') return;
 
         if (!data[major]) data[major] = {};
         if (!data[major][sub]) data[major][sub] = {};
         if (!data[major][sub][subSub]) data[major][sub][subSub] = [];
 
-        let existing = data[major][sub][subSub].find(i => i.name === itemName);
+        let existing = data[major][sub][subSub].find(i => norm(i.name) === norm(itemName));
         if (!existing) {
-          existing = { name: itemName, unit: item.values?.[unitColId] || 'UND', siteData: {}, allItemIds: [] };
+          existing = { 
+            name: itemName, 
+            unit: (item.values?.[unitColId] || 'UND').toUpperCase(), 
+            siteData: {}, 
+            allItemIds: [] 
+          };
           data[major][sub][subSub].push(existing);
         }
         
-        existing.allItemIds.push(item.id);
+        if (!existing.allItemIds.includes(item.id)) {
+            existing.allItemIds.push(item.id);
+        }
         
         const bQty = Number(item.values?.[qtyColId]) || 0;
         const uPrice = Number(item.values?.[priceColId]) || 0;
         const eQty = Number(item.values?.[execQtyColId]) || 0;
         
-        existing.siteData[group.id] = {
-          groupId: group.id,
-          itemId: item.id,
-          budgetQty: bQty,
-          unitPrice: uPrice,
-          budgetTotal: bQty * uPrice,
-          executedQty: eQty,
-          executedTotal: eQty * uPrice,
-          compliance: bQty > 0 ? (eQty / bQty) * 100 : 0,
-          unit: item.values?.[unitColId] || 'UND'
-        };
+        // AGGREGATION FIX: Sum metrics if multiple items in the same site match the name
+        if (!existing.siteData[group.id]) {
+            existing.siteData[group.id] = {
+                groupId: group.id,
+                itemId: item.id,
+                budgetQty: bQty,
+                unitPrice: uPrice,
+                budgetTotal: bQty * uPrice,
+                executedQty: eQty,
+                executedTotal: eQty * uPrice,
+                compliance: 0,
+                unit: (item.values?.[unitColId] || 'UND').toUpperCase()
+            };
+        } else {
+            const sd = existing.siteData[group.id];
+            sd.budgetQty += bQty;
+            sd.budgetTotal += (bQty * uPrice);
+            sd.executedQty += eQty;
+            sd.executedTotal += (eQty * uPrice);
+            // If prices differ, we show a weighted average or the last one? 
+            // For Matrix summary, budgetTotal/budgetQty is the most accurate representation.
+            if (sd.budgetQty > 0) sd.unitPrice = sd.budgetTotal / sd.budgetQty;
+        }
+        
+        // Final compliance for this site
+        const sd = existing.siteData[group.id];
+        sd.compliance = sd.budgetQty > 0 ? (sd.executedQty / sd.budgetQty) * 100 : 0;
       });
     });
 
@@ -208,17 +231,27 @@ export default function FinancialMatrixView({
   };
 
   const calculateTotalItemData = (item: ItemSummary): SiteData => {
-      return Object.values(item.siteData).reduce((acc, curr) => ({
+      const totals = Object.values(item.siteData).reduce((acc, curr) => ({
           groupId: 'total_proyecto',
           itemId: 'total',
           budgetQty: acc.budgetQty + curr.budgetQty,
-          unitPrice: curr.unitPrice, // average maybe?
+          unitPrice: 0, // calculated below
           budgetTotal: acc.budgetTotal + curr.budgetTotal,
           executedQty: acc.executedQty + curr.executedQty,
           executedTotal: acc.executedTotal + curr.executedTotal,
-          compliance: (acc.budgetQty + curr.budgetQty) > 0 ? ((acc.executedQty + curr.executedQty) / (acc.budgetQty + curr.budgetQty)) * 100 : 0,
+          compliance: 0, // calculated below
           unit: curr.unit
       }), { budgetQty:0, unitPrice:0, budgetTotal:0, executedQty:0, executedTotal:0, compliance:0, itemId: '', groupId: '', unit: '' });
+
+      if (totals.budgetQty > 0) {
+          totals.unitPrice = totals.budgetTotal / totals.budgetQty;
+          totals.compliance = (totals.executedQty / totals.budgetQty) * 100;
+      } else if (totals.executedQty > 0) {
+          // If no budget but there is execution
+          totals.compliance = 100; 
+      }
+
+      return totals;
   };
 
   return (
@@ -297,7 +330,7 @@ export default function FinancialMatrixView({
                        </tr>
                     </thead>
 
-                    <tbody className="bg-white/5">
+                    <tbody className="bg-slate-500/5">
                        {Object.entries(hierarchicalData)
                            .filter(([majorCat]) => !majorCat.toLowerCase().includes('otros costos'))
                            .sort(([a], [b]) => {
@@ -347,14 +380,14 @@ export default function FinancialMatrixView({
                                          {Object.entries(subSubCats as any).map(([subSubCat, items]) => (
                                               <Fragment key={`${majorCat}-${subCat}-${subSubCat}`}>
                                                    {(items as any[]).map((item, idx) => {
-                                                       const itemRowKey = `${majorCat}|${subCat}|${subSubCat}|${item.name}`;
+                                                       const itemRowKey = `row-${majorCat}-${subCat}-${subSubCat}-${item.name}-${idx}`;
                                                        const isEven = idx % 2 === 0;
                                                        return (
                                                        <tr key={itemRowKey} className={`group hover:bg-slate-800/80 transition-colors ${isEven ? 'bg-transparent' : 'bg-slate-900/20'}`}>
-                                                           <td className="p-0 border border-slate-800/50 sticky left-0 z-40 bg-slate-900 text-slate-300 text-[11px] group/row shadow-[4px_0_8px_rgba(0,0,0,0.2)]">
+                                                           <td className="p-0 border border-slate-800/50 sticky left-0 z-40 bg-slate-900 text-[var(--text-primary)] text-[11px] group/row shadow-[4px_0_8px_rgba(0,0,0,0.2)]">
                                                                <div className="relative w-full h-full pl-8 pr-2 py-1.5 flex items-center">
                                                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full border border-slate-600 bg-slate-800"></div>
-                                                                   <EditableCell value={item.name} type="text" onSave={() => {}} className="text-slate-300 font-medium truncate" align="left" />
+                                                                   <EditableCell value={item.name} type="text" onSave={() => {}} className="text-[var(--text-primary)] font-medium truncate" align="left" />
                                                                    <button 
                                                                        onClick={() => {
                                                                            if (window.confirm(`¿Eliminar '${item.name}' de todos los sitios?`)) {
@@ -384,7 +417,7 @@ export default function FinancialMatrixView({
                                                                     <td className={`p-1 border border-slate-800/50 ${cellBg}`}>
                                                                         <EditableCell value={v.p} type="number" onSave={(val) => !isTotal && onUpdateItemValue?.(g.id, sD.itemId, priceColId, val)} className="text-slate-400 italic text-right font-medium" align="right" readonly={isTotal} />
                                                                     </td>
-                                                                    <td className={`p-1 border border-slate-800/50 text-right font-black text-xs ${isTotal ? 'text-white' : 'text-slate-200'} ${cellBg}`}>
+                                                                    <td className={`p-1 border border-slate-800/50 text-right font-black text-xs ${isTotal ? 'text-white' : 'text-[var(--text-primary)]'} ${cellBg}`}>
                                                                         {currencyFormatter.format(v.t)}
                                                                     </td>
                                                                     <td className={`p-1 border border-slate-800/50 text-center font-black text-[10px] ${isTotal ? 'bg-slate-900 text-emerald-400' : 'text-slate-500 bg-black/10'}`}>
@@ -411,10 +444,12 @@ export default function FinancialMatrixView({
                             { label: 'TOTAL COSTO DIRECTO', type: 'base' },
                             { label: 'A (20%)', factor: 0.20, type: 'aiu' },
                             { label: 'I (5%)', factor: 0.05, type: 'aiu' },
-                            { label: 'U (5%)', factor: 0.05, type: 'aiu' }
+                            { label: 'U (5%)', factor: 0.05, type: 'aiu' },
+                            { label: 'VALOR ACTA', type: 'acta' },
+                            { label: '% MARGEN/UTILIDAD', type: 'utility' }
                         ].map((row_def) => (
                             <tr key={row_def.label} className={`border-b border-slate-700/30 ${row_def.type === 'acta' || row_def.type === 'utility' ? 'bg-slate-900' : 'bg-slate-800'}`}>
-                                <td className="p-2 border-r border-slate-700 sticky left-0 z-40 bg-slate-800 text-right uppercase text-[9px] font-black tracking-widest text-slate-300 shadow-[4px_0_8px_rgba(0,0,0,0.3)]">
+                                <td className="p-2 border-r border-slate-700 sticky left-0 z-40 bg-slate-800 text-right uppercase text-[9px] font-black tracking-widest text-[var(--text-primary)] shadow-[4px_0_8px_rgba(0,0,0,0.3)]">
                                      {row_def.label}
                                 </td>
                                 <td className="bg-slate-800 border-r border-slate-700"></td>
@@ -476,7 +511,7 @@ export default function FinancialMatrixView({
                                     }
 
                                     const cellBg = isTotal ? 'bg-slate-950/60' : '';
-                                    const tc = (row_def.type==='acta'||row_def.type==='utility') ? 'text-emerald-400' : 'text-slate-300';
+                                    const tc = (row_def.type==='acta'||row_def.type==='utility') ? 'text-emerald-400' : 'text-[var(--text-primary)]';
 
                                     return (
                                         <Fragment key={g.id}>
@@ -485,7 +520,7 @@ export default function FinancialMatrixView({
                                             <td className={`p-2 border-r border-slate-700/50 text-right font-black text-[10px] ${tc} ${cellBg}`}>
                                                 {bDisplay}
                                             </td>
-                                            <td className={`p-2 border-r border-slate-700/50 text-center font-bold text-slate-400 ${cellBg} bg-black/20`}>
+                                            <td className={`p-2 border-r border-slate-700/50 text-center font-bold text-slate-400 ${cellBg} bg-slate-500/5`}>
                                                 {typeof eDisplay === 'string' || !eDisplay ? eDisplay : eDisplay}
                                                 {!eDisplay && eSub}
                                             </td>

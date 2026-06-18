@@ -43,7 +43,7 @@ export function renderWidget(type: string, props: any) {
     <div className="h-full flex items-center justify-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
       <div className="text-center">
         <p className="text-slate-400 text-sm font-medium italic">Widget no encontrado</p>
-        <p className="text-slate-300 text-[10px] uppercase font-black tracking-widest mt-1">{type}</p>
+        <p className="text-[var(--text-primary)] text-[10px] uppercase font-black tracking-widest mt-1">{type}</p>
       </div>
     </div>
   );

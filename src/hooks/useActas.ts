@@ -139,7 +139,7 @@ export const useActaDetailsByBoard = (boardId?: string) => {
             if (actasError) throw actasError;
             if (!actas || actas.length === 0) return [];
 
-            const actaIds = actas.map(a => a.id);
+            const actaIds = actas.map((a: any) => a.id);
 
             const { data: details, error: detailsError } = await supabase
                 .from('financial_acta_details')

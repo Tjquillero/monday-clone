@@ -99,7 +99,7 @@ export function generateBoardReportHtml(boardName: string, groups: Group[], colu
         <div class="text-right">
           <p class="text-xs font-bold text-slate-400">FECHA</p>
           <p class="text-sm font-black capitalize">${dateStr}</p>
-          <p class="text-[10px] text-slate-300 mt-2 uppercase tracking-wide">${boardName}</p>
+          <p class="text-[10px] text-[var(--text-primary)] mt-2 uppercase tracking-wide">${boardName}</p>
         </div>
       </div>
 
@@ -108,10 +108,10 @@ export function generateBoardReportHtml(boardName: string, groups: Group[], colu
 
       <!-- Footer -->
       <div class="mt-12 pt-6 border-t border-slate-100 text-center break-inside-avoid">
-        <p className="text-[10px] text-slate-300 font-medium">
+        <p className="text-[10px] text-[var(--text-primary)] font-medium">
           Reporte generado automáticamente por Mantenix Platform.
         </p>
-        <p className="text-[10px] text-slate-300 font-medium italic mt-1">
+        <p className="text-[10px] text-[var(--text-primary)] font-medium italic mt-1">
           &copy; ${new Date().getFullYear()} Mantenix.
         </p>
       </div>

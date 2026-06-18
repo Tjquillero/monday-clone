@@ -83,113 +83,132 @@ export default function PersonnelPicker({ currentValue, onSelect, onClose, posit
   const content = (
     <div 
         ref={pickerRef} 
-        className={`${position ? 'fixed' : 'absolute'} z-[9999] mt-2 w-72 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden text-left animation-scale-in`}
+        className={`${position ? 'fixed' : 'absolute'} z-[9999] mt-2 w-80 bg-[var(--bg-secondary)] rounded-[2rem] shadow-2xl border border-[var(--border-color)] overflow-hidden text-left animation-scale-in backdrop-blur-md`}
         style={position ? { top: position.top, left: position.left } : {}}
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
     >
         {isCreating ? (
-            <div className="p-4 bg-slate-50">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-sm font-bold text-slate-700">Nuevo Operario</h3>
-                    <button onClick={() => setIsCreating(false)} className="p-1 hover:bg-white rounded-lg transition-all text-slate-400 hover:text-rose-500 shadow-sm border border-transparent hover:border-rose-100">
-                        <X className="w-4 h-4"/>
+            <div className="p-8 bg-[var(--bg-secondary)]">
+                <div className="flex justify-between items-center mb-8">
+                    <h3 className="text-[10px] font-black text-[#3B7EF8] uppercase tracking-[0.4em] italic leading-none">Registro_Operario</h3>
+                    <button onClick={() => setIsCreating(false)} className="p-1.5 hover:bg-slate-500/5 rounded-lg transition-all text-slate-600 hover:text-rose-500 border border-transparent hover:border-rose-500/20">
+                        <X className="w-5 h-5"/>
                     </button>
                 </div>
                 
-                <div className="space-y-3">
-                    <div>
-                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Nombre</label>
+                <div className="space-y-6">
+                    <div className="space-y-2">
+                        <label className="text-[9px] uppercase font-black text-slate-600 tracking-[0.3em] ml-1">Nombre_Operativo</label>
                         <input 
                             autoFocus
-                            className="w-full text-sm border-b-2 border-slate-200 focus:border-emerald-500 outline-none bg-transparent py-1 transition-all"
+                            className="w-full text-sm border-b border-[var(--border-color)] focus:border-[#3B7EF8] outline-none bg-transparent py-2 text-white font-mono font-bold transition-all placeholder:text-slate-800"
                             value={newName} 
                             onChange={e => setNewName(e.target.value)}
                             placeholder="Ej. Juan Pérez"
                         />
                     </div>
-                    <div>
-                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Cargo / Rol</label>
+                    <div className="space-y-2">
+                        <label className="text-[9px] uppercase font-black text-slate-600 tracking-[0.3em] ml-1">Cargo / Rol</label>
                         <input 
-                            className="w-full text-sm border-b-2 border-slate-200 focus:border-emerald-500 outline-none bg-transparent py-1 transition-all"
+                            className="w-full text-sm border-b border-[var(--border-color)] focus:border-[#3B7EF8] outline-none bg-transparent py-2 text-white font-mono font-bold transition-all placeholder:text-slate-800"
                             value={newRole} 
                             onChange={e => setNewRole(e.target.value)}
-                            placeholder="Ej. Oficial"
+                            placeholder="Ej. Oficial_Lider"
                         />
                     </div>
-                    <div>
-                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Costo Día ($)</label>
+                    <div className="space-y-2">
+                        <label className="text-[9px] uppercase font-black text-slate-600 tracking-[0.3em] ml-1">Costo_Operativo ($)</label>
                         <input 
                             type="number"
-                            className="w-full text-sm border-b-2 border-slate-200 focus:border-emerald-500 outline-none bg-transparent py-1 transition-all"
+                            className="w-full text-sm border-b border-[var(--border-color)] focus:border-[#3B7EF8] outline-none bg-transparent py-2 text-white font-mono font-bold transition-all"
                             value={newRate} 
                             onChange={e => setNewRate(parseFloat(e.target.value) || 0)}
                         />
                     </div>
                 </div>
 
-                <div className="mt-4 flex justify-end">
+                <div className="mt-10">
                     <button 
                         onClick={handleCreate}
                         disabled={!newName}
-                        className="bg-slate-800 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-900 shadow-lg shadow-slate-200 disabled:opacity-50 transition-all active:scale-95"
+                        className="w-full bg-[#3B7EF8] text-white py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-[#2563EB] shadow-xl shadow-[#3B7EF8]/20 disabled:opacity-50 transition-all active:scale-95 border border-[var(--border-color)]"
                     >
-                        Crear y Asignar
+                        COMMIT & ASSIGN_UNIT
                     </button>
                 </div>
             </div>
         ) : (
             <>
-                <div className="p-2 border-b border-slate-100 flex items-center bg-white sticky top-0 bg-slate-50/50 backdrop-blur-sm">
-                    <Search className="w-4 h-4 text-slate-400 mr-2" />
+                <div className="p-4 border-b border-[var(--border-color)] flex items-center bg-[var(--bg-primary)]/50 sticky top-0 backdrop-blur-md z-10">
+                    <Search className="w-4 h-4 text-[#3B7EF8] mr-3 opacity-50" />
                     <input 
-                        className="w-full text-sm outline-none placeholder:text-slate-400 bg-transparent"
-                        placeholder="Buscar operario..."
+                        className="w-full text-[10px] font-black uppercase tracking-[0.2em] outline-none placeholder:text-slate-700 bg-transparent text-white"
+                        placeholder="Search_Database..."
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                     />
                 </div>
                 
-                <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                <div className="max-h-[320px] overflow-y-auto custom-scrollbar bg-[var(--bg-secondary)]/50 p-2">
                     {loading ? (
-                        <div className="p-4 text-center text-xs text-slate-400 font-medium">Cargando...</div>
+                        <div className="p-8 text-center text-[10px] text-slate-700 font-black uppercase tracking-widest italic animate-pulse">Accessing_Database...</div>
                     ) : filteredPersonnel.length === 0 ? (
-                        <div className="p-4 text-center text-xs text-slate-400 font-medium">
-                            {searchQuery ? 'No encontrado.' : 'No hay personal registrado.'}
+                        <div className="p-8 text-center text-[10px] text-slate-700 font-black uppercase tracking-widest italic">
+                            {searchQuery ? 'Zero_Results_Found.' : 'Empty_Database.'}
                         </div>
                     ) : (
-                        filteredPersonnel.map(person => (
-                            <button
-                                key={person.id}
-                                onClick={() => onSelect(person.id, person.name)}
-                                className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-center justify-between group transition-colors"
-                            >
-                                <div className="flex items-center">
-                                    <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold mr-3 border border-slate-200">
-                                        {(person.name || '?').charAt(0)}
+                        <div className="space-y-1">
+                            {filteredPersonnel.map((person, idx) => (
+                                <button
+                                    key={`personnel-${person.id || `idx-${idx}`}`}
+                                    onClick={() => onSelect(person.id, person.name)}
+                                    className={`w-full text-left p-4 rounded-2xl flex items-center justify-between group transition-all border border-transparent hover:bg-white/[0.03] hover:border-[var(--border-color)] ${currentValue === person.id ? 'bg-[#3B7EF8]/10 border-[#3B7EF8]/20' : ''}`}
+                                >
+                                    <div className="flex items-center">
+                                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#3B7EF8] to-[#1E2442] text-white flex items-center justify-center text-[10px] font-black mr-4 shadow-lg border border-[var(--border-color)] group-hover:scale-110 transition-transform">
+                                            {(person.name || '?').charAt(0)}
+                                        </div>
+                                        <div>
+                                            <div className="text-[11px] text-white font-black uppercase tracking-tighter leading-none">{person.name}</div>
+                                            <div className="text-[9px] text-slate-600 font-black italic mt-1.5 uppercase tracking-widest">{person.role || 'NO_AUTH_ROLE'}</div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <div className="text-sm text-slate-700 font-bold leading-tight">{person.name}</div>
-                                        <div className="text-[10px] text-slate-400 font-medium leading-tight">{person.role || 'Sin cargo'}</div>
-                                    </div>
-                                </div>
-                                {currentValue === person.id && <Check className="w-3 h-3 text-emerald-600" />}
-                            </button>
-                        ))
+                                    {currentValue === person.id && (
+                                        <div className="w-6 h-6 rounded-full bg-[#10B981] flex items-center justify-center shadow-lg shadow-[#10B981]/20">
+                                            <Check className="w-3.5 h-3.5 text-white" />
+                                        </div>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
                     )}
                 </div>
 
-                <div className="p-2 border-t border-slate-100 bg-slate-50/50 md:sticky bottom-0">
+                <div className="p-4 border-t border-[var(--border-color)] bg-[var(--bg-primary)]/50">
                     <button 
                         onClick={() => setIsCreating(true)}
-                        className="w-full flex items-center justify-center px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-emerald-50 hover:border-emerald-200 text-emerald-600 text-xs font-bold transition-all shadow-sm"
+                        className="w-full flex items-center justify-center py-4 rounded-2xl border border-[var(--border-color)] bg-slate-500/5 hover:bg-[#10B981]/10 hover:border-[#10B981]/30 text-[#10B981] text-[10px] font-black uppercase tracking-[0.3em] transition-all shadow-xl hover:shadow-[#10B981]/10"
                     >
-                        <UserPlus className="w-3 h-3 mr-2" />
-                        Crear Nuevo
+                        <UserPlus className="w-4 h-4 mr-3" />
+                        CREATE_NEW_UNIT
                     </button>
                 </div>
             </>
         )}
+
+        <style jsx>{`
+            .custom-scrollbar::-webkit-scrollbar {
+                width: 4px;
+            }
+            .custom-scrollbar::-webkit-scrollbar-thumb {
+                background: rgba(255, 255, 255, 0.05);
+                border-radius: 10px;
+            }
+            .custom-scrollbar::-webkit-scrollbar-track {
+                background: transparent;
+            }
+        `}</style>
     </div>
   );
 

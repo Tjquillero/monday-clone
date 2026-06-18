@@ -37,7 +37,7 @@ const getDashboardWidgets = async (dashboardId: string): Promise<DashboardWidget
     .select('*')
     .eq('dashboard_id', dashboardId);
   if (error) throw new Error(error.message);
-  return data.map(w => ({ ...w, layout: w.layout || { i: w.id, x: 0, y: 0, w: 4, h: 2 } }));
+  return (data || []).map((w: any) => ({ ...w, layout: w.layout || { i: w.id, x: 0, y: 0, w: 4, h: 2 } }));
 };
 
 const updateWidgetLayouts = async (widgets: { id: string, layout: any }[]) => {
@@ -185,7 +185,7 @@ export default function CustomizableDashboard({ dashboardId }: CustomizableDashb
       
       {widgets.length === 0 && (
           <div className="text-center py-24 border-2 border-dashed border-slate-200 rounded-xl">
-              <LayoutGrid size={48} className="mx-auto text-slate-300 mb-4" />
+              <LayoutGrid size={48} className="mx-auto text-[var(--text-primary)] mb-4" />
               <h3 className="text-lg font-bold text-slate-600">Panel Vacío</h3>
               <p className="text-sm text-slate-400 mb-6">Añade tu primer widget para empezar a visualizar tus datos.</p>
               <button onClick={() => handleAddWidget('s-curve')} className="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold">Añadir Widget de Curva S</button>

@@ -132,7 +132,7 @@ export function CustomizableDashboard({ boardId, groups, columns }: Customizable
       <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
         {!widgets || widgets.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-12">
-            <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center text-slate-200 mb-6">
+            <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center text-[var(--text-primary)] mb-6">
               <Layout size={40} />
             </div>
             <h3 className="text-slate-900 font-bold text-xl mb-2">Tu panel está vacío</h3>
@@ -172,7 +172,7 @@ export function CustomizableDashboard({ boardId, groups, columns }: Customizable
                   </div>
 
                   {/* Drag Handle (Full header in Edit mode) */}
-                  <div className={`p-4 bg-white/50 backdrop-blur-sm border-b border-slate-50/50 flex items-center gap-3 ${isEditing ? 'cursor-move widget-drag-handle' : ''}`}>
+                  <div className={`p-4 bg-slate-500/50 backdrop-blur-sm border-b border-slate-50/50 flex items-center gap-3 ${isEditing ? 'cursor-move widget-drag-handle' : ''}`}>
                     <div className="w-2 h-2 rounded-full bg-primary" />
                     <h4 className="text-slate-900 font-black text-[10px] uppercase tracking-widest">{widget.title}</h4>
                   </div>

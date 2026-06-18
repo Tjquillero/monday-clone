@@ -35,7 +35,7 @@ export default function NotificationBell() {
             .on(
                 'postgres_changes',
                 { event: 'INSERT', schema: 'public', table: 'notifications' },
-                (payload) => {
+                (payload: any) => {
                     const newNotif = payload.new as Notification;
                     setNotifications(prev => [newNotif, ...prev]);
                     setUnreadCount(prev => prev + 1);
@@ -61,7 +61,7 @@ export default function NotificationBell() {
 
         if (data) {
             setNotifications(data);
-            setUnreadCount(data.filter(n => !n.read).length);
+            setUnreadCount(data.filter((n: any) => !n.read).length);
         }
     };
 

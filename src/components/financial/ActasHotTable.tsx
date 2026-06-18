@@ -161,61 +161,13 @@ const COL_WIDTHS = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-const ActasHotTable: React.FC<ActasHotTableProps> = ({
+const ActasHotTable: React.FC<ActasHotTableProps> = React.memo(({
   tableData, isReadOnly, onCellChange, actaName, onDelete,
 }) => {
-  const [rows, setRows] = useState<ActasTableRow[]>(tableData);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
-  useEffect(() => { setRows(tableData); }, [tableData]);
-
   const commit = useCallback(
-    (rowIndex: number, row: ActasTableRow, field: 'qty' | 'val' | 'pct' | 'prevQty' | 'prevVal' | 'unitPrice' | 'budgetTotal', value: number) => {
-      // Optimistic recalculation
-      const r = { ...row };
-      if (field === 'qty') {
-        r.currentQty   = value;
-        r.currentValue = value * r.unitPrice;
-        r.currentPct   = r.budgetQty > 0 ? (value / r.budgetQty) * 100 : 0;
-      } else if (field === 'val') {
-        r.currentValue = value;
-        r.currentQty   = r.unitPrice > 0 ? value / r.unitPrice : 0;
-        r.currentPct   = r.budgetQty > 0 ? (r.currentQty / r.budgetQty) * 100 : 0;
-      } else if (field === 'pct') {
-        r.currentPct   = value;
-        r.currentQty   = (value / 100) * r.budgetQty;
-        r.currentValue = r.currentQty * r.unitPrice;
-      } else if (field === 'prevQty') {
-        r.previousQty   = value;
-        r.previousValue = value * r.unitPrice;
-      } else if (field === 'prevVal') {
-        r.previousValue = value;
-        r.previousQty   = r.unitPrice > 0 ? value / r.unitPrice : 0;
-      } else if (field === 'unitPrice') {
-        r.unitPrice = value;
-        r.budgetTotal = r.budgetQty * value;
-        // Also recalculate current value based on updated unit price and current qty
-        r.currentValue = r.currentQty * value;
-        r.previousValue = r.previousQty * value;
-      } else if (field === 'budgetTotal') {
-        r.budgetTotal = value;
-        // If we have a quantity, adjust unit price. If no qty but we have unit price, adjust qty.
-        if (r.budgetQty > 0) {
-            r.unitPrice = value / r.budgetQty;
-        } else if (r.unitPrice > 0) {
-            r.budgetQty = value / r.unitPrice;
-        } else {
-            // Default: keep qty 1 and set unit price to total
-            r.budgetQty = 1;
-            r.unitPrice = value;
-        }
-        // Recalculate percent and values based on new budget
-        r.currentPct   = r.budgetQty > 0 ? (r.currentQty / r.budgetQty) * 100 : 0;
-      }
-      r.accumQty    = r.previousQty + r.currentQty;
-      r.accumValue  = r.previousValue + r.currentValue;
-
-      setRows(prev => { const n = [...prev]; n[rowIndex] = r; return n; });
+    (row: ActasTableRow, field: 'qty' | 'val' | 'pct' | 'prevQty' | 'prevVal' | 'unitPrice' | 'budgetTotal', value: number) => {
       setSaveStatus('saving');
       
       try {
@@ -292,7 +244,7 @@ const ActasHotTable: React.FC<ActasHotTableProps> = ({
       <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}>
         <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: total }}>
           <colgroup>
-            {Object.values(COL_WIDTHS).map((w, i) => <col key={i} style={{ width: w }} />)}
+            {Object.values(COL_WIDTHS).map((w, i) => <col key={`col-${i}`} style={{ width: w }} />)}
           </colgroup>
 
           <thead style={{ position: 'sticky', top: 0, zIndex: 20 }}>
@@ -338,11 +290,11 @@ const ActasHotTable: React.FC<ActasHotTableProps> = ({
           </thead>
 
           <tbody>
-            {rows.map((row, idx) => {
+            {tableData.map((row) => {
               const bg = rowBg(row.code);
               return (
                 <tr
-                  key={`${row.id}-${row.groupId}-${idx}`}
+                  key={`${row.id}-${row.groupId}`}
                   style={{ background: bg }}
                 >
                   {/* IT */}
@@ -358,9 +310,8 @@ const ActasHotTable: React.FC<ActasHotTableProps> = ({
                       <span style={{ fontWeight:700,fontSize:'11px',textTransform:'uppercase',color:'#0f172a',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>
                         {row.name}
                       </span>
-                      {row.groupName && row.groupName !== 'PRESUPUESTO GENERAL' && (
-                        <span style={{ fontSize:'9px',color:'#94a3b8',fontStyle:'italic',lineHeight:1 }}>{row.groupName}</span>
-                      )}
+                      {/* Removed row.groupName label to avoid confusion in consolidated view */}
+
                     </div>
                   </td>
 
@@ -372,42 +323,42 @@ const ActasHotTable: React.FC<ActasHotTableProps> = ({
                   <td style={tdStyle(COL_WIDTHS.unitPrice, { background: bg })}>
                     {isReadOnly
                       ? <div style={{ display:'flex',alignItems:'center',justifyContent:'flex-end',paddingRight:5,height:28,fontSize:'11px',color:'#475569' }}>{fmt(row.unitPrice)}</div>
-                      : <CellInput value={row.unitPrice} align="right" display={fmt} onCommit={v => commit(idx, row, 'unitPrice', v)} />}
+                      : <CellInput value={row.unitPrice} align="right" display={fmt} onCommit={v => commit(row, 'unitPrice', v)} />}
                   </td>
                   {/* V/TOTAL PRESUPUESTO — EDITABLE */}
                   <td style={tdStyle(COL_WIDTHS.budgetTotal, { background: bg })}>
                     {isReadOnly
                       ? <div style={{ display:'flex',alignItems:'center',justifyContent:'flex-end',paddingRight:5,height:28,fontSize:'11px',fontWeight:600,color:'#475569' }}>{fmt(row.budgetTotal)}</div>
-                      : <CellInput value={row.budgetTotal} align="right" display={fmt} onCommit={v => commit(idx, row, 'budgetTotal', v)} />}
+                      : <CellInput value={row.budgetTotal} align="right" display={fmt} onCommit={v => commit(row, 'budgetTotal', v)} />}
                   </td>
 
                   {/* ANTERIORES — EDITABLE */}
                   <td style={tdStyle(COL_WIDTHS.prevQty, { background: '#fefce8' })}>
                     {isReadOnly
                       ? <div style={{ display:'flex',alignItems:'center',justifyContent:'flex-end',paddingRight:5,height:28,fontSize:'11px',color:'#78716c' }}>{fmtN(row.previousQty)}</div>
-                      : <CellInput value={row.previousQty}   align="right" display={fmtN} onCommit={v => commit(idx, row, 'prevQty', v)} />}
+                      : <CellInput value={row.previousQty}   align="right" display={fmtN} onCommit={v => commit(row, 'prevQty', v)} />}
                   </td>
                   <td style={tdStyle(COL_WIDTHS.prevVal, { background: '#fefce8' })}>
                     {isReadOnly
                       ? <div style={{ display:'flex',alignItems:'center',justifyContent:'flex-end',paddingRight:5,height:28,fontSize:'11px',color:'#78716c' }}>{fmt(row.previousValue)}</div>
-                      : <CellInput value={row.previousValue} align="right" display={fmt}  onCommit={v => commit(idx, row, 'prevVal', v)} />}
+                      : <CellInput value={row.previousValue} align="right" display={fmt}  onCommit={v => commit(row, 'prevVal', v)} />}
                   </td>
 
                   {/* ACTUAL — EDITABLE */}
                   <td style={tdStyle(COL_WIDTHS.curQty, { background: '#eff6ff' })}>
                     {isReadOnly
                       ? <div style={{ display:'flex',alignItems:'center',justifyContent:'flex-end',paddingRight:5,height:28,fontSize:'11px',fontWeight:700,color:'#1d4ed8',background:'#eff6ff' }}>{fmtN(row.currentQty)}</div>
-                      : <CellInput value={row.currentQty}   align="right"  display={fmtN} onCommit={v => commit(idx, row, 'qty', v)} />}
+                      : <CellInput value={row.currentQty}   align="right"  display={fmtN} onCommit={v => commit(row, 'qty', v)} />}
                   </td>
                   <td style={tdStyle(COL_WIDTHS.curVal, { background: '#eff6ff' })}>
                     {isReadOnly
                       ? <div style={{ display:'flex',alignItems:'center',justifyContent:'flex-end',paddingRight:5,height:28,fontSize:'11px',fontWeight:700,color:'#1d4ed8',background:'#eff6ff' }}>{fmt(row.currentValue)}</div>
-                      : <CellInput value={row.currentValue} align="right"  display={fmt}  onCommit={v => commit(idx, row, 'val', v)} />}
+                      : <CellInput value={row.currentValue} align="right"  display={fmt}  onCommit={v => commit(row, 'val', v)} />}
                   </td>
                   <td style={tdStyle(COL_WIDTHS.curPct, { background: '#eff6ff' })}>
                     {isReadOnly
                       ? <div style={{ display:'flex',alignItems:'center',justifyContent:'center',height:28,fontSize:'11px',fontWeight:700,color:'#1d4ed8',background:'#eff6ff' }}>{fmtP(row.currentPct)}</div>
-                      : <CellInput value={row.currentPct}  align="center" display={fmtP} onCommit={v => commit(idx, row, 'pct', v)} />}
+                      : <CellInput value={row.currentPct}  align="center" display={fmtP} onCommit={v => commit(row, 'pct', v)} />}
                   </td>
 
                   {/* ACUMULADO */}
@@ -450,6 +401,6 @@ const ActasHotTable: React.FC<ActasHotTableProps> = ({
       </div>
     </div>
   );
-};
+});
 
 export default ActasHotTable;

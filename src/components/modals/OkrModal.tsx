@@ -107,7 +107,7 @@ export default function OkrModal({ isOpen, onClose, okr }: OkrModalProps) {
               </div>
               <div className="relative z-10 flex items-center justify-between w-full">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10">
+                  <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-[var(--border-color)]">
                     <Target className="text-white w-6 h-6" />
                   </div>
                   <h2 className="text-2xl font-black text-white tracking-tight">
@@ -133,7 +133,7 @@ export default function OkrModal({ isOpen, onClose, okr }: OkrModalProps) {
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   placeholder="Ej: Aumentar eficiencia operativa en 20%"
-                  className="w-full text-2xl font-bold text-slate-800 placeholder:text-slate-200 border-none focus:ring-0 p-0"
+                  className="w-full text-2xl font-bold text-slate-800 placeholder:text-[var(--text-primary)] border-none focus:ring-0 p-0"
                 />
               </div>
 

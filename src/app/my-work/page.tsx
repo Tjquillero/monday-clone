@@ -210,7 +210,7 @@ export default function MyWorkPage() {
             ) : (
               <div className="text-center py-20 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200">
                   <div className="w-16 h-16 bg-white rounded-full shadow-sm flex items-center justify-center mx-auto mb-4 border border-slate-100">
-                      <CheckCircle2 className="w-8 h-8 text-slate-200" />
+                      <CheckCircle2 className="w-8 h-8 text-[var(--text-primary)]" />
                   </div>
                   <h3 className="text-slate-600 font-bold text-lg">{searchQuery ? 'Sin resultados' : '¡Todo listo!'}</h3>
                   <p className="text-slate-400 text-sm mt-1 max-w-[280px] mx-auto">

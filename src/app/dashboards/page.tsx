@@ -84,7 +84,7 @@ export default function DashboardsPage() {
 
       {dashboards.length === 0 ? (
         <div className="text-center py-24 border-2 border-dashed border-slate-200 rounded-xl">
-          <LayoutGrid size={48} className="mx-auto text-slate-300 mb-4" />
+          <LayoutGrid size={48} className="mx-auto text-[var(--text-primary)] mb-4" />
           <h3 className="text-lg font-bold text-slate-600">No tienes paneles todavía</h3>
           <p className="text-sm text-slate-400 mb-6">Crea tu primer panel para empezar a visualizar tus datos.</p>
           <button 

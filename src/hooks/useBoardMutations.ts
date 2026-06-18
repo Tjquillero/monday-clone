@@ -135,8 +135,30 @@ export function useBoardMutations(boardId?: string) {
     },
   });
 
+  const deleteItems = useMutation({
+    mutationFn: async (itemIds: (string | number)[]) => {
+      // 1. Delete children first to avoid FK errors
+      await supabase.from('items').delete().in('parent_id', itemIds);
+      
+      // 2. Delete the items themselves
+      const { error } = await supabase.from('items').delete().in('id', itemIds);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['groups', boardId] });
+    },
+    onError: (err: any) => {
+      console.error("❌ ERROR AL ELIMINAR ITEMS:", err);
+      alert("Error al eliminar los ítems: " + (err?.message || "Error desconocido"));
+    }
+  });
+
   const deleteItem = useMutation({
     mutationFn: async (itemId: string | number) => {
+      // 1. Delete children first
+      await supabase.from('items').delete().eq('parent_id', itemId);
+      
+      // 2. Delete the item
       const { error } = await supabase.from('items').delete().eq('id', itemId);
       if (error) throw error;
     },
@@ -145,13 +167,14 @@ export function useBoardMutations(boardId?: string) {
     },
     onError: (err: any) => {
       console.error("❌ ERROR AL ELIMINAR ITEM:", err);
-      alert("Error al eliminar el ítem de la base de datos: " + (err?.message || JSON.stringify(err)));
+      alert("Error al eliminar el ítem: " + (err?.message || "Error desconocido"));
     }
   });
 
   return {
     addItem,
     updateItem,
-    deleteItem
+    deleteItem,
+    deleteItems
   };
 }

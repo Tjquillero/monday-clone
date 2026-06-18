@@ -157,7 +157,7 @@ export default function NotificationsView() {
                                 animate={{ opacity: 1 }}
                                 className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-100"
                             >
-                                <Mail className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+                                <Mail className="w-12 h-12 text-[var(--text-primary)] mx-auto mb-4" />
                                 <p className="text-sm text-slate-400 font-medium">No hay notificaciones para mostrar aquí.</p>
                             </motion.div>
                         ) : (

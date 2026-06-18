@@ -35,7 +35,7 @@ export function generateReportHtml(item: Item, columns: Column[], evidence: any[
         <div class="text-right">
           <p class="text-xs font-bold text-slate-400">FECHA DE EMISIÓN</p>
           <p class="text-sm font-black">${new Date().toLocaleDateString()}</p>
-          <p class="text-[10px] text-slate-300 mt-2">ID REPORTE: ${String(item.id).slice(0, 12)}</p>
+          <p class="text-[10px] text-[var(--text-primary)] mt-2">ID REPORTE: ${String(item.id).slice(0, 12)}</p>
         </div>
       </div>
 
@@ -77,10 +77,10 @@ export function generateReportHtml(item: Item, columns: Column[], evidence: any[
 
       <!-- Footer -->
       <div class="mt-auto pt-10 border-t border-slate-100 text-center">
-        <p class="text-[10px] text-slate-300 font-medium">
+        <p class="text-[10px] text-[var(--text-primary)] font-medium">
           Este documento es un reporte automático generado por la plataforma Mantenix.
         </p>
-        <p class="text-[10px] text-slate-300 font-medium italic mt-1">
+        <p class="text-[10px] text-[var(--text-primary)] font-medium italic mt-1">
           &copy; ${new Date().getFullYear()} Mantenix Project Management. Todos los derechos reservados.
         </p>
       </div>

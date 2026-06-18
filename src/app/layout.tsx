@@ -1,6 +1,18 @@
 import './globals.css';
 import { Providers } from '@/components/Providers';
 import { Metadata } from 'next';
+import AgentControlCenter from '@/components/AgentControlCenter';
+import { Sora, JetBrains_Mono } from 'next/font/google';
+
+const sora = Sora({ 
+  subsets: ['latin'],
+  variable: '--font-sora',
+});
+
+const jetbrainsMono = JetBrains_Mono({ 
+  subsets: ['latin'],
+  variable: '--font-mono',
+});
 
 export const metadata: Metadata = {
   title: 'Mantenix | Gestión Inteligente de Flujos de Trabajo',
@@ -20,10 +32,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" suppressHydrationWarning>
-      <body className="font-sans">
+    <html lang="es" suppressHydrationWarning className={`${sora.variable} ${jetbrainsMono.variable}`}>
+      <body className="font-sans antialiased">
         <Providers>
           {children}
+          {/* AGENTE DE IA MANTENIX (GLOBAL) */}
+          <AgentControlCenter />
         </Providers>
       </body>
     </html>

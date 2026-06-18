@@ -10,6 +10,7 @@ interface UIContextType {
   itemModal: {
     isOpen: boolean;
     selectedItem: { groupId: string; item: Item } | null;
+    initialTab?: 'updates' | 'details' | 'evidence' | 'attachments' | 'execution' | 'dependencies' | 'location';
   };
   automationsModalOpen: boolean;
   confirmModal: {
@@ -19,7 +20,7 @@ interface UIContextType {
     onConfirm: (() => void) | null;
   };
   // Modal Actions
-  openItemModal: (groupId: string, item: Item) => void;
+  openItemModal: (groupId: string, item: Item, tab?: 'updates' | 'details' | 'evidence' | 'attachments' | 'execution' | 'dependencies' | 'location') => void;
   closeItemModal: () => void;
   setAutomationsModalOpen: (open: boolean) => void;
   openConfirmModal: (title: string, message: string, onConfirm: () => void) => void;
@@ -72,8 +73,8 @@ export function UIProvider({ children }: { children: ReactNode }) {
     setSearchQueryState(query);
   }, []);
 
-  const openItemModal = useCallback((groupId: string, item: Item) => {
-    setItemModal({ isOpen: true, selectedItem: { groupId, item } });
+  const openItemModal = useCallback((groupId: string, item: Item, tab?: any) => {
+    setItemModal({ isOpen: true, selectedItem: { groupId, item }, initialTab: tab });
   }, []);
 
   const closeItemModal = useCallback(() => {

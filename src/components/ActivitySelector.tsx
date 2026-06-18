@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ActivityTemplate } from '@/types/monday';
-import { ChevronDown, Search } from 'lucide-react';
+import { ChevronDown, Search, Plus, X, List, Target, Zap } from 'lucide-react';
 
 interface ActivitySelectorProps {
   value: string;
@@ -27,7 +27,7 @@ export default function ActivitySelector({
    onCreateTemplate,
    onEnter,
    onBlur,
-   placeholder = "Buscar actividad...",
+   placeholder = "Search_Database...",
   className = "",
   disabled = false
 }: ActivitySelectorProps & { disabled?: boolean }) {
@@ -79,7 +79,7 @@ export default function ActivitySelector({
 
   return (
     <div className={`relative w-full ${isOpen ? 'z-[1000]' : 'z-auto'}`} ref={containerRef}>
-      <div className="relative flex items-center h-full">
+      <div className="relative flex items-center h-full group">
         <input 
           type="text" 
           value={value}
@@ -116,7 +116,7 @@ export default function ActivitySelector({
             if (onBlur) onBlur();
           }}
           placeholder={placeholder}
-          className={`${className} pr-8 w-full`}
+          className={`${className} pr-10 w-full transition-all duration-300 placeholder:text-[var(--text-secondary)] bg-transparent text-[var(--text-primary)] border-none focus:ring-0 font-black uppercase`}
         />
         <button 
           type="button"
@@ -126,234 +126,250 @@ export default function ActivitySelector({
             setIsOpen(!isOpen);
             setIsCreating(false);
           }}
-          className="absolute right-2 text-gray-400 hover:text-primary p-1 h-full flex items-center"
+          className="absolute right-2 text-slate-700 hover:text-[#3B7EF8] p-1 h-full flex items-center transition-colors"
         >
-          <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`w-4 h-4 transition-transform duration-500 ${isOpen ? 'rotate-180 text-[#3B7EF8]' : ''}`} />
         </button>
       </div>
 
       <AnimatePresence>
         {isOpen && (
           <motion.div 
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 5 }}
-            className="absolute z-[1000] left-0 right-0 top-full mt-1 bg-white border border-gray-200 shadow-2xl rounded-xl overflow-hidden max-h-[450px] flex flex-col min-w-[320px]"
+            key="activity-selector-dropdown"
+            initial={{ opacity: 0, y: 10, scale: 0.98, filter: 'blur(5px)' }}
+            animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, y: 10, scale: 0.98, filter: 'blur(5px)' }}
+            className="absolute z-[1000] left-0 right-0 top-full mt-3 bg-[var(--bg-secondary)] border border-[var(--border-color)] shadow-[0_25px_80px_rgba(0,0,0,0.6)] rounded-[2.5rem] overflow-hidden max-h-[500px] flex flex-col min-w-[380px] backdrop-blur-2xl"
           >
             {isCreating ? (
-              <form onSubmit={handleCreateSubmit} className="p-4 space-y-4">
-                <div className="flex items-center justify-between border-b border-gray-100 pb-2 mb-2">
-                  <span className="text-xs font-black text-primary uppercase tracking-widest">Nueva Actividad</span>
+              <form onSubmit={handleCreateSubmit} className="p-8 space-y-6">
+                <div className="flex items-center justify-between border-b border-[var(--border-color)] pb-4 mb-2">
+                  <div className="flex items-center gap-3">
+                     <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shadow-lg shadow-emerald-500/5">
+                        <Plus className="w-4 h-4 text-emerald-500" />
+                     </div>
+                     <span className="text-[10px] font-black text-white hover:text-[#3B7EF8] uppercase tracking-[0.4em] italic leading-none transition-colors">New_Activity_Record</span>
+                  </div>
                   <button 
                     type="button" 
                     onClick={() => setIsCreating(false)}
-                    className="text-[10px] text-gray-400 hover:text-red-500 font-bold uppercase"
+                    className="p-1.5 hover:bg-slate-500/5 rounded-lg transition-all text-slate-600 hover:text-rose-500"
                   >
-                    Cancelar
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
                 
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Nombre</label>
+                <div className="space-y-5">
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em] ml-2">Nombre_Protocolo</label>
                     <input 
                       autoFocus
                       type="text"
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                      className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-4 py-3 text-sm text-white font-mono font-bold focus:border-[#3B7EF8] focus:ring-1 focus:ring-[#3B7EF8] outline-none shadow-inner transition-all"
                       value={newActivity.name}
                       onChange={e => setNewActivity({...newActivity, name: e.target.value})}
                       required
                     />
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Unidad</label>
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em] ml-2">Unidad</label>
                       <input 
                         type="text"
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                        className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-4 py-3 text-sm text-white font-mono font-bold focus:border-[#3B7EF8] outline-none shadow-inner transition-all uppercase"
                         value={newActivity.unit}
                         onChange={e => setNewActivity({...newActivity, unit: e.target.value})}
-                        placeholder="M2, PZ..."
+                        placeholder="M2, ML..."
                       />
                     </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Rendimiento</label>
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em] ml-2">Rendimiento</label>
                       <input 
                         type="number"
                         step="any"
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                        className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-4 py-3 text-sm text-white font-mono font-bold focus:border-[#3B7EF8] outline-none shadow-inner transition-all"
                         value={newActivity.rend}
                         onChange={e => setNewActivity({...newActivity, rend: parseFloat(e.target.value) || 0})}
                       />
                     </div>
                   </div>
 
-                  <div>
-                     <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Precio Unitario ($)</label>
-                     <input 
-                       type="number"
-                       step="any"
-                       className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-                       value={newActivity.unit_price}
-                       onChange={e => setNewActivity({...newActivity, unit_price: parseFloat(e.target.value) || 0})}
-                       placeholder="0.00"
-                     />
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                       <label className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em] ml-2">P_Unitario ($)</label>
+                       <input 
+                         type="number"
+                         step="any"
+                         className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-4 py-3 text-sm text-[#10B981] font-mono font-black focus:border-[#3B7EF8] outline-none shadow-inner transition-all"
+                         value={newActivity.unit_price}
+                         onChange={e => setNewActivity({...newActivity, unit_price: parseFloat(e.target.value) || 0})}
+                         placeholder="0.00"
+                       />
+                    </div>
+                    <div className="space-y-2">
+                       <label className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em] ml-2">Freq_(Días)</label>
+                       <input 
+                         type="number"
+                         step="any"
+                         className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-4 py-3 text-sm text-[#A78BFA] font-mono font-black focus:border-[#3B7EF8] outline-none shadow-inner transition-all"
+                         value={newActivity.frequency}
+                         onChange={e => setNewActivity({...newActivity, frequency: parseFloat(e.target.value) || 25})}
+                       />
+                    </div>
                   </div>
 
-                  <div>
-                     <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Frecuencia (Días)</label>
-                     <input 
-                       type="number"
-                       step="any"
-                       className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-                       value={newActivity.frequency}
-                       onChange={e => setNewActivity({...newActivity, frequency: parseFloat(e.target.value) || 25})}
-                       placeholder="25 (Mensual)"
-                     />
-                     <div className="text-[9px] text-gray-400 mt-1 space-x-2">
-                        <span onClick={() => setNewActivity({...newActivity, frequency: 25})} className="cursor-pointer hover:text-primary underline">Mensual (25)</span>
-                        <span onClick={() => setNewActivity({...newActivity, frequency: 12.5})} className="cursor-pointer hover:text-primary underline">Quincenal (12.5)</span>
-                     </div>
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Categoría</label>
-                    <input 
-                      type="text"
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-                      value={newActivity.category}
-                      onChange={e => setNewActivity({...newActivity, category: e.target.value})}
-                      placeholder="Cimentación, Acabados..."
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Zona de Mantenimiento</label>
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em] ml-2">Zona_Mantenimiento</label>
                     <select
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                      className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl px-4 py-3 text-sm text-white font-black uppercase tracking-widest focus:border-[#3B7EF8] outline-none shadow-inner transition-all appearance-none cursor-pointer"
                       value={newActivity.zone || ''}
                       onChange={e => setNewActivity({...newActivity, zone: e.target.value as any || null})}
                     >
-                      <option value="">Sin zona específica</option>
-                      <option value="Zonas Verdes">🌿 Zonas Verdes</option>
-                      <option value="Zonas Duras">🏗️ Zonas Duras</option>
-                      <option value="Zona de Playa">🏖️ Zona de Playa</option>
+                      <option value="" className="bg-[var(--bg-secondary)]">No_Global_Zone</option>
+                      <option value="Zonas Verdes" className="bg-[var(--bg-secondary)]">🌿 Zonas Verdes</option>
+                      <option value="Zonas Duras" className="bg-[var(--bg-secondary)]">🏗️ Zonas Duras</option>
+                      <option value="Zona de Playa" className="bg-[var(--bg-secondary)]">🏖️ Zona de Playa</option>
                     </select>
                   </div>
                 </div>
 
                 <button 
                   type="submit"
-                  className="w-full bg-primary text-white py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-[#235e48] transition-colors mt-2"
+                  className="w-full bg-[#3B7EF8] text-white py-4 rounded-[1.5rem] text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-[#3B7EF8]/20 hover:bg-[#2563EB] active:scale-95 transition-all border border-[var(--border-color)] mt-4"
                 >
-                  Guardar en Catálogo
+                  COMMIT_CATALOG_DATA
                 </button>
               </form>
             ) : (
               <>
-                <div className="p-2 border-b border-gray-50 flex items-center justify-between bg-gray-50/30">
-                  <div className="flex items-center">
-                    <Search className="w-3 h-3 text-gray-400 mr-2" />
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                      {value ? 'Resultados' : 'Todas las Actividades'} ({filteredTemplates.length})
+                <div className="p-4 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-primary)]/50 backdrop-blur-md sticky top-0 z-10">
+                  <div className="flex items-center ml-2">
+                    <Search className="w-4 h-4 text-[#3B7EF8] mr-3 opacity-50" />
+                    <span className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em]">
+                      {value ? 'QUERY_RESULTS' : 'FULL_ARCHIVE'} ({filteredTemplates.length})
                     </span>
                   </div>
                   {isAdmin && (
                     <button 
                       onClick={handleStartCreate}
-                      className="text-[10px] bg-primary/10 text-primary px-2 py-1 rounded font-black hover:bg-primary/20 transition-colors uppercase tracking-tight"
+                      className="text-[9px] bg-[#10B981]/10 text-[#10B981] px-4 py-2 rounded-xl font-black hover:bg-[#10B981]/20 transition-all uppercase tracking-widest border border-[#10B981]/10"
                     >
-                      + Nueva Actividad
+                      + Register_New
                     </button>
                   )}
                 </div>
 
-                <div className="overflow-y-auto flex-1 custom-scrollbar">
+                <div className="overflow-y-auto flex-1 custom-scrollbar bg-[var(--bg-secondary)]/50 p-2">
                   {filteredTemplates.length > 0 ? (
-                    filteredTemplates.map(template => (
-                      <button
-                        key={template.id}
-                        type="button"
-                        onClick={() => {
-                          onSelect(template);
-                          setIsOpen(false);
-                        }}
-                        className="w-full text-left px-4 py-3 hover:bg-green-50 flex flex-col border-b border-gray-50 last:border-0 transition-colors group"
-                      >
-                        <span className="text-sm font-bold text-gray-700 group-hover:text-primary line-clamp-2">{template.name}</span>
-                        <div className="flex items-center space-x-3 mt-1.5">
-                          <div className="flex items-center space-x-1">
-                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-tight">Unidad:</span>
-                            <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-bold">{template.unit}</span>
-                          </div>
-                          <div className="flex items-center space-x-1">
-                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-tight">Rend:</span>
-                            <span className="text-[10px] text-gray-500 font-medium">{template.rend}</span>
-                          </div>
-                          {template.unit_price !== undefined && (
-                             <div className="flex items-center space-x-1">
-                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-tight">$:</span>
-                                <span className="text-[10px] text-green-600 font-bold">${template.unit_price}</span>
-                             </div>
-                          )}
-                          <div className="flex items-center space-x-1">
-                             <span className="text-[9px] font-black text-gray-400 uppercase tracking-tight">Freq:</span>
-                             <span className="text-[10px] text-gray-500 font-medium">{template.frequency || 25}d</span>
-                          </div>
-                          {template.category && (
-                            <div className="flex items-center space-x-1 border-l pl-3 border-gray-100">
-                              <span className="text-[10px] text-primary font-black uppercase tracking-tighter">{template.category}</span>
+                    <div className="space-y-1">
+                      {filteredTemplates.map((template, idx) => (
+                        <button
+                          key={`template-${template.id || `idx-${idx}`}`}
+                          type="button"
+                          onClick={() => {
+                            onSelect(template);
+                            setIsOpen(false);
+                          }}
+                          className="w-full text-left p-5 rounded-[1.5rem] hover:bg-white/[0.03] flex flex-col border border-transparent hover:border-[var(--border-color)] transition-all group"
+                        >
+                          <div className="flex items-start justify-between">
+                            <span className="text-sm font-black text-white group-hover:text-[#3B7EF8] line-clamp-2 leading-tight transition-colors">{template.name.toUpperCase()}</span>
+                            <div className="w-3 h-3 rounded-full border border-[#10B981] flex items-center justify-center scale-0 group-hover:scale-100 transition-transform">
+                              <div className="w-1.5 h-1.5 bg-[#10B981] rounded-full shadow-[0_0_5px_#10b981]" />
                             </div>
-                          )}
-                          {template.zone && (
-                            <div className="flex items-center space-x-1 border-l pl-3 border-gray-100">
-                              <span 
-                                className="text-[10px] px-2 py-0.5 rounded-full font-bold"
-                                style={{
-                                  backgroundColor: template.zone === 'Zonas Verdes' ? '#d1fae5' : 
-                                                 template.zone === 'Zonas Duras' ? '#e5e7eb' : 
-                                                 '#fed7aa',
-                                  color: template.zone === 'Zonas Verdes' ? '#065f46' : 
-                                        template.zone === 'Zonas Duras' ? '#374151' : 
-                                        '#92400e'
-                                }}
-                              >
-                                {template.zone === 'Zonas Verdes' ? '🌿' : 
-                                 template.zone === 'Zonas Duras' ? '🏗️' : 
-                                 '🏖️'} {template.zone}
-                              </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-4 mt-4">
+                            <div className="flex items-center gap-2 bg-[var(--bg-primary)] px-3 py-1.5 rounded-lg border border-[var(--border-color)] shadow-inner">
+                              <span className="text-[8px] font-black text-slate-700 uppercase tracking-widest">UNIT</span>
+                              <span className="text-[10px] text-white font-mono font-bold leading-none">{template.unit}</span>
                             </div>
-                          )}
-                        </div>
-                      </button>
-                    ))
+                            
+                            <div className="flex items-center gap-2">
+                              <Target className="w-3 h-3 text-[#3B7EF8]/40" />
+                              <span className="text-[10px] text-slate-500 font-mono font-bold italic">{template.rend}</span>
+                            </div>
+
+                            {template.unit_price !== undefined && (
+                               <div className="flex items-center gap-1.5 bg-[#10B981]/5 px-2 py-1 rounded-lg border border-[#10B981]/10">
+                                  <span className="text-[10px] text-[#10B981] font-black font-mono leading-none">${template.unit_price}</span>
+                               </div>
+                            )}
+
+                            <div className="flex items-center gap-2">
+                               <Zap className="w-3 h-3 text-[#A78BFA]/40" />
+                               <span className="text-[10px] text-[#A78BFA] font-mono font-black italic">{template.frequency || 25}d</span>
+                            </div>
+
+                            {template.zone && (
+                              <div className="flex items-center ml-auto">
+                                <span 
+                                  className="text-[8px] px-2 py-1 rounded-lg font-black uppercase tracking-widest border shadow-lg"
+                                  style={{
+                                    backgroundColor: template.zone === 'Zonas Verdes' ? 'rgba(16, 185, 129, 0.1)' : 
+                                                   template.zone === 'Zonas Duras' ? 'rgba(71, 85, 105, 0.1)' : 
+                                                   'rgba(59, 126, 248, 0.1)',
+                                    borderColor: template.zone === 'Zonas Verdes' ? 'rgba(16, 185, 129, 0.3)' : 
+                                               template.zone === 'Zonas Duras' ? 'rgba(71, 85, 105, 0.3)' : 
+                                               'rgba(59, 126, 248, 0.3)',
+                                    color: template.zone === 'Zonas Verdes' ? '#10B981' : 
+                                          template.zone === 'Zonas Duras' ? '#94a3b8' : 
+                                          '#3B7EF8'
+                                  }}
+                                >
+                                  {template.zone === 'Zonas Verdes' ? '🌿' : 
+                                   template.zone === 'Zonas Duras' ? '🏗' : 
+                                   '🏖'} {template.zone.split(' ')[2] || 'Global'}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
                   ) : (
-                    <div className="p-8 text-center">
-                      <p className="text-sm text-gray-500 font-medium">No se encontraron actividades</p>
+                    <div className="p-12 text-center">
+                      <p className="text-[11px] text-slate-700 font-black uppercase tracking-[0.3em] leading-loose italic">No_System_Match_<br/>Protocol_Unknown</p>
                       {isAdmin ? (
                         <button 
                           onClick={handleStartCreate}
-                          className="mt-3 text-sm text-primary font-bold hover:underline"
+                          className="mt-6 text-[10px] text-[#3B7EF8] font-black uppercase tracking-widest hover:underline"
                         >
-                          ¿Quieres crear "{value}"?
+                          ¿Register Protocol "{value}"?
                         </button>
                       ) : (
-                        <p className="text-xs text-gray-400 mt-1">Intenta con otros términos</p>
+                        <p className="text-[9px] text-slate-800 mt-4 uppercase tracking-[0.2em]">Restricted_Access: Contact_HQ</p>
                       )}
                     </div>
                   )}
                 </div>
                 
-                <div className="p-3 bg-gray-50 border-t border-gray-100 flex justify-between items-center text-[9px] font-bold text-gray-400 uppercase">
-                  <span>{templates.length} en total</span>
-                  <span>{isAdmin ? 'Admins pueden crear' : 'Usa Enter para seleccionar'}</span>
+                <div className="p-4 bg-[var(--bg-primary)]/50 border-t border-[var(--border-color)] flex justify-between items-center text-[9px] font-black text-slate-600 uppercase tracking-[0.3em]">
+                  <span className="flex items-center"><List className="w-3 h-3 mr-2" /> {templates.length}_TOTAL_ENTRIES</span>
+                  <span>{isAdmin ? 'ADMIN_MODE_ACTIVE' : 'READY_FOR_COMMIT'}</span>
                 </div>
               </>
             )}
           </motion.div>
         )}
       </AnimatePresence>
+
+      <style jsx>{`
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(59, 126, 248, 0.2);
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+      `}</style>
     </div>
   );
 }

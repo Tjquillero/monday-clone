@@ -20,14 +20,24 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
+    console.log('--- AUTH ATTEMPT ---');
+    console.log('Action:', isLogin ? 'Login' : 'Register');
+    console.log('Email:', email);
+    console.log('Supabase URL available:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
+
     try {
       if (isLogin) {
+        console.log('Invoking signInWithPassword...');
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
-        if (signInError) throw signInError;
+        if (signInError) {
+          console.error('Sign-in error details:', signInError);
+          throw signInError;
+        }
       } else {
+        console.log('Invoking signUp...');
         const { error: signUpError } = await supabase.auth.signUp({
           email,
           password,
@@ -35,12 +45,68 @@ export default function LoginPage() {
             emailRedirectTo: `${window.location.origin}/dashboard`,
           },
         });
-        if (signUpError) throw signUpError;
+        if (signUpError) {
+          console.error('Sign-up error details:', signUpError);
+          throw signUpError;
+        }
         alert('Revisa tu correo para confirmar tu registro.');
       }
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err.message || 'Ocurrió un error inesperado');
+      console.error('Caught error in handleAuth:', err);
+      console.error('Error name:', err.name);
+      console.error('Error message:', err.message);
+
+      if (err.message === 'Failed to fetch' || err.status === 0 || err.message?.includes('Network')) {
+        console.warn('Network issue detected. Falling back to local offline mode...');
+        localStorage.setItem('use_mock_db', 'true');
+        
+        try {
+          if (isLogin) {
+            const { error: mockError } = await supabase.auth.signInWithPassword({
+              email,
+              password,
+            });
+            if (mockError) throw mockError;
+          } else {
+            const { error: mockError } = await supabase.auth.signUp({
+              email,
+              password,
+            });
+            if (mockError) throw mockError;
+            alert('Modo Offline: Cuenta creada e inicio de sesión local exitoso.');
+          }
+          router.push('/dashboard');
+          return;
+        } catch (mockErr: any) {
+          setError(mockErr.message || 'Error en la autenticación offline');
+          return;
+        }
+      }
+
+      setError(err.message || 'Error en la autenticación');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDemoMode = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      console.log('Activating Offline Demo Mode...');
+      localStorage.setItem('use_mock_db', 'true');
+      
+      const { data, error: demoError } = await supabase.auth.signInWithPassword({
+        email: 'admin@mantenix.com',
+        password: 'demo'
+      });
+      
+      if (demoError) throw demoError;
+      
+      router.push('/dashboard');
+    } catch (err: any) {
+      setError(err.message || 'Error al iniciar Modo Demo');
     } finally {
       setLoading(false);
     }
@@ -48,7 +114,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-[#f5f6f8] flex items-center justify-center p-4">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md border border-gray-100"
@@ -62,13 +128,13 @@ export default function LoginPage() {
 
         {/* Toggle Login/Signup */}
         <div className="flex bg-gray-100 p-1 rounded-xl mb-8">
-          <button 
+          <button
             onClick={() => setIsLogin(true)}
             className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${isLogin ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
           >
             Iniciar Sesión
           </button>
-          <button 
+          <button
             onClick={() => setIsLogin(false)}
             className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${!isLogin ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
           >
@@ -79,7 +145,7 @@ export default function LoginPage() {
         <form onSubmit={handleAuth} className="space-y-5">
           <AnimatePresence mode="wait">
             {error && (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
@@ -137,6 +203,21 @@ export default function LoginPage() {
                 )}
               </>
             )}
+          </button>
+
+          <div className="relative flex py-2 items-center">
+            <div className="flex-grow border-t border-gray-200"></div>
+            <span className="flex-shrink mx-4 text-gray-400 text-[10px] font-black uppercase tracking-widest">o</span>
+            <div className="flex-grow border-t border-gray-200"></div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleDemoMode}
+            disabled={loading}
+            className="w-full bg-[#3B7EF8]/10 hover:bg-[#3B7EF8] text-[#3B7EF8] hover:text-white py-3.5 rounded-xl flex items-center justify-center font-bold text-base border border-[#3B7EF8]/20 transition-all active:scale-95 disabled:opacity-70 disabled:active:scale-100 uppercase tracking-wider text-xs"
+          >
+            Acceder en Modo Demo (Offline)
           </button>
         </form>
 

@@ -39,7 +39,7 @@ export default function BudgetImporter({ boardId, onImportComplete }: BudgetImpo
 
             if (groups && groups.length > 0) { 
                  // Try to find one named similarly
-                 const budgetGroup = groups.find(g => g.title.toUpperCase().includes('PRESUPUESTO'));
+                 const budgetGroup = groups.find((g: any) => g.title.toUpperCase().includes('PRESUPUESTO'));
                  targetGroupId = budgetGroup ? budgetGroup.id : groups[0].id;
             } else {
                  // Create Group

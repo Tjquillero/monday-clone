@@ -182,7 +182,7 @@ export default function WorkloadView() {
                 
                 <div className="flex gap-4 pt-1">
                   <div className="flex items-center gap-1">
-                    <Clock size={12} className="text-slate-300" />
+                    <Clock size={12} className="text-[var(--text-primary)]" />
                     <span className="text-[10px] font-bold text-slate-500">{person.working + person.stuck + person.pending} Pendientes</span>
                   </div>
                   {person.stuck > 0 && (

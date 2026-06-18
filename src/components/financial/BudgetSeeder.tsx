@@ -26,7 +26,7 @@ export default function BudgetSeeder({ boardId }: BudgetSeederProps) {
                 .select('id, title')
                 .eq('board_id', boardId);
 
-            const budgetGroup = existingGroups?.find(g => g.title === 'PRESUPUESTO GENERAL');
+            const budgetGroup = existingGroups?.find((g: any) => g.title === 'PRESUPUESTO GENERAL');
 
             if (budgetGroup) {
                 targetGroupId = budgetGroup.id;

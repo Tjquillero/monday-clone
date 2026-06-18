@@ -19,9 +19,9 @@ describe('itemUtils', () => {
       expect(isFinancialItem(item)).toBe(false);
     });
 
-    it('should NOT fallback to rubro check (strict mode)', () => {
+    it('should fallback to rubro check if item_type is missing', () => {
       const itemWithRubro = { ...mockItem, values: { rubro: 'Materials' } };
-      expect(isFinancialItem(itemWithRubro)).toBe(false);
+      expect(isFinancialItem(itemWithRubro)).toBe(true);
     });
   });
 

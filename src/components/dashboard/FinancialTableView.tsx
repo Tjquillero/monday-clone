@@ -149,7 +149,19 @@ export default function FinancialTableView({
         
         // Categories
         const category = safeText(item.values?.[catCol.id]) || item.values?.category || 'Sin Categoría';
-        const majorCategory = safeText(item.values?.[typeCol.id]) || item.values?.rubro || 'Otros Costos Directos'; // Default if not found
+        const majorCategory = safeText(item.values?.[typeCol.id]) || item.values?.rubro || 'Otros Costos Directos'; 
+
+        // FILTER: Remove items without a valid category as requested
+        if (category.toLowerCase().includes('sin categoría') || 
+            majorCategory.toLowerCase().includes('sin categoría') ||
+            majorCategory.toLowerCase().trim() === 'otros' ||
+            category.toLowerCase().trim() === 'general' // Optionally check for default values if they count as 'no category'
+        ) {
+            // However, the user specifically mentioned "Sin Categoría"
+            if (category.toLowerCase().includes('sin categoría') || majorCategory.toLowerCase().includes('sin categoría')) {
+                return;
+            }
+        }
 
         // Execution Calculation
         const dailyExec = item.values['daily_execution'] || {};
@@ -228,7 +240,7 @@ export default function FinancialTableView({
 
   return (
     <div className={`bg-white transition-all duration-300 font-sans ${isCanvasMode ? 'fixed inset-0 z-[120] flex flex-col w-screen h-screen' : 'rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden'}`}>
-        <div className={`px-6 py-4 flex justify-between items-center border-b border-slate-200 ${isCanvasMode ? 'bg-slate-900 text-slate-300 rounded-none' : 'bg-slate-50 text-slate-500 rounded-t-[2rem]'}`}>
+        <div className={`px-6 py-4 flex justify-between items-center border-b border-slate-200 ${isCanvasMode ? 'bg-slate-900 text-[var(--text-primary)] rounded-none' : 'bg-slate-50 text-slate-500 rounded-t-[2rem]'}`}>
              <div className="flex items-center gap-3">
                  <button 
                      onClick={() => setIsCanvasMode(!isCanvasMode)}
@@ -246,15 +258,15 @@ export default function FinancialTableView({
                      </button>
                  )}
              </div>
-             <div className="flex items-center gap-4 text-xs">
+             <div className="flex items-center gap-4 text-sm">
                 <span className="font-medium uppercase hidden sm:inline">Total Ejecutado:</span>
-                <span className="text-lg font-black text-slate-800">{currencyFormatter.format(totalExecuted)}</span>
+                <span className="text-xl font-black text-slate-800">{currencyFormatter.format(totalExecuted)}</span>
                 <span className="text-slate-400">/ {currencyFormatter.format(totalBudget)}</span>
                 <div className="h-4 w-px bg-slate-200 mx-2"></div>
                 
                 {/* Global Utility Indicator in Header */}
-                <span className="text-slate-500 font-medium uppercase">Utilidad Global:</span>
-                  <span className={`text-lg font-black ${
+                <span className="text-slate-500 font-medium uppercase text-xs">Utilidad Global:</span>
+                  <span className={`text-xl font-black ${
                     currentActa > 0 
                     ? (((currentActa - totalExecuted) / currentActaDenominator) * 100) >= 70 ? 'text-emerald-600' 
                     : (((currentActa - totalExecuted) / currentActaDenominator) * 100) >= 65 ? 'text-amber-500' 
@@ -271,27 +283,27 @@ export default function FinancialTableView({
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left table-fixed border-collapse">
                 <colgroup>
-                    <col style={{ width: '280px' }} />
-                    <col style={{ width: '50px' }} />
-                    <col style={{ width: '70px' }} />
-                    <col style={{ width: '90px' }} />
-                    <col style={{ width: '100px' }} />
+                    <col style={{ width: '320px' }} />
+                    <col style={{ width: '60px' }} />
                     <col style={{ width: '80px' }} />
-                    <col style={{ width: '70px' }} />
+                    <col style={{ width: '110px' }} />
+                    <col style={{ width: '120px' }} />
                     <col style={{ width: '90px' }} />
-                    <col style={{ width: '100px' }} />
                     <col style={{ width: '80px' }} />
-                    <col style={{ width: '150px' }} />
+                    <col style={{ width: '110px' }} />
+                    <col style={{ width: '120px' }} />
                     <col style={{ width: '90px' }} />
+                    <col style={{ width: '180px' }} />
+                    <col style={{ width: '110px' }} />
                 </colgroup>
                 <thead>
-                    <tr className="text-[10px] uppercase font-bold tracking-wider text-white">
+                    <tr className="text-[11px] uppercase font-bold tracking-wider text-white">
                         <th colSpan={2} className="bg-slate-800 border-b border-slate-700 rounded-tl-xl"></th>
-                        <th colSpan={4} className="bg-blue-900 border-b border-blue-800 text-center py-2 border-l border-slate-700/50">PRESUPUESTO</th>
-                        <th colSpan={4} className="bg-emerald-900 border-b border-emerald-800 text-center py-2 border-l border-slate-700/50">EJECUCIÓN</th>
+                        <th colSpan={4} className="bg-blue-900 border-b border-blue-800 text-center py-3 border-l border-slate-700/50">PRESUPUESTO</th>
+                        <th colSpan={4} className="bg-emerald-900 border-b border-emerald-800 text-center py-3 border-l border-slate-700/50">EJECUCIÓN</th>
                         <th colSpan={2} className="bg-slate-800 border-b border-slate-700 border-l border-slate-700/50 rounded-tr-xl"></th>
                     </tr>
-                    <tr className="text-[9px] uppercase font-bold tracking-wider text-slate-300">
+                    <tr className="text-[10px] uppercase font-bold tracking-wider text-[var(--text-primary)]">
                         <th className="px-4 py-3 bg-slate-800 text-left border-b-4 border-slate-900">DESCRIPCIÓN</th>
                         <th className="px-1 py-3 bg-slate-800 text-center border-b-4 border-slate-900 border-l border-slate-700/50">UND</th>
                         
@@ -346,7 +358,7 @@ export default function FinancialTableView({
                                                         value={majorCat}
                                                         type="text"
                                                         onSave={(val: any) => onRenameGroup(majorCat, val, 'major')}
-                                                        className="bg-transparent text-white font-black uppercase tracking-wider text-[11px] focus:bg-white/10"
+                                                        className="bg-transparent text-white font-black uppercase tracking-wider text-sm focus:bg-white/10"
                                                         align="left"
                                                     />
                                                 </div>
@@ -365,18 +377,18 @@ export default function FinancialTableView({
                                     </td>
                                     <td className="px-2 py-3 bg-[#1e293b]"></td>
                                     <td className="px-2 py-3 bg-[#1e293b]"></td>
-                                    <td className="px-2 py-3 text-right font-bold text-white text-[11px] bg-slate-800/50">
+                                    <td className="px-2 py-3 text-right font-bold text-white text-[13px] bg-slate-800/50">
                                         {currencyFormatter.format(majorBudget).replace('$', '')}
                                     </td>
                                     <td className="px-2 py-3 bg-[#1e293b]"></td>
                                     <td className="px-2 py-3 bg-[#1e293b]"></td>
                                     <td className="px-2 py-3 bg-[#1e293b]"></td>
-                                    <td className="px-2 py-3 text-right font-bold text-emerald-400 text-[11px] bg-slate-800/50">
+                                    <td className="px-2 py-3 text-right font-bold text-emerald-400 text-[13px] bg-slate-800/50">
                                         {currencyFormatter.format(majorExec).replace('$', '')}
                                     </td>
                                     <td className="px-2 py-3 bg-[#1e293b]"></td>
                                     <td className="px-2 py-3 bg-[#1e293b]"></td>
-                                    <td className="px-2 py-3 text-right font-bold text-rose-400 text-[11px]">
+                                    <td className="px-2 py-3 text-right font-bold text-rose-400 text-[13px]">
                                         {currencyFormatter.format(majorBudget - majorExec).replace('$', '')}
                                     </td>
                                 </tr>
@@ -391,16 +403,16 @@ export default function FinancialTableView({
                                         <Fragment key={`${majorCat}-${subCat}`}>
                                             {/* Sub Category Header */}
                                             <tr className="bg-[#f0f9ff] border-b border-blue-100">
-                                                <td colSpan={2} className="px-4 py-2 font-bold text-[#0369a1] uppercase text-[10px] pl-8 group/cat min-w-[300px]">
+                                                <td colSpan={2} className="px-4 py-3 font-bold text-[#0369a1] uppercase text-xs pl-8 group/cat min-w-[300px]">
                                                     <div className="flex items-center gap-3 w-full">
-                                                        <div className="w-1.5 h-1.5 rounded-full bg-[#0ea5e9]"></div>
+                                                        <div className="w-2 h-2 rounded-full bg-[#0ea5e9]"></div>
                                                         {onRenameGroup ? (
                                                             <div className="flex-1">
                                                                 <EditableCell 
                                                                     value={subCat}
                                                                     type="text"
                                                                     onSave={(val: any) => onRenameGroup(subCat, val, 'sub', { major: majorCat })}
-                                                                    className="bg-transparent text-[#0369a1] font-bold uppercase text-[10px] focus:bg-blue-200/50"
+                                                                    className="bg-transparent text-[#0369a1] font-bold uppercase text-xs focus:bg-blue-200/50"
                                                                     align="left"
                                                                 />
                                                             </div>
@@ -436,22 +448,22 @@ export default function FinancialTableView({
                                                         )}
                                                     </div>
                                                 </td>
-                                                <td className="px-1 py-2 bg-[#f0f9ff]"></td>
-                                                <td className="px-1 py-2 bg-[#f0f9ff]"></td>
-                                                <td className="px-2 py-2 text-right font-bold text-[#0369a1] text-[10px]">
+                                                <td className="px-2 py-3 bg-[#f0f9ff]"></td>
+                                                <td className="px-2 py-3 bg-[#f0f9ff]"></td>
+                                                <td className="px-2 py-3 text-right font-bold text-[#0369a1] text-xs">
                                                     {currencyFormatter.format(subBudget).replace('$', '')}
                                                 </td>
-                                                <td className="px-1 py-2 bg-[#f0f9ff]"></td>
+                                                <td className="px-2 py-3 bg-[#f0f9ff]"></td>
                                                 
-                                                <td className="px-1 py-2 bg-[#f0fdf4]"></td>
-                                                <td className="px-1 py-2 bg-[#f0fdf4]"></td>
-                                                <td className="px-2 py-2 text-right font-bold text-[#15803d] bg-[#f0fdf4] text-[10px]">
+                                                <td className="px-2 py-3 bg-[#f0fdf4]"></td>
+                                                <td className="px-2 py-3 bg-[#f0fdf4]"></td>
+                                                <td className="px-2 py-3 text-right font-bold text-[#15803d] bg-[#f0fdf4] text-xs">
                                                     {currencyFormatter.format(subExec).replace('$', '')}
                                                 </td>
-                                                <td className="px-1 py-2 bg-[#f0fdf4]"></td>
+                                                <td className="px-2 py-3 bg-[#f0fdf4]"></td>
                                                 
-                                                <td className="px-1 py-2 bg-[#f0f9ff]"></td>
-                                                <td className="px-2 py-2 text-right font-bold text-rose-500 text-[10px]">
+                                                <td className="px-2 py-3 bg-[#f0f9ff]"></td>
+                                                <td className="px-2 py-3 text-right font-bold text-rose-500 text-xs">
                                                     {currencyFormatter.format(subBudget - subExec).replace('$', '')}
                                                 </td>
                                             </tr>
@@ -460,8 +472,8 @@ export default function FinancialTableView({
                                             {items.map((item: any) => {
                                                 const itemRowKey = `${majorCat}|${subCat}|${item.name || ''}|${item.id}`;
                                                 return (
-                                                <tr key={itemRowKey} className="hover:bg-gray-50 transition-colors group text-[10px] border-b border-gray-50">
-                                                    <td className="px-4 py-1.5 pl-10 group/row relative font-semibold text-gray-700">
+                                                <tr key={itemRowKey} className="hover:bg-gray-50 transition-colors group text-xs border-b border-gray-50">
+                                                    <td className="px-4 py-2 pl-10 group/row relative font-semibold text-gray-700">
                                                         {onUpdateItemValue ? (
                                                             <EditableCell 
                                                                 value={item.name}
@@ -594,46 +606,46 @@ export default function FinancialTableView({
 
                 <tfoot className="border-t-4 border-[#1e293b]">
                      <tr className="bg-slate-800 text-white/90 border-t border-slate-700">
-                         <td colSpan={2} className="px-6 py-2 font-black text-right uppercase text-[10px] pr-6">TOTAL COSTO DIRECTO</td>
-                         <td className="px-2 py-2"></td><td className="px-2 py-2"></td>
-                         <td className="px-2 py-2 text-right font-black text-[11px] bg-slate-700/30">{currencyFormatter.format(totalBudget)}</td>
-                         <td className="px-2 py-2 text-center font-bold text-[10px]">100%</td>
-                         <td className="px-2 py-2"></td><td className="px-2 py-2"></td>
-                         <td className="px-2 py-2 text-right font-black text-[11px] bg-slate-700/30">{currencyFormatter.format(totalExecuted)}</td>
-                         <td className="px-2 py-2 text-center font-bold text-[10px]">100%</td>
-                         <td className="px-2 py-2"></td><td className="px-2 py-2 text-right font-bold text-rose-300 text-[11px]">{currencyFormatter.format(totalBudget - totalExecuted)}</td>
+                         <td colSpan={2} className="px-6 py-3 font-black text-right uppercase text-xs pr-6">TOTAL COSTO DIRECTO</td>
+                         <td className="px-2 py-3"></td><td className="px-2 py-3"></td>
+                         <td className="px-2 py-3 text-right font-black text-sm bg-slate-700/30">{currencyFormatter.format(totalBudget)}</td>
+                         <td className="px-2 py-3 text-center font-bold text-xs">100%</td>
+                         <td className="px-2 py-3"></td><td className="px-2 py-3"></td>
+                         <td className="px-2 py-3 text-right font-black text-sm bg-slate-700/30">{currencyFormatter.format(totalExecuted)}</td>
+                         <td className="px-2 py-3 text-center font-bold text-xs">100%</td>
+                         <td className="px-2 py-3"></td><td className="px-2 py-3 text-right font-bold text-rose-300 text-sm">{currencyFormatter.format(totalBudget - totalExecuted)}</td>
                      </tr>
                      
                      {/* 2. AIU Rows */}
                      <tr className="bg-[#334155] text-white/80 border-t border-slate-600">
-                         <td colSpan={2} className="px-6 py-1.5 font-bold text-right uppercase text-[10px] pr-6">A (20%)</td>
-                         <td className="px-2 py-1.5"></td><td className="px-2 py-1.5"></td>
-                         <td className="px-2 py-1.5 text-right font-bold text-[11px]">{currencyFormatter.format(totalBudget * 0.2)}</td>
-                         <td className="px-2 py-1.5 text-center font-bold text-[10px]">20%</td>
-                         <td className="px-2 py-1.5"></td><td className="px-2 py-1.5"></td>
-                         <td className="px-2 py-1.5 text-right font-bold text-[11px]">{currencyFormatter.format(totalExecuted * 0.2)}</td>
-                         <td className="px-2 py-1.5 text-center font-bold text-[10px]">20%</td>
-                         <td className="px-2 py-1.5"></td><td className="px-2 py-1.5 text-right font-bold text-rose-300 text-[11px]">{currencyFormatter.format((totalBudget - totalExecuted) * 0.2)}</td>
+                         <td colSpan={2} className="px-6 py-2 font-bold text-right uppercase text-xs pr-6">A (20%)</td>
+                         <td className="px-2 py-2"></td><td className="px-2 py-2"></td>
+                         <td className="px-2 py-2 text-right font-bold text-sm">{currencyFormatter.format(totalBudget * 0.2)}</td>
+                         <td className="px-2 py-2 text-center font-bold text-xs">20%</td>
+                         <td className="px-2 py-2"></td><td className="px-2 py-2"></td>
+                         <td className="px-2 py-2 text-right font-bold text-sm">{currencyFormatter.format(totalExecuted * 0.2)}</td>
+                         <td className="px-2 py-2 text-center font-bold text-xs">20%</td>
+                         <td className="px-2 py-2"></td><td className="px-2 py-2 text-right font-bold text-rose-300 text-sm">{currencyFormatter.format((totalBudget - totalExecuted) * 0.2)}</td>
                      </tr>
                      <tr className="bg-[#334155] text-white/80">
-                         <td colSpan={2} className="px-6 py-1.5 font-bold text-right uppercase text-[10px] pr-6">I (5%)</td>
-                         <td className="px-2 py-1.5"></td><td className="px-2 py-1.5"></td>
-                         <td className="px-2 py-1.5 text-right font-bold text-[11px]">{currencyFormatter.format(totalBudget * 0.05)}</td>
-                         <td className="px-2 py-1.5 text-center font-bold text-[10px]">5%</td>
-                         <td className="px-2 py-1.5"></td><td className="px-2 py-1.5"></td>
-                         <td className="px-2 py-1.5 text-right font-bold text-[11px]">{currencyFormatter.format(totalExecuted * 0.05)}</td>
-                         <td className="px-2 py-1.5 text-center font-bold text-[10px]">5%</td>
-                         <td className="px-2 py-1.5"></td><td className="px-2 py-1.5 text-right font-bold text-rose-300 text-[11px]">{currencyFormatter.format((totalBudget - totalExecuted) * 0.05)}</td>
+                         <td colSpan={2} className="px-6 py-2 font-bold text-right uppercase text-xs pr-6">I (5%)</td>
+                         <td className="px-2 py-2"></td><td className="px-2 py-2"></td>
+                         <td className="px-2 py-2 text-right font-bold text-sm">{currencyFormatter.format(totalBudget * 0.05)}</td>
+                         <td className="px-2 py-2 text-center font-bold text-xs">5%</td>
+                         <td className="px-2 py-2"></td><td className="px-2 py-2"></td>
+                         <td className="px-2 py-2 text-right font-bold text-sm">{currencyFormatter.format(totalExecuted * 0.05)}</td>
+                         <td className="px-2 py-2 text-center font-bold text-xs">5%</td>
+                         <td className="px-2 py-2"></td><td className="px-2 py-2 text-right font-bold text-rose-300 text-sm">{currencyFormatter.format((totalBudget - totalExecuted) * 0.05)}</td>
                      </tr>
                      <tr className="bg-[#334155] text-white/80">
-                         <td colSpan={2} className="px-6 py-1.5 font-bold text-right uppercase text-[10px] pr-6">U (5%)</td>
-                         <td className="px-2 py-1.5"></td><td className="px-2 py-1.5"></td>
-                         <td className="px-2 py-1.5 text-right font-bold text-[11px]">{currencyFormatter.format(totalBudget * 0.05)}</td>
-                         <td className="px-2 py-1.5 text-center font-bold text-[10px]">5%</td>
-                         <td className="px-2 py-1.5"></td><td className="px-2 py-1.5"></td>
-                         <td className="px-2 py-1.5 text-right font-bold text-[11px]">{currencyFormatter.format(totalExecuted * 0.05)}</td>
-                         <td className="px-2 py-1.5 text-center font-bold text-[10px]">5%</td>
-                         <td className="px-2 py-1.5"></td><td className="px-2 py-1.5 text-right font-bold text-rose-300 text-[11px]">{currencyFormatter.format((totalBudget - totalExecuted) * 0.05)}</td>
+                         <td colSpan={2} className="px-6 py-2 font-bold text-right uppercase text-xs pr-6">U (5%)</td>
+                         <td className="px-2 py-2"></td><td className="px-2 py-2"></td>
+                         <td className="px-2 py-2 text-right font-bold text-sm">{currencyFormatter.format(totalBudget * 0.05)}</td>
+                         <td className="px-2 py-2 text-center font-bold text-xs">5%</td>
+                         <td className="px-2 py-2"></td><td className="px-2 py-2"></td>
+                         <td className="px-2 py-2 text-right font-bold text-sm">{currencyFormatter.format(totalExecuted * 0.05)}</td>
+                         <td className="px-2 py-2 text-center font-bold text-xs">5%</td>
+                         <td className="px-2 py-2"></td><td className="px-2 py-2 text-right font-bold text-rose-300 text-sm">{currencyFormatter.format((totalBudget - totalExecuted) * 0.05)}</td>
                      </tr>
                  </tfoot>
             </table>

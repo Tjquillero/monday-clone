@@ -16,6 +16,9 @@ export interface Item {
   subItems?: Item[];
   parent_id?: string | number;
   group_id?: string | number;
+  position?: number;
+  lat?: number;
+  lng?: number;
 }
 
 export interface Group {
@@ -23,6 +26,8 @@ export interface Group {
   title: string;
   color: string;
   items: Item[];
+  lat?: number;
+  lng?: number;
 }
 
 export interface Column {

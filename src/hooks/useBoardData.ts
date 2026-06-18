@@ -91,7 +91,7 @@ export function useBoardGroups(boardId?: string) {
         .from('groups')
         .select(`
           *,
-          items (*)
+          items (*, personnel(*))
         `)
         .eq('board_id', boardId)
         .order('position');

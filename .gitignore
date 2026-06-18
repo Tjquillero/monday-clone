@@ -42,3 +42,44 @@ next-env.d.ts
 
 # custom
 /logs
+
+# Temporary scripts, keys and logs
+check_boards.py
+import_cronograma.js
+list_groups.js
+merge_groups.js
+update_group_capacity.js
+read_detalle.js
+read_excel.js
+update_board_view.py
+activities_from_excel.json
+boards_structure.txt
+collision_report.txt
+deep_report.json
+deep_report.txt
+detalle_grupo.txt
+diff.patch
+diff.txt
+excel_analysis.json
+excel_analysis.txt
+excel_cronograma.json
+excel_data_clean.json
+excel_structure.txt
+excel_trailing.json
+general_budget_items.txt
+groups_list.txt
+last_row.json
+lint_output.txt
+next_lint.txt
+other_groups_items.txt
+workers_per_site.json
+group_detail.json
+scripts/analyze_logic.js
+scripts/export_excel_data.js
+scripts/get_trailing.js
+scripts/inspect_totals.js
+scripts/read_excel_logic.js
+scripts/setup-db.mjs
+scripts/test-gemini.mjs
+tmp/
+*.xlsb

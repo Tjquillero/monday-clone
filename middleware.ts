@@ -54,11 +54,23 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const {
-    data: {
-      session
-    },
-  } = await supabase.auth.getSession()
+  const mockSessionCookie = request.cookies.get('sb-mock-session')?.value;
+  let session = null;
+
+  if (mockSessionCookie) {
+    try {
+      session = JSON.parse(decodeURIComponent(mockSessionCookie));
+    } catch (e) {
+      console.error('Error parsing mock session cookie:', e);
+    }
+  } else {
+    try {
+      const { data } = await supabase.auth.getSession();
+      session = data?.session;
+    } catch (e) {
+      console.warn('Supabase getSession failed (offline mode):', e instanceof Error ? e.message : String(e));
+    }
+  }
 
   const isProtectedRoute =
     request.nextUrl.pathname.startsWith('/dashboard') ||

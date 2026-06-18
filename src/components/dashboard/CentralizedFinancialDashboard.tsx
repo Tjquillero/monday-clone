@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Group, Column } from '@/types/monday';
 import SCurveWidget from './SCurveWidget';
 import BudgetExecutionWidget from './BudgetExecutionWidget';
@@ -64,6 +64,13 @@ export default function CentralizedFinancialDashboard({
       }
   }, []);
 
+  const filteredGroups = useMemo(() => {
+    return groups.map(g => ({
+        ...g,
+        items: g.items.filter(i => String(i.values?.rubro || '').trim().toLowerCase() !== 'otros costos')
+    }));
+  }, [groups]);
+
   const currencyFormatter = new Intl.NumberFormat('es-CO', {
         style: 'currency',
         currency: 'COP',
@@ -90,19 +97,19 @@ export default function CentralizedFinancialDashboard({
                      <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-50 shadow-inner">
                         <button 
                             onClick={() => setViewMode('matrix')}
-                            className={`flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-black transition-all duration-300 ${viewMode === 'matrix' ? 'bg-white text-slate-900 shadow-md ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'}`}
+                            className={`flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-black transition-all duration-300 ${viewMode === 'matrix' ? 'bg-white text-slate-900 shadow-md ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-500/50'}`}
                         >
                             <LayoutGrid size={14} /> SÁBANA
                         </button>
                         <button 
                             onClick={() => setViewMode('list')}
-                            className={`flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-black transition-all duration-300 ${viewMode === 'list' ? 'bg-white text-slate-900 shadow-md ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'}`}
+                            className={`flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-black transition-all duration-300 ${viewMode === 'list' ? 'bg-white text-slate-900 shadow-md ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-500/50'}`}
                         >
                             <List size={14} /> RESUMEN
                         </button>
                         <button 
                             onClick={() => setViewMode('actas')}
-                            className={`flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-black transition-all duration-300 ${viewMode === 'actas' ? 'bg-white text-emerald-800 shadow-md ring-1 ring-emerald-100' : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'}`}
+                            className={`flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-black transition-all duration-300 ${viewMode === 'actas' ? 'bg-white text-emerald-800 shadow-md ring-1 ring-emerald-100' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-500/50'}`}
                         >
                             <FileText size={14} /> ACTAS
                         </button>
@@ -114,7 +121,7 @@ export default function CentralizedFinancialDashboard({
                     <div className="flex bg-slate-100/50 p-1.5 rounded-2xl border border-slate-50 overflow-x-auto no-scrollbar max-w-[500px]">
                         <button 
                             onClick={() => setActiveSiteId('all')} 
-                            className={`px-5 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-all duration-300 ${activeSiteId === 'all' ? 'bg-white text-emerald-700 shadow-md ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'}`}
+                            className={`px-5 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-all duration-300 ${activeSiteId === 'all' ? 'bg-white text-emerald-700 shadow-md ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-500/50'}`}
                         >
                             TODO
                         </button>
@@ -122,7 +129,7 @@ export default function CentralizedFinancialDashboard({
                             <button
                                 key={group.id}
                                 onClick={() => setActiveSiteId(group.id)}
-                                className={`px-5 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-all duration-300 ${activeSiteId === group.id ? 'bg-white text-emerald-700 shadow-md ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'}`}
+                                className={`px-5 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-all duration-300 ${activeSiteId === group.id ? 'bg-white text-emerald-700 shadow-md ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-500/50'}`}
                             >
                                 {group.title.toUpperCase()}
                             </button>
@@ -146,10 +153,7 @@ export default function CentralizedFinancialDashboard({
                 <ActasModule groups={groups} boardId={boardId} onAddSite={onAddSite} />
              ) : viewMode === 'list' ? (
                 <FinancialTableView 
-                    groups={groups.map(g => ({
-                        ...g,
-                        items: g.items.filter(i => String(i.values?.rubro || '').trim().toLowerCase() !== 'otros costos')
-                    }))} 
+                    groups={filteredGroups} 
                     columns={columns} 
                     activeSiteId={activeSiteId}
                     onUpdateItemValue={onUpdateItemValue}
@@ -165,10 +169,7 @@ export default function CentralizedFinancialDashboard({
                 />
              ) : (
                 <FinancialMatrixView 
-                    groups={groups.map(g => ({
-                        ...g,
-                        items: g.items.filter(i => String(i.values?.rubro || '').trim().toLowerCase() !== 'otros costos')
-                    }))} 
+                    groups={filteredGroups} 
                     columns={columns}
                     onUpdateItemValue={onUpdateItemValue}
                     onRenameGroup={onRenameGroup}

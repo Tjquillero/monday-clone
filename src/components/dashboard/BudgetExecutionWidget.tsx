@@ -131,7 +131,7 @@ export default function BudgetExecutionWidget({ groups, columns, activeSiteId: p
                 <div className="flex bg-slate-50 p-1.5 rounded-2xl border border-slate-100 shadow-inner">
                     <button 
                         onClick={() => setInternalActiveSiteId('all')} 
-                        className={`px-4 py-2 rounded-xl text-xs font-black shadow-sm transition-all duration-300 ${activeSiteId === 'all' ? 'bg-white text-slate-800 ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'}`}
+                        className={`px-4 py-2 rounded-xl text-xs font-black shadow-sm transition-all duration-300 ${activeSiteId === 'all' ? 'bg-white text-slate-800 ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-500/50'}`}
                     >
                         TODOS
                     </button>
@@ -139,7 +139,7 @@ export default function BudgetExecutionWidget({ groups, columns, activeSiteId: p
                         <button
                             key={group.id}
                             onClick={() => setInternalActiveSiteId(group.id)}
-                            className={`px-4 py-2 rounded-xl text-xs font-black transition-all duration-300 ${activeSiteId === group.id ? 'bg-white text-emerald-700 shadow-md ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'}`}
+                            className={`px-4 py-2 rounded-xl text-xs font-black transition-all duration-300 ${activeSiteId === group.id ? 'bg-white text-emerald-700 shadow-md ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-500/50'}`}
                         >
                             {group.title.toUpperCase()}
                         </button>

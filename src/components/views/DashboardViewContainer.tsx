@@ -1,10 +1,14 @@
 'use client';
 
+import { useSearchParams } from 'next/navigation';
 import { useBoard, useBoardGroups, useBoardColumns } from '@/hooks/useBoardData';
 import { CustomizableDashboard } from '@/components/dashboard/CustomizableDashboard';
 
 export default function DashboardViewContainer() {
-  const { data: board, isLoading: loadingBoard } = useBoard();
+  const searchParams = useSearchParams();
+  const boardId = searchParams?.get('id') || undefined;
+  
+  const { data: board, isLoading: loadingBoard } = useBoard(boardId);
   const { data: groups, isLoading: loadingGroups } = useBoardGroups(board?.id);
   const { data: columns, isLoading: loadingColumns } = useBoardColumns(board?.id);
 

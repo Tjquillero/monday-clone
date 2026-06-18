@@ -1,10 +1,26 @@
 import { createBrowserClient } from '@supabase/ssr';
+import { MockSupabaseClient } from './mockSupabase';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase URL or Anon Key is missing. Please check your .env.local file.');
-}
+const isBrowser = typeof window !== 'undefined';
 
-export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey);
+// Instantiate both clients once
+const realClient = supabaseUrl && supabaseAnonKey ? createBrowserClient(supabaseUrl, supabaseAnonKey) : null;
+const mockClient = new MockSupabaseClient();
+
+// Dynamic proxy wrapper
+export const supabase = new Proxy({}, {
+  get(target, prop) {
+    const useMock = !supabaseUrl || !supabaseAnonKey || 
+                    (isBrowser && (
+                      localStorage.getItem('use_mock_db') === 'true' || 
+                      localStorage.getItem('sb_mock_session') !== null ||
+                      document.cookie.includes('sb-mock-session')
+                    ));
+    
+    const activeClient = useMock || !realClient ? mockClient : realClient;
+    return (activeClient as any)[prop];
+  }
+}) as any;
