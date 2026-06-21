@@ -52,7 +52,7 @@ export default function ProfessionalLayout({ children }: { children: React.React
   
   const handleLogout = async () => {
     await signOut();
-    router.push('/login');
+    router.push('/login?signedout=true');
     router.refresh();
   };
 

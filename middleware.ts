@@ -9,7 +9,16 @@ export async function middleware(request: NextRequest) {
   })
 
   const mockSessionCookie = request.cookies.get('sb-mock-session')?.value;
+  const isSignedOut = request.nextUrl.searchParams.has('signedout');
   let session = null;
+  const defaultMockSession = {
+    user: {
+      id: 'mock-user-admin-default',
+      email: 'admin@mantenix.com',
+      user_metadata: { role: 'admin' }
+    },
+    expires_at: Math.floor(Date.now() / 1000) + 3600 * 24
+  };
 
   if (mockSessionCookie) {
     try {
@@ -17,6 +26,15 @@ export async function middleware(request: NextRequest) {
     } catch (e) {
       console.error('Error parsing mock session cookie:', e);
     }
+  } else if (!isSignedOut) {
+    // Auto-login: assign session and set cookie
+    session = defaultMockSession;
+    response.cookies.set({
+      name: 'sb-mock-session',
+      value: encodeURIComponent(JSON.stringify(defaultMockSession)),
+      path: '/',
+      maxAge: 86400,
+    });
   } else {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -86,8 +104,18 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  if (request.nextUrl.pathname === '/login' && session) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+  if ((request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/') && session) {
+    const redirectResponse = NextResponse.redirect(new URL('/dashboard', request.url))
+    // Carry the cookie over in case it was just set
+    if (!mockSessionCookie && !isSignedOut) {
+      redirectResponse.cookies.set({
+        name: 'sb-mock-session',
+        value: encodeURIComponent(JSON.stringify(defaultMockSession)),
+        path: '/',
+        maxAge: 86400,
+      });
+    }
+    return redirectResponse
   }
 
   return response

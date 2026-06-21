@@ -330,7 +330,23 @@ class MockAuth {
 
   private getLocalSession(): MockSession | null {
     if (!isBrowser) return null;
-    const stored = localStorage.getItem('sb_mock_session');
+    let stored = localStorage.getItem('sb_mock_session');
+    if (!stored) {
+      const cookieValue = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('sb-mock-session='))
+        ?.split('=')[1];
+      if (cookieValue) {
+        try {
+          const decoded = decodeURIComponent(cookieValue);
+          localStorage.setItem('sb_mock_session', decoded);
+          localStorage.setItem('use_mock_db', 'true');
+          stored = decoded;
+        } catch (e) {
+          console.error('Error parsing session cookie in mock client:', e);
+        }
+      }
+    }
     if (stored) {
       try {
         return JSON.parse(stored);
