@@ -26,6 +26,19 @@ export default function LoginPage() {
     console.log('Supabase URL available:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
 
     try {
+      // Interceptar cuenta Demo/Offline antes de llamar al backend real
+      if (isLogin && email.trim().toLowerCase() === 'admin@mantenix.com' && password === 'demo') {
+        console.log('Demo account detected. Switching to local offline mode...');
+        localStorage.setItem('use_mock_db', 'true');
+        const { error: mockError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (mockError) throw mockError;
+        router.push('/dashboard');
+        return;
+      }
+
       if (isLogin) {
         console.log('Invoking signInWithPassword...');
         const { error: signInError } = await supabase.auth.signInWithPassword({

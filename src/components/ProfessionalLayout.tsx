@@ -39,7 +39,7 @@ export default function ProfessionalLayout({ children }: { children: React.React
   const pathname = usePathname();
   const router = useRouter();
   const { sidebarOpen, setSidebarOpen } = useUI();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const { can } = usePermissions();
   
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -51,7 +51,7 @@ export default function ProfessionalLayout({ children }: { children: React.React
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({ 'main': true });
   
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await signOut();
     router.push('/login');
     router.refresh();
   };
@@ -240,6 +240,23 @@ export default function ProfessionalLayout({ children }: { children: React.React
                   </div>
                ))}
             </div>
+         </div>
+         
+         {/* Sección de perfil y logout en móvil */}
+         <div className="lg:hidden p-4 border-t border-[var(--border-color)] bg-[var(--bg-secondary)] flex flex-col gap-3">
+            <div className="flex items-center gap-3 px-2 py-1">
+              <div className="w-9 h-9 bg-gradient-to-tr from-[#3B7EF8] to-emerald-500 rounded-xl flex items-center justify-center text-white text-xs font-black shadow-md border border-white/10">M</div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs font-bold text-white truncate">Mantenix Operator</span>
+                <span className="text-[10px] text-slate-500 truncate">{user?.email}</span>
+              </div>
+            </div>
+            <button 
+              onClick={handleLogout} 
+              className="w-full py-2.5 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-rose-500/20"
+            >
+              <LogOut size={14} /> Cerrar Sesión
+            </button>
          </div>
       </aside>
 

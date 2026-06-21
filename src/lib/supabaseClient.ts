@@ -7,8 +7,8 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const isBrowser = typeof window !== 'undefined';
 
 // Instantiate both clients once
-const realClient = supabaseUrl && supabaseAnonKey ? createBrowserClient(supabaseUrl, supabaseAnonKey) : null;
-const mockClient = new MockSupabaseClient();
+export const realClient = supabaseUrl && supabaseAnonKey ? createBrowserClient(supabaseUrl, supabaseAnonKey) : null;
+export const mockClient = new MockSupabaseClient();
 
 // Dynamic proxy wrapper
 export const supabase = new Proxy({}, {
