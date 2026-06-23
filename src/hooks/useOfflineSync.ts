@@ -27,14 +27,22 @@ export function useOfflineSync() {
   const refreshLocalCache = useCallback(async () => {
     if (!offlineDB || typeof window === 'undefined' || !window.navigator.onLine) return;
     try {
-      const tables = ['boards', 'groups', 'items', 'site_incidents'];
+      const tables = [
+        'boards',
+        'groups',
+        'items',
+        'site_incidents',
+        'board_columns',
+        'activity_templates',
+        'task_dependencies'
+      ];
       for (const table of tables) {
         const { data, error } = await supabase.from(table).select('*');
         if (!error && data) {
           await offlineDB.saveTable(table, data);
         }
       }
-      console.log('[offlineSync] Local IndexedDB snapshot cache updated.');
+      console.log('[offlineSync] Local IndexedDB snapshot cache updated for all tables.');
     } catch (err) {
       console.error('[offlineSync] Failed to update local snapshot cache:', err);
     }

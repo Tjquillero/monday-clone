@@ -5,6 +5,29 @@ import { supabase } from '@/lib/supabaseClient';
 import { useAutomations } from '@/hooks/useAutomations';
 import { useAuth } from '@/contexts/AuthContext';
 import { Column, Dependency, Group } from '@/types/monday';
+import { offlineDB, generateUUID } from '@/lib/offlineDB';
+
+function isNetworkError(error: any): boolean {
+  if (!error) return false;
+  if (typeof window !== 'undefined' && !window.navigator.onLine) return true;
+  
+  const msg = (error.message || '').toLowerCase();
+  const name = (error.name || '').toLowerCase();
+  
+  return (
+    msg.includes('fetch') ||
+    msg.includes('network') ||
+    msg.includes('load failed') ||
+    msg.includes('connection') ||
+    msg.includes('aborted') ||
+    msg.includes('timeout') ||
+    name.includes('aborterror') ||
+    name.includes('typeerror') ||
+    error.status === 502 ||
+    error.status === 503 ||
+    error.status === 504
+  );
+}
 
 export function useBoardMutations(boardId?: string) {
   const queryClient = useQueryClient();
@@ -38,9 +61,40 @@ export function useBoardMutations(boardId?: string) {
       const newEndStr = newEnd.toISOString().split('T')[0];
 
       if (currentTimeline?.from !== newStartStr) {
-        await supabase.from('items').update({
-          values: { ...successorItem.values, timeline: { from: newStartStr, to: newEndStr } }
-        }).eq('id', successorItem.id);
+        const mergedVal = { ...successorItem.values, timeline: { from: newStartStr, to: newEndStr } };
+        try {
+          const { error } = await supabase.from('items').update({
+            values: mergedVal
+          }).eq('id', successorItem.id);
+          
+          if (error) throw error;
+
+          if (offlineDB) {
+            const localItems = await offlineDB.getTable('items');
+            const idx = localItems.findIndex((i: any) => String(i.id) === String(successorItem.id));
+            if (idx !== -1) {
+              localItems[idx].values = mergedVal;
+              await offlineDB.saveTable('items', localItems);
+            }
+          }
+        } catch (rescheduleErr) {
+          if (isNetworkError(rescheduleErr) && offlineDB) {
+            const localItems = await offlineDB.getTable('items');
+            const idx = localItems.findIndex((i: any) => String(i.id) === String(successorItem.id));
+            if (idx !== -1) {
+              localItems[idx].values = mergedVal;
+              await offlineDB.saveTable('items', localItems);
+            }
+
+            await offlineDB.addMutation({
+              table: 'items',
+              action: 'update',
+              payload: { id: successorItem.id, values: mergedVal }
+            });
+          } else {
+            throw rescheduleErr;
+          }
+        }
 
         await rescheduleSuccessors(String(successorItem.id), newEndStr, taskDependencies, groups);
       }
@@ -49,14 +103,47 @@ export function useBoardMutations(boardId?: string) {
 
   const addItem = useMutation({
     mutationFn: async ({ groupId, name, initialValues }: { groupId: string, name: string, initialValues: any }) => {
-      const { data, error } = await supabase.from('items').insert({
-        group_id: groupId,
-        name: name,
-        values: initialValues,
-        position: 999 
-      }).select().single();
-      if (error) throw error;
-      return data;
+      try {
+        const { data, error } = await supabase.from('items').insert({
+          group_id: groupId,
+          name: name,
+          values: initialValues,
+          position: 999 
+        }).select().single();
+        
+        if (error) throw error;
+
+        if (offlineDB && data) {
+          await offlineDB.upsertRecords('items', [data]);
+        }
+        return data;
+      } catch (err: any) {
+        if (isNetworkError(err) && offlineDB) {
+          console.log('[Offline] Add item failed due to network. Queuing mutation.');
+          const newId = generateUUID();
+          const newItem = {
+            id: newId,
+            group_id: groupId,
+            name: name,
+            values: initialValues,
+            position: 999,
+            created_at: new Date().toISOString()
+          };
+
+          const localItems = await offlineDB.getTable('items');
+          localItems.push(newItem);
+          await offlineDB.saveTable('items', localItems);
+
+          await offlineDB.addMutation({
+            table: 'items',
+            action: 'insert',
+            payload: newItem
+          });
+
+          return newItem;
+        }
+        throw err;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['groups', boardId] });
@@ -65,37 +152,114 @@ export function useBoardMutations(boardId?: string) {
 
   const updateItem = useMutation({
     mutationFn: async ({ itemId, updates, isValuesUpdate }: { itemId: string | number, updates: any, isValuesUpdate: boolean }) => {
-      if (isValuesUpdate) {
-        const { data: current } = await supabase.from('items').select('values').eq('id', itemId).single();
-        const mergedValues = { ...(current?.values || {}), ...updates };
-        
-        const statusUpdate = await processExecutionUpdate(itemId, mergedValues);
-        if (statusUpdate) {
-            mergedValues.status = statusUpdate;
-            // Note: In a real app we'd also update the specific status column ID.
-        }
+      try {
+        if (isValuesUpdate) {
+          let currentValues = {};
+          try {
+            const { data: current, error: fetchErr } = await supabase.from('items').select('values').eq('id', itemId).single();
+            if (fetchErr) throw fetchErr;
+            currentValues = current?.values || {};
+          } catch (fetchErr) {
+            if (isNetworkError(fetchErr) && offlineDB) {
+              const localItems = await offlineDB.getTable('items');
+              const localItem = localItems.find((i: any) => String(i.id) === String(itemId));
+              currentValues = localItem?.values || {};
+            } else {
+              throw fetchErr;
+            }
+          }
 
-        const { error } = await supabase.from('items').update({ values: mergedValues }).eq('id', itemId);
-        if (error) throw error;
+          const mergedValues = { ...currentValues, ...updates };
+          
+          const statusUpdate = await processExecutionUpdate(itemId, mergedValues);
+          if (statusUpdate) {
+              mergedValues.status = statusUpdate;
+          }
 
-        // Trigger Automations
-        if (user) {
-          await executeAutomations('status_change', String(itemId), {
-            values: mergedValues,
-            previous_values: current?.values,
-            updated_by: user.id
-          });
-        }
+          try {
+            const { error } = await supabase.from('items').update({ values: mergedValues }).eq('id', itemId);
+            if (error) throw error;
 
-        // Trigger Rescheduling if timeline changed
-        if (updates.timeline?.to) {
-          const deps = queryClient.getQueryData<Dependency[]>(['task_dependencies', boardId]) || [];
-          const groups = queryClient.getQueryData<Group[]>(['groups', boardId]) || [];
-          await rescheduleSuccessors(String(itemId), updates.timeline.to, deps, groups);
+            if (offlineDB) {
+              const localItems = await offlineDB.getTable('items');
+              const idx = localItems.findIndex((i: any) => String(i.id) === String(itemId));
+              if (idx !== -1) {
+                localItems[idx].values = mergedValues;
+                await offlineDB.saveTable('items', localItems);
+              }
+            }
+
+            // Trigger Automations
+            if (user) {
+              await executeAutomations('status_change', String(itemId), {
+                values: mergedValues,
+                previous_values: currentValues,
+                updated_by: user.id
+              });
+            }
+
+            // Trigger Rescheduling if timeline changed
+            if (updates.timeline?.to) {
+              const deps = queryClient.getQueryData<Dependency[]>(['task_dependencies', boardId]) || [];
+              const groups = queryClient.getQueryData<Group[]>(['groups', boardId]) || [];
+              await rescheduleSuccessors(String(itemId), updates.timeline.to, deps, groups);
+            }
+          } catch (updateErr) {
+            if (isNetworkError(updateErr) && offlineDB) {
+              console.log('[Offline] Update item values failed due to network. Queuing mutation.');
+              
+              const localItems = await offlineDB.getTable('items');
+              const idx = localItems.findIndex((i: any) => String(i.id) === String(itemId));
+              if (idx !== -1) {
+                localItems[idx].values = mergedValues;
+                await offlineDB.saveTable('items', localItems);
+              }
+
+              await offlineDB.addMutation({
+                table: 'items',
+                action: 'update',
+                payload: { id: itemId, values: mergedValues }
+              });
+            } else {
+              throw updateErr;
+            }
+          }
+        } else {
+          try {
+            const { error } = await supabase.from('items').update(updates).eq('id', itemId);
+            if (error) throw error;
+
+            if (offlineDB) {
+              const localItems = await offlineDB.getTable('items');
+              const idx = localItems.findIndex((i: any) => String(i.id) === String(itemId));
+              if (idx !== -1) {
+                localItems[idx] = { ...localItems[idx], ...updates };
+                await offlineDB.saveTable('items', localItems);
+              }
+            }
+          } catch (updateErr) {
+            if (isNetworkError(updateErr) && offlineDB) {
+              console.log('[Offline] Update item fields failed due to network. Queuing mutation.');
+              
+              const localItems = await offlineDB.getTable('items');
+              const idx = localItems.findIndex((i: any) => String(i.id) === String(itemId));
+              if (idx !== -1) {
+                localItems[idx] = { ...localItems[idx], ...updates };
+                await offlineDB.saveTable('items', localItems);
+              }
+
+              await offlineDB.addMutation({
+                table: 'items',
+                action: 'update',
+                payload: { id: itemId, ...updates }
+              });
+            } else {
+              throw updateErr;
+            }
+          }
         }
-      } else {
-        const { error } = await supabase.from('items').update(updates).eq('id', itemId);
-        if (error) throw error;
+      } catch (err) {
+        throw err;
       }
     },
     onMutate: async ({ itemId, updates, isValuesUpdate }) => {
@@ -124,11 +288,15 @@ export function useBoardMutations(boardId?: string) {
       return { previousGroups };
     },
     onError: (err, variables, context) => {
-      console.error("❌ MUTATION ERROR:", err); // DEBUG LOG
+      console.error("❌ MUTATION ERROR:", err);
+      if (isNetworkError(err)) {
+        console.log('[Offline] Mutation failure handled gracefully. Change will sync later.');
+        return;
+      }
       if (context?.previousGroups) {
         queryClient.setQueryData(['groups', boardId], context.previousGroups);
       }
-      alert("❌ Error al guardar en base de datos: " + (err as any).message); // VISIBLE ALERT
+      alert("❌ Error al guardar en base de datos: " + (err as any).message);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['groups', boardId] });
@@ -137,17 +305,56 @@ export function useBoardMutations(boardId?: string) {
 
   const deleteItems = useMutation({
     mutationFn: async (itemIds: (string | number)[]) => {
-      // 1. Delete children first to avoid FK errors
-      await supabase.from('items').delete().in('parent_id', itemIds);
-      
-      // 2. Delete the items themselves
-      const { error } = await supabase.from('items').delete().in('id', itemIds);
-      if (error) throw error;
+      try {
+        const stringIds = itemIds.map(String);
+
+        // 1. Delete children first
+        await supabase.from('items').delete().in('parent_id', itemIds);
+        
+        // 2. Delete the items themselves
+        const { error } = await supabase.from('items').delete().in('id', itemIds);
+        if (error) throw error;
+
+        if (offlineDB) {
+          const localItems = await offlineDB.getTable('items');
+          const remaining = localItems.filter((i: any) => 
+            !stringIds.includes(String(i.id)) && !stringIds.includes(String(i.parent_id))
+          );
+          await offlineDB.saveTable('items', remaining);
+        }
+      } catch (err: any) {
+        if (isNetworkError(err) && offlineDB) {
+          console.log('[Offline] Delete items failed due to network. Queuing mutations.');
+          const stringIds = itemIds.map(String);
+
+          const localItems = await offlineDB.getTable('items');
+          const remaining = localItems.filter((i: any) => 
+            !stringIds.includes(String(i.id)) && !stringIds.includes(String(i.parent_id))
+          );
+          await offlineDB.saveTable('items', remaining);
+
+          for (const id of itemIds) {
+            await offlineDB.addMutation({
+              table: 'items',
+              action: 'delete',
+              payload: { parent_id: id }
+            });
+            await offlineDB.addMutation({
+              table: 'items',
+              action: 'delete',
+              payload: { id: id }
+            });
+          }
+          return;
+        }
+        throw err;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['groups', boardId] });
     },
     onError: (err: any) => {
+      if (isNetworkError(err)) return;
       console.error("❌ ERROR AL ELIMINAR ITEMS:", err);
       alert("Error al eliminar los ítems: " + (err?.message || "Error desconocido"));
     }
@@ -155,17 +362,49 @@ export function useBoardMutations(boardId?: string) {
 
   const deleteItem = useMutation({
     mutationFn: async (itemId: string | number) => {
-      // 1. Delete children first
-      await supabase.from('items').delete().eq('parent_id', itemId);
-      
-      // 2. Delete the item
-      const { error } = await supabase.from('items').delete().eq('id', itemId);
-      if (error) throw error;
+      try {
+        // 1. Delete children first
+        await supabase.from('items').delete().eq('parent_id', itemId);
+        
+        // 2. Delete the item
+        const { error } = await supabase.from('items').delete().eq('id', itemId);
+        if (error) throw error;
+
+        if (offlineDB) {
+          const localItems = await offlineDB.getTable('items');
+          const remaining = localItems.filter((i: any) => String(i.id) !== String(itemId) && String(i.parent_id) !== String(itemId));
+          await offlineDB.saveTable('items', remaining);
+        }
+      } catch (err: any) {
+        if (isNetworkError(err) && offlineDB) {
+          console.log('[Offline] Delete item failed due to network. Queuing mutation.');
+
+          const localItems = await offlineDB.getTable('items');
+          const remaining = localItems.filter((i: any) => String(i.id) !== String(itemId) && String(i.parent_id) !== String(itemId));
+          await offlineDB.saveTable('items', remaining);
+
+          await offlineDB.addMutation({
+            table: 'items',
+            action: 'delete',
+            payload: { parent_id: itemId }
+          });
+
+          await offlineDB.addMutation({
+            table: 'items',
+            action: 'delete',
+            payload: { id: itemId }
+          });
+          
+          return;
+        }
+        throw err;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['groups', boardId] });
     },
     onError: (err: any) => {
+      if (isNetworkError(err)) return;
       console.error("❌ ERROR AL ELIMINAR ITEM:", err);
       alert("Error al eliminar el ítem: " + (err?.message || "Error desconocido"));
     }

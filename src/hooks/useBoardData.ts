@@ -3,38 +3,73 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { Board, Group, Column, Item } from '@/types/monday';
+import { offlineDB } from '@/lib/offlineDB';
+
+function isNetworkError(error: any): boolean {
+  if (!error) return false;
+  if (typeof window !== 'undefined' && !window.navigator.onLine) return true;
+  
+  const msg = (error.message || '').toLowerCase();
+  const name = (error.name || '').toLowerCase();
+  
+  return (
+    msg.includes('fetch') ||
+    msg.includes('network') ||
+    msg.includes('load failed') ||
+    msg.includes('connection') ||
+    msg.includes('aborted') ||
+    msg.includes('timeout') ||
+    name.includes('aborterror') ||
+    name.includes('typeerror') ||
+    error.status === 502 ||
+    error.status === 503 ||
+    error.status === 504
+  );
+}
 
 export function useBoard(boardId?: string) {
   return useQuery({
     queryKey: ['board', boardId],
     queryFn: async () => {
-      let query = supabase.from('boards').select('*');
-      if (boardId) {
-        query = query.eq('id', boardId);
-      } else {
-        query = query.order('created_at', { ascending: false }).limit(1);
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) {
+      try {
+        let query = supabase.from('boards').select('*');
+        if (boardId) {
+          query = query.eq('id', boardId);
+        } else {
+          query = query.order('created_at', { ascending: false }).limit(1);
+        }
+        
+        const { data, error } = await query;
+        
+        if (error) throw error;
+        
+        const board = data && data.length > 0 ? (data[0] as Board) : null;
+        if (board && offlineDB) {
+          await offlineDB.upsertRecords('boards', [board]);
+        }
+        return board;
+      } catch (error: any) {
         const isAbort = error.name === 'AbortError' || error.message?.includes('aborted');
         if (isAbort) {
           console.log('Board fetch aborted');
-          return null; // Don't throw AbortError to avoid Next.js overlay crashes
-        } else {
-          console.error('Board fetch error - Full:', error);
-          console.error('Board fetch error - Code:', error.code);
-          console.error('Board fetch error - Message:', error.message);
-          console.error('Board fetch error - Details:', error.details);
-          throw error; // Throw other errors to trigger Retry/Error state
+          return null;
         }
+
+        if (isNetworkError(error) && offlineDB) {
+          console.log('[Offline] Board query failed due to network. Falling back to IndexedDB.');
+          const localBoards = await offlineDB.getTable('boards');
+          const found = boardId 
+            ? localBoards.find((b: any) => String(b.id) === String(boardId))
+            : [...localBoards].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+          return found || null;
+        }
+
+        console.error('Board fetch error - Full:', error);
+        throw error;
       }
-      
-      return data && data.length > 0 ? (data[0] as Board) : null;
     },
     retry: 2, 
-    staleTime: 30 * 60 * 1000, // Increase staleTime to reduce redundant fetches
+    staleTime: 30 * 60 * 1000,
   });
 }
 
@@ -43,41 +78,59 @@ export function useBoardColumns(boardId?: string) {
     queryKey: ['columns', boardId],
     queryFn: async () => {
       if (!boardId) return [];
-      const { data, error } = await supabase
-        .from('board_columns')
-        .select('*')
-        .eq('board_id', boardId)
-        .order('position');
-      
-      if (error) throw error;
+      try {
+        const { data, error } = await supabase
+          .from('board_columns')
+          .select('*')
+          .eq('board_id', boardId)
+          .order('position');
+        
+        if (error) throw error;
 
-      const cols = [...(data || [])];
-      
-      // Fallback: Ensure crucial columns exist
-      if (!cols.some((c: any) => c.type === 'status' || c.id === 'status' || c.title.toLowerCase().includes('estado'))) {
-        cols.push({ id: 'status', title: 'Estado', type: 'status', width: 140, position: 1 });
+        const cols = [...(data || [])];
+        if (offlineDB) {
+          await offlineDB.upsertRecords('board_columns', cols);
+        }
+        
+        return processColumns(cols);
+      } catch (error: any) {
+        if (isNetworkError(error) && offlineDB) {
+          console.log('[Offline] Board columns query failed due to network. Falling back to IndexedDB.');
+          const localCols = await offlineDB.getTable('board_columns');
+          const filteredCols = localCols.filter((c: any) => String(c.board_id) === String(boardId));
+          return processColumns(filteredCols);
+        }
+        throw error;
       }
-      if (!cols.some((c: Column) => c.type === 'people')) {
-        cols.push({ id: 'people', title: 'Personas', type: 'people', width: 150, position: 2 });
-      }
-      if (!cols.some((c: any) => c.id === 'unit_price' || c.title.includes('Precio'))) {
-        cols.push({ id: 'unit_price', title: 'Precio Unitario', type: 'numbers', width: 140, position: 3 });
-      }
-      if (!cols.some((c: any) => c.id === 'cant' || c.title.includes('Cant'))) {
-        cols.push({ id: 'cant', title: 'Cantidad', type: 'numbers', width: 100, position: 4 });
-      }
-      if (!cols.some((c: any) => c.id === 'category' || c.title.includes('Categor'))) {
-        cols.push({ id: 'category', title: 'Categoría', type: 'text', width: 150, position: 5 });
-      }
-      if (!cols.some((c: any) => c.id === 'rubro')) {
-        cols.push({ id: 'rubro', title: 'Rubro Mayor', type: 'text', width: 150, position: 6 });
-      }
-
-      return cols.sort((a, b) => (a.position || 0) - (b.position || 0));
     },
     enabled: !!boardId,
     staleTime: 10 * 60 * 1000,
   });
+}
+
+function processColumns(cols: any[]) {
+  const sorted = [...cols];
+  
+  if (!sorted.some((c: any) => c.type === 'status' || c.id === 'status' || c.title.toLowerCase().includes('estado'))) {
+    sorted.push({ id: 'status', title: 'Estado', type: 'status', width: 140, position: 1 });
+  }
+  if (!sorted.some((c: Column) => c.type === 'people')) {
+    sorted.push({ id: 'people', title: 'Personas', type: 'people', width: 150, position: 2 });
+  }
+  if (!sorted.some((c: any) => c.id === 'unit_price' || c.title.includes('Precio'))) {
+    sorted.push({ id: 'unit_price', title: 'Precio Unitario', type: 'numbers', width: 140, position: 3 });
+  }
+  if (!sorted.some((c: any) => c.id === 'cant' || c.title.includes('Cant'))) {
+    sorted.push({ id: 'cant', title: 'Cantidad', type: 'numbers', width: 100, position: 4 });
+  }
+  if (!sorted.some((c: any) => c.id === 'category' || c.title.includes('Categor'))) {
+    sorted.push({ id: 'category', title: 'Categoría', type: 'text', width: 150, position: 5 });
+  }
+  if (!sorted.some((c: any) => c.id === 'rubro')) {
+    sorted.push({ id: 'rubro', title: 'Rubro Mayor', type: 'text', width: 150, position: 6 });
+  }
+
+  return sorted.sort((a, b) => (a.position || 0) - (b.position || 0));
 }
 
 export function useBoardGroups(boardId?: string) {
@@ -86,34 +139,87 @@ export function useBoardGroups(boardId?: string) {
     queryFn: async () => {
       if (!boardId) return [];
       
-      // Fetch groups and items in one efficient query
-      const { data, error } = await supabase
-        .from('groups')
-        .select(`
-          *,
-          items (*, personnel(*))
-        `)
-        .eq('board_id', boardId)
-        .order('position');
+      try {
+        const { data, error } = await supabase
+          .from('groups')
+          .select(`
+            *,
+            items (*, personnel(*))
+          `)
+          .eq('board_id', boardId)
+          .order('position');
 
-      if (error) throw error;
+        if (error) throw error;
 
-      return (data || []).map((g: any) => {
-        // Separate parent items and subitems efficiently
-        const parentItems = g.items.filter((i: Item) => !i.parent_id);
-        const subItems = g.items.filter((i: Item) => !!i.parent_id);
-        
-        return {
-          ...g,
-          items: parentItems.map((parent: Item) => ({
-            ...parent,
-            subItems: subItems.filter((child: Item) => child.parent_id === parent.id)
-          }))
-        };
-      }) as Group[];
+        const result = (data || []).map((g: any) => {
+          const parentItems = g.items.filter((i: Item) => !i.parent_id);
+          const subItems = g.items.filter((i: Item) => !!i.parent_id);
+          
+          return {
+            ...g,
+            items: parentItems.map((parent: Item) => ({
+              ...parent,
+              subItems: subItems.filter((child: Item) => child.parent_id === parent.id)
+            }))
+          };
+        }) as Group[];
+
+        if (offlineDB && data) {
+          const groupsToSave = data.map((g: any) => {
+            const { items, ...groupOnly } = g;
+            return groupOnly;
+          });
+          await offlineDB.upsertRecords('groups', groupsToSave);
+
+          const itemsToSave: any[] = [];
+          data.forEach((g: any) => {
+            if (g.items) {
+              g.items.forEach((item: any) => {
+                const { subItems, ...itemOnly } = item;
+                itemsToSave.push(itemOnly);
+                if (subItems) {
+                  subItems.forEach((sub: any) => {
+                    itemsToSave.push(sub);
+                  });
+                }
+              });
+            }
+          });
+          if (itemsToSave.length > 0) {
+            await offlineDB.upsertRecords('items', itemsToSave);
+          }
+        }
+
+        return result;
+      } catch (error: any) {
+        if (isNetworkError(error) && offlineDB) {
+          console.log('[Offline] Board groups query failed due to network. Falling back to IndexedDB.');
+          const localGroups = await offlineDB.getTable('groups');
+          const localItems = await offlineDB.getTable('items');
+
+          const filteredGroups = localGroups.filter((g: any) => String(g.board_id) === String(boardId));
+          const filteredItems = localItems.filter((item: any) => 
+            filteredGroups.some((g: any) => String(g.id) === String(item.group_id))
+          );
+
+          return filteredGroups.map((g: any) => {
+            const parentItems = filteredItems.filter((i: any) => String(i.group_id) === String(g.id) && !i.parent_id);
+            const subItems = filteredItems.filter((i: any) => String(i.group_id) === String(g.id) && !!i.parent_id);
+
+            return {
+              ...g,
+              items: parentItems.map((parent: any) => ({
+                ...parent,
+                subItems: subItems.filter((child: any) => String(child.parent_id) === String(parent.id))
+              }))
+            };
+          }).sort((a: any, b: any) => (a.position || 0) - (b.position || 0)) as Group[];
+        }
+        throw error;
+      }
     },
     enabled: !!boardId,
-    staleTime: 5 * 60 * 1000, // Reasonable staleTime for group data
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -121,11 +227,22 @@ export function useActivityTemplates() {
   return useQuery({
     queryKey: ['activity_templates'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('activity_templates').select('*').order('name');
-      if (error) throw error;
-      return data;
+      try {
+        const { data, error } = await supabase.from('activity_templates').select('*').order('name');
+        if (error) throw error;
+        if (offlineDB && data) {
+          await offlineDB.upsertRecords('activity_templates', data);
+        }
+        return data;
+      } catch (error: any) {
+        if (isNetworkError(error) && offlineDB) {
+          console.log('[Offline] Activity templates query failed due to network. Falling back to IndexedDB.');
+          return await offlineDB.getTable('activity_templates');
+        }
+        throw error;
+      }
     },
-    staleTime: 60 * 60 * 1000, // Templates change very rarely
+    staleTime: 60 * 60 * 1000,
   });
 }
 
@@ -134,9 +251,21 @@ export function useTaskDependencies(boardId?: string) {
     queryKey: ['task_dependencies', boardId],
     queryFn: async () => {
       if (!boardId) return [];
-      const { data, error } = await supabase.from('task_dependencies').select('*').eq('board_id', boardId);
-      if (error) throw error;
-      return data;
+      try {
+        const { data, error } = await supabase.from('task_dependencies').select('*').eq('board_id', boardId);
+        if (error) throw error;
+        if (offlineDB && data) {
+          await offlineDB.upsertRecords('task_dependencies', data);
+        }
+        return data;
+      } catch (error: any) {
+        if (isNetworkError(error) && offlineDB) {
+          console.log('[Offline] Task dependencies query failed due to network. Falling back to IndexedDB.');
+          const localDeps = await offlineDB.getTable('task_dependencies');
+          return localDeps.filter((d: any) => String(d.board_id) === String(boardId));
+        }
+        throw error;
+      }
     },
     enabled: !!boardId,
     staleTime: 10 * 60 * 1000,

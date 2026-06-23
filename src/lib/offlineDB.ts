@@ -2,7 +2,18 @@
 import { supabase } from './supabaseClient';
 
 const DB_NAME = 'mantenix_offline_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
+
+export function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
 export interface OfflineMutation {
   id?: number;
@@ -34,11 +45,17 @@ export class OfflineDB {
         if (!db.objectStoreNames.contains('items')) db.createObjectStore('items', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('site_incidents')) db.createObjectStore('site_incidents', { keyPath: 'id' });
         
+        // Nuevas tablas para el caché offline completo
+        if (!db.objectStoreNames.contains('board_columns')) db.createObjectStore('board_columns', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('activity_templates')) db.createObjectStore('activity_templates', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('task_dependencies')) db.createObjectStore('task_dependencies', { keyPath: 'id' });
+        
         // Cola de mutaciones pendientes
         if (!db.objectStoreNames.contains('mutations')) {
           db.createObjectStore('mutations', { keyPath: 'id', autoIncrement: true });
         }
       };
+
 
       request.onsuccess = () => {
         this.db = request.result;
@@ -90,6 +107,28 @@ export class OfflineDB {
       }
     });
   }
+
+  async upsertRecords(table: string, data: any[]): Promise<void> {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      try {
+        const transaction = db.transaction(table, 'readwrite');
+        const store = transaction.objectStore(table);
+        
+        data.forEach(item => {
+          if (item && item.id) {
+            store.put(item);
+          }
+        });
+
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
 
   // --- Queue for pending mutations ---
   async getMutations(): Promise<OfflineMutation[]> {
@@ -288,7 +327,7 @@ export class OfflineQueryBuilder {
       const createdRows = [];
       const tableData = await offlineDB.getTable(this.table);
       for (const r of rows) {
-        const id = r.id || Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        const id = r.id || generateUUID();
         const newRow = {
           id,
           created_at: new Date().toISOString(),
