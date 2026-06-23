@@ -11,6 +11,8 @@ import { useRouter, usePathname } from 'next/navigation';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import NotificationBell from './NotificationBell';
+import OfflineIndicator from './OfflineIndicator';
+import { useOfflineSync } from '@/hooks/useOfflineSync';
 import NewsModal from '@/components/modals/NewsModal';
 import SearchModal from '@/components/modals/SearchModal';
 import NewBoardModal from '@/components/modals/NewBoardModal';
@@ -41,6 +43,25 @@ export default function ProfessionalLayout({ children }: { children: React.React
   const { sidebarOpen, setSidebarOpen } = useUI();
   const { user, signOut } = useAuth();
   const { can } = usePermissions();
+
+  const { refreshLocalCache, isOnline } = useOfflineSync();
+
+  // Registrar Service Worker para soporte offline
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then(
+        (reg) => console.log('[PWA] Service Worker registrado:', reg.scope),
+        (err) => console.error('[PWA] Error al registrar Service Worker:', err)
+      );
+    }
+  }, []);
+
+  // Sincronizar instantánea IndexedDB al iniciar o volver a estar online
+  useEffect(() => {
+    if (isOnline) {
+      refreshLocalCache();
+    }
+  }, [isOnline, refreshLocalCache]);
   
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -144,6 +165,7 @@ export default function ProfessionalLayout({ children }: { children: React.React
           </button>
 
           <NotificationBell />
+          <OfflineIndicator />
 
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className={`p-3 rounded-2xl transition-all group ${sidebarOpen ? 'text-[#3B7EF8] bg-[#3B7EF8]/10' : 'text-slate-500 hover:text-white hover:bg-slate-500/5'}`}>
             <PanelLeft className="w-5 h-5 group-hover:rotate-12 transition-transform" />
@@ -274,6 +296,7 @@ export default function ProfessionalLayout({ children }: { children: React.React
               </div>
             </div>
             <NotificationBell />
+            <OfflineIndicator />
           </header>
 
           <main className="flex-1 overflow-y-auto bg-[var(--bg-primary)] custom-scrollbar relative min-h-0">
