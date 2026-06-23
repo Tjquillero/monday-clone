@@ -15,6 +15,9 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
+  const isProduction = process.env.NODE_ENV === 'production';
+  const allowDemo = process.env.NEXT_PUBLIC_ALLOW_DEMO === 'true' || !isProduction;
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -28,6 +31,9 @@ export default function LoginPage() {
     try {
       // Interceptar cuenta Demo/Offline antes de llamar al backend real
       if (isLogin && email.trim().toLowerCase() === 'admin@mantenix.com' && password === 'demo') {
+        if (!allowDemo) {
+          throw new Error('El modo demo no está permitido en este entorno.');
+        }
         console.log('Demo account detected. Switching to local offline mode...');
         localStorage.setItem('use_mock_db', 'true');
         const { error: mockError } = await supabase.auth.signInWithPassword({
@@ -104,6 +110,10 @@ export default function LoginPage() {
   };
 
   const handleDemoMode = async () => {
+    if (!allowDemo) {
+      setError('El modo demo no está permitido en este entorno.');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -218,20 +228,24 @@ export default function LoginPage() {
             )}
           </button>
 
-          <div className="relative flex py-2 items-center">
-            <div className="flex-grow border-t border-gray-200"></div>
-            <span className="flex-shrink mx-4 text-gray-400 text-[10px] font-black uppercase tracking-widest">o</span>
-            <div className="flex-grow border-t border-gray-200"></div>
-          </div>
+          {allowDemo && (
+            <>
+              <div className="relative flex py-2 items-center">
+                <div className="flex-grow border-t border-gray-200"></div>
+                <span className="flex-shrink mx-4 text-gray-400 text-[10px] font-black uppercase tracking-widest">o</span>
+                <div className="flex-grow border-t border-gray-200"></div>
+              </div>
 
-          <button
-            type="button"
-            onClick={handleDemoMode}
-            disabled={loading}
-            className="w-full bg-[#3B7EF8]/10 hover:bg-[#3B7EF8] text-[#3B7EF8] hover:text-white py-3.5 rounded-xl flex items-center justify-center font-bold text-base border border-[#3B7EF8]/20 transition-all active:scale-95 disabled:opacity-70 disabled:active:scale-100 uppercase tracking-wider text-xs"
-          >
-            Acceder en Modo Demo (Offline)
-          </button>
+              <button
+                type="button"
+                onClick={handleDemoMode}
+                disabled={loading}
+                className="w-full bg-[#3B7EF8]/10 hover:bg-[#3B7EF8] text-[#3B7EF8] hover:text-white py-3.5 rounded-xl flex items-center justify-center font-bold text-base border border-[#3B7EF8]/20 transition-all active:scale-95 disabled:opacity-70 disabled:active:scale-100 uppercase tracking-wider text-xs"
+              >
+                Acceder en Modo Demo (Offline)
+              </button>
+            </>
+          )}
         </form>
 
         <div className="mt-8 text-center">

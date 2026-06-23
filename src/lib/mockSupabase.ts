@@ -397,7 +397,7 @@ class MockAuth {
     if (isBrowser) {
       localStorage.setItem('sb_mock_session', JSON.stringify(session));
       // Also write cookie for middleware access
-      document.cookie = `sb-mock-session=${encodeURIComponent(JSON.stringify(session))}; path=/; max-age=86400;`;
+      document.cookie = `sb-mock-session=${encodeURIComponent(JSON.stringify(session))}; path=/; max-age=86400; Secure; SameSite=Lax;`;
     }
 
     this.triggerAuthStateChange();
@@ -417,7 +417,7 @@ class MockAuth {
 
     if (isBrowser) {
       localStorage.setItem('sb_mock_session', JSON.stringify(session));
-      document.cookie = `sb-mock-session=${encodeURIComponent(JSON.stringify(session))}; path=/; max-age=86400;`;
+      document.cookie = `sb-mock-session=${encodeURIComponent(JSON.stringify(session))}; path=/; max-age=86400; Secure; SameSite=Lax;`;
     }
 
     this.triggerAuthStateChange();
@@ -428,7 +428,7 @@ class MockAuth {
     if (isBrowser) {
       localStorage.removeItem('sb_mock_session');
       localStorage.removeItem('use_mock_db');
-      document.cookie = 'sb-mock-session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;';
+      document.cookie = 'sb-mock-session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; SameSite=Lax;';
     }
     this.triggerAuthStateChange();
     return { error: null };

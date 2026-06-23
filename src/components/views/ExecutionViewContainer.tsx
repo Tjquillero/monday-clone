@@ -24,7 +24,7 @@ export default function ExecutionViewContainer({ searchQuery, selectedGroupId, f
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const role = (user?.user_metadata as any)?.role?.toLowerCase();
-  const isAdmin = role === 'admin' || user?.email === 'admin@mantenix.com' || user?.email === 'tjho145@hotmail.com';
+  const isAdmin = role === 'admin' || user?.email === 'admin@mantenix.com';
 
   const { data: board } = useBoard();
   const { data: groups, isLoading } = useBoardGroups(board?.id);

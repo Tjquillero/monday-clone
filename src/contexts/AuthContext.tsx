@@ -4,6 +4,9 @@ import { useEffect, useState, createContext, useContext } from 'react';
 import { supabase, realClient, mockClient } from '@/lib/supabaseClient';
 import { User, Session } from '@supabase/supabase-js';
 
+const isProduction = process.env.NODE_ENV === 'production';
+const allowDemo = process.env.NEXT_PUBLIC_ALLOW_DEMO === 'true' || !isProduction;
+
 type AuthContextType = {
   user: User | null;
   session: Session | null;
@@ -30,11 +33,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const getInitialSession = async () => {
       try {
-        const useMock = typeof window !== 'undefined' && (
+        const useMock = (!realClient) || (allowDemo && typeof window !== 'undefined' && (
           localStorage.getItem('use_mock_db') === 'true' || 
           localStorage.getItem('sb_mock_session') !== null ||
           document.cookie.includes('sb-mock-session')
-        );
+        ));
 
         const client = useMock || !realClient ? mockClient : realClient;
         const res = await client.auth.getSession();
@@ -58,11 +61,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Listen to changes on BOTH clients to ensure sync
     const realAuthListener = realClient?.auth.onAuthStateChange((_event: any, session: any) => {
       if (!active) return;
-      const useMock = typeof window !== 'undefined' && (
+      const useMock = (!realClient) || (allowDemo && typeof window !== 'undefined' && (
         localStorage.getItem('use_mock_db') === 'true' || 
         localStorage.getItem('sb_mock_session') !== null ||
         document.cookie.includes('sb-mock-session')
-      );
+      ));
       if (!useMock) {
         setSession(session);
         setUser(session?.user ?? null);
@@ -72,11 +75,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const mockAuthListener = mockClient.auth.onAuthStateChange((_event: any, session: any) => {
       if (!active) return;
-      const useMock = typeof window !== 'undefined' && (
+      const useMock = (!realClient) || (allowDemo && typeof window !== 'undefined' && (
         localStorage.getItem('use_mock_db') === 'true' || 
         localStorage.getItem('sb_mock_session') !== null ||
         document.cookie.includes('sb-mock-session')
-      );
+      ));
       if (useMock) {
         setSession(session);
         setUser(session?.user ?? null);
@@ -108,7 +111,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('sb_mock_session');
         localStorage.removeItem('use_mock_db');
-        document.cookie = 'sb-mock-session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;';
+        document.cookie = 'sb-mock-session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; SameSite=Lax;';
       }
       setSession(null);
       setUser(null);
@@ -117,8 +120,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const isAdmin = (user?.user_metadata as any)?.role?.toLowerCase() === 'admin' || 
-                  user?.email === 'admin@mantenix.com' || 
-                  user?.email === 'tjho145@hotmail.com';
+                  user?.email === 'admin@mantenix.com';
 
   return (
     <AuthContext.Provider value={{ user, session, loading, isAdmin, signOut }}>

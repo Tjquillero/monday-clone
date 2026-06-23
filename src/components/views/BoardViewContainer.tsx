@@ -37,7 +37,7 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const role = (user?.user_metadata as any)?.role?.toLowerCase();
-  const isAdmin = role === 'admin' || user?.email === 'admin@mantenix.com' || user?.email === 'tjho145@hotmail.com';
+  const isAdmin = role === 'admin' || user?.email === 'admin@mantenix.com';
 
   const { data: board, isLoading: boardLoading } = useBoard();
   const { data: columns } = useBoardColumns(board?.id);
