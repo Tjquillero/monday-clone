@@ -15,9 +15,6 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  const isProduction = process.env.NODE_ENV === 'production';
-  const allowDemo = process.env.NEXT_PUBLIC_ALLOW_DEMO === 'true' || !isProduction;
-
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -26,25 +23,8 @@ export default function LoginPage() {
     console.log('--- AUTH ATTEMPT ---');
     console.log('Action:', isLogin ? 'Login' : 'Register');
     console.log('Email:', email);
-    console.log('Supabase URL available:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
 
     try {
-      // Interceptar cuenta Demo/Offline antes de llamar al backend real
-      if (isLogin && email.trim().toLowerCase() === 'admin@mantenix.com' && password === 'demo') {
-        if (!allowDemo) {
-          throw new Error('El modo demo no está permitido en este entorno.');
-        }
-        console.log('Demo account detected. Switching to local offline mode...');
-        localStorage.setItem('use_mock_db', 'true');
-        const { error: mockError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (mockError) throw mockError;
-        router.push('/dashboard');
-        return;
-      }
-
       if (isLogin) {
         console.log('Invoking signInWithPassword...');
         const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -73,63 +53,7 @@ export default function LoginPage() {
       router.push('/dashboard');
     } catch (err: any) {
       console.error('Caught error in handleAuth:', err);
-      console.error('Error name:', err.name);
-      console.error('Error message:', err.message);
-
-      if (err.message === 'Failed to fetch' || err.status === 0 || err.message?.includes('Network')) {
-        console.warn('Network issue detected. Falling back to local offline mode...');
-        localStorage.setItem('use_mock_db', 'true');
-        
-        try {
-          if (isLogin) {
-            const { error: mockError } = await supabase.auth.signInWithPassword({
-              email,
-              password,
-            });
-            if (mockError) throw mockError;
-          } else {
-            const { error: mockError } = await supabase.auth.signUp({
-              email,
-              password,
-            });
-            if (mockError) throw mockError;
-            alert('Modo Offline: Cuenta creada e inicio de sesión local exitoso.');
-          }
-          router.push('/dashboard');
-          return;
-        } catch (mockErr: any) {
-          setError(mockErr.message || 'Error en la autenticación offline');
-          return;
-        }
-      }
-
       setError(err.message || 'Error en la autenticación');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDemoMode = async () => {
-    if (!allowDemo) {
-      setError('El modo demo no está permitido en este entorno.');
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      console.log('Activating Offline Demo Mode...');
-      localStorage.setItem('use_mock_db', 'true');
-      
-      const { data, error: demoError } = await supabase.auth.signInWithPassword({
-        email: 'admin@mantenix.com',
-        password: 'demo'
-      });
-      
-      if (demoError) throw demoError;
-      
-      router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.message || 'Error al iniciar Modo Demo');
     } finally {
       setLoading(false);
     }
@@ -227,25 +151,6 @@ export default function LoginPage() {
               </>
             )}
           </button>
-
-          {allowDemo && (
-            <>
-              <div className="relative flex py-2 items-center">
-                <div className="flex-grow border-t border-gray-200"></div>
-                <span className="flex-shrink mx-4 text-gray-400 text-[10px] font-black uppercase tracking-widest">o</span>
-                <div className="flex-grow border-t border-gray-200"></div>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleDemoMode}
-                disabled={loading}
-                className="w-full bg-[#3B7EF8]/10 hover:bg-[#3B7EF8] text-[#3B7EF8] hover:text-white py-3.5 rounded-xl flex items-center justify-center font-bold text-base border border-[#3B7EF8]/20 transition-all active:scale-95 disabled:opacity-70 disabled:active:scale-100 uppercase tracking-wider text-xs"
-              >
-                Acceder en Modo Demo (Offline)
-              </button>
-            </>
-          )}
         </form>
 
         <div className="mt-8 text-center">

@@ -1,11 +1,8 @@
 'use client';
 
 import { useEffect, useState, createContext, useContext } from 'react';
-import { supabase, realClient, mockClient } from '@/lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
 import { User, Session } from '@supabase/supabase-js';
-
-const isProduction = process.env.NODE_ENV === 'production';
-const allowDemo = process.env.NEXT_PUBLIC_ALLOW_DEMO === 'true' || !isProduction;
 
 type AuthContextType = {
   user: User | null;
@@ -33,19 +30,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const getInitialSession = async () => {
       try {
-        const useMock = (!realClient) || (allowDemo && typeof window !== 'undefined' && (
-          localStorage.getItem('use_mock_db') === 'true' || 
-          localStorage.getItem('sb_mock_session') !== null ||
-          document.cookie.includes('sb-mock-session')
-        ));
-
-        const client = useMock || !realClient ? mockClient : realClient;
-        const res = await client.auth.getSession();
+        const res = await supabase.auth.getSession();
         
         if (active) {
           const initialSession = res.data?.session;
-          setSession(initialSession as any);
-          setUser((initialSession?.user as any) ?? null);
+          setSession(initialSession);
+          setUser(initialSession?.user ?? null);
         }
       } catch (err) {
         console.error('Error fetching initial session:', err);
@@ -58,61 +48,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     getInitialSession();
 
-    // Listen to changes on BOTH clients to ensure sync
-    const realAuthListener = realClient?.auth.onAuthStateChange((_event: any, session: any) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
       if (!active) return;
-      const useMock = (!realClient) || (allowDemo && typeof window !== 'undefined' && (
-        localStorage.getItem('use_mock_db') === 'true' || 
-        localStorage.getItem('sb_mock_session') !== null ||
-        document.cookie.includes('sb-mock-session')
-      ));
-      if (!useMock) {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-      }
-    });
-
-    const mockAuthListener = mockClient.auth.onAuthStateChange((_event: any, session: any) => {
-      if (!active) return;
-      const useMock = (!realClient) || (allowDemo && typeof window !== 'undefined' && (
-        localStorage.getItem('use_mock_db') === 'true' || 
-        localStorage.getItem('sb_mock_session') !== null ||
-        document.cookie.includes('sb-mock-session')
-      ));
-      if (useMock) {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-      }
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
     });
 
     return () => {
       active = false;
-      if (realAuthListener?.data?.subscription) {
-        realAuthListener.data.subscription.unsubscribe();
-      }
-      if (mockAuthListener?.data?.subscription) {
-        mockAuthListener.data.subscription.unsubscribe();
-      }
+      subscription.unsubscribe();
     };
   }, []);
 
   const signOut = async () => {
     setLoading(true);
     try {
-      if (realClient) {
-        await realClient.auth.signOut();
-      }
-      await mockClient.auth.signOut();
+      await supabase.auth.signOut();
     } catch (err) {
       console.error('Error during signOut:', err);
     } finally {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('sb_mock_session');
-        localStorage.removeItem('use_mock_db');
-        document.cookie = 'sb-mock-session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; SameSite=Lax;';
-      }
       setSession(null);
       setUser(null);
       setLoading(false);
