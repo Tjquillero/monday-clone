@@ -4,7 +4,7 @@
 -- 1. DASHBOARDS TABLE
 -- -----------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS dashboards (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   board_id UUID NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   description TEXT,
@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS dashboards (
 -- 2. DASHBOARD WIDGETS TABLE
 -- -----------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS dashboard_widgets (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   dashboard_id UUID NOT NULL REFERENCES dashboards(id) ON DELETE CASCADE,
   type TEXT NOT NULL, -- 'scurve', 'budget-execution', 'task-list', 'incident-log', etc.
   title TEXT,

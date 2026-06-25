@@ -1,7 +1,7 @@
 -- 1. Automations Table
 -- -----------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS automations (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   board_id UUID NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   trigger_type TEXT NOT NULL, -- 'status_change', 'value_change', 'item_created'
