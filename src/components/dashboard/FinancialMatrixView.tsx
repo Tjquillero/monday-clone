@@ -15,6 +15,7 @@ import {
   Plus
 } from 'lucide-react';
 import { EditableCell } from '../common/EditableCell';
+import { resolveFinancialColumns } from '@/utils/financialUtils';
 
 interface SiteData {
   groupId: string;
@@ -44,7 +45,7 @@ interface CategoryWithSubs {
 interface FinancialMatrixViewProps {
   groups: any[];
   columns: any[];
-  onUpdateItemValue?: (groupId: string, itemId: string, columnId: string, value: any) => void;
+  onUpdateItemValue?: (groupId: string, itemId: string | number, columnId: string, value: any, metadata?: any) => void;
   onAddItem?: (major: string, sub: string, subSub?: string) => void;
   onDeleteItem?: (itemId: string) => void;
   onDeleteItems?: (itemIds: string[]) => void;
@@ -57,10 +58,8 @@ interface FinancialMatrixViewProps {
   onUpdateValorActaPorSitio?: (newVal: { [key: string]: number }) => void;
 }
 
-const qtyColId = 'cant';
-const priceColId = 'unit_price';
-const execQtyColId = 'executed_qty';
-const unitColId = 'unit';
+// execQtyColId is always 'executed_qty' — stored as a fixed audit key, not a template column.
+const EXEC_QTY_KEY = 'executed_qty';
 
 interface HierarchicalItem extends ItemSummary {
   majorCat: string;
@@ -101,9 +100,10 @@ export default function FinancialMatrixView({
       return new Date().toLocaleString('es-ES', { month: 'long' });
   }, []);
 
-  const hierarchicalData = useMemo(() => {
+  const hierarchicalDataResult = useMemo(() => {
     const data: { [major: string]: { [sub: string]: { [subSub: string]: ItemSummary[] } } } = {};
-    
+    const { qtyColKey, priceColKey, unitColKey } = resolveFinancialColumns(columns);
+
     // Helper to normalize strings for comparison
     const norm = (s: string) => (s || '').trim().toUpperCase();
 
@@ -133,23 +133,23 @@ export default function FinancialMatrixView({
 
         let existing = data[major][sub][subSub].find(i => norm(i.name) === norm(itemName));
         if (!existing) {
-          existing = { 
-            name: itemName, 
-            unit: (item.values?.[unitColId] || 'UND').toUpperCase(), 
-            siteData: {}, 
-            allItemIds: [] 
+          existing = {
+            name: itemName,
+            unit: (item.values?.[unitColKey] || item.values?.unit || 'UND').toUpperCase(),
+            siteData: {},
+            allItemIds: []
           };
           data[major][sub][subSub].push(existing);
         }
-        
+
         if (!existing.allItemIds.includes(item.id)) {
             existing.allItemIds.push(item.id);
         }
-        
-        const bQty = Number(item.values?.[qtyColId]) || 0;
-        const uPrice = Number(item.values?.[priceColId]) || 0;
-        const eQty = Number(item.values?.[execQtyColId]) || 0;
-        
+
+        const bQty   = Number(item.values?.[qtyColKey]   ?? item.values?.cant)       || 0;
+        const uPrice = Number(item.values?.[priceColKey]  ?? item.values?.unit_price) || 0;
+        const eQty   = Number(item.values?.[EXEC_QTY_KEY]) || 0;
+
         // AGGREGATION FIX: Sum metrics if multiple items in the same site match the name
         if (!existing.siteData[group.id]) {
             existing.siteData[group.id] = {
@@ -161,7 +161,7 @@ export default function FinancialMatrixView({
                 executedQty: eQty,
                 executedTotal: eQty * uPrice,
                 compliance: 0,
-                unit: (item.values?.[unitColId] || 'UND').toUpperCase()
+                unit: (item.values?.[unitColKey] || item.values?.unit || 'UND').toUpperCase()
             };
         } else {
             const sd = existing.siteData[group.id];
@@ -180,8 +180,10 @@ export default function FinancialMatrixView({
       });
     });
 
-    return data;
-  }, [groups]);
+    return { data, qtyColKey, priceColKey };
+  }, [groups, columns]);
+
+  const { data: hierarchicalData, qtyColKey, priceColKey } = hierarchicalDataResult;
 
   const { majorTotals, siteTotals } = useMemo(() => {
     const mT: { [major: string]: { [siteId: string]: Totals } } = {};
@@ -412,10 +414,47 @@ export default function FinancialMatrixView({
                                                               return (
                                                                 <Fragment key={g.id}>
                                                                     <td className={`p-1 border border-slate-800/50 ${cellBg}`}>
-                                                                        <EditableCell value={v.q} type="number" onSave={(val) => !isTotal && onUpdateItemValue?.(g.id, sD.itemId, viewMode === 'budget' ? qtyColId : execQtyColId, val)} className={`text-center font-bold text-[11px] ${viewMode === 'budget' ? 'text-blue-400' : 'text-emerald-400'}`} readonly={isTotal} />
+                                                                        <EditableCell 
+                                                                            value={v.q} 
+                                                                            type="number" 
+                                                                            onSave={(val) => !isTotal && onUpdateItemValue?.(
+                                                                                g.id, 
+                                                                                sD.itemId, 
+                                                                                viewMode === 'budget' ? qtyColKey : EXEC_QTY_KEY, 
+                                                                                val,
+                                                                                sD.itemId ? undefined : {
+                                                                                    name: item.name,
+                                                                                    rubro: majorCat,
+                                                                                    category: subCat,
+                                                                                    sub_category: subSubCat,
+                                                                                    unit: item.unit
+                                                                                }
+                                                                            )} 
+                                                                            className={`text-center font-bold text-[11px] ${viewMode === 'budget' ? 'text-blue-400' : 'text-emerald-400'}`} 
+                                                                            readonly={isTotal} 
+                                                                        />
                                                                     </td>
                                                                     <td className={`p-1 border border-slate-800/50 ${cellBg}`}>
-                                                                        <EditableCell value={v.p} type="number" onSave={(val) => !isTotal && onUpdateItemValue?.(g.id, sD.itemId, priceColId, val)} className="text-slate-400 italic text-right font-medium" align="right" readonly={isTotal} />
+                                                                        <EditableCell 
+                                                                            value={v.p} 
+                                                                            type="number" 
+                                                                            onSave={(val) => !isTotal && onUpdateItemValue?.(
+                                                                                g.id, 
+                                                                                sD.itemId, 
+                                                                                priceColKey, 
+                                                                                val,
+                                                                                sD.itemId ? undefined : {
+                                                                                    name: item.name,
+                                                                                    rubro: majorCat,
+                                                                                    category: subCat,
+                                                                                    sub_category: subSubCat,
+                                                                                    unit: item.unit
+                                                                                }
+                                                                            )} 
+                                                                            className="text-slate-400 italic text-right font-medium" 
+                                                                            align="right" 
+                                                                            readonly={isTotal} 
+                                                                        />
                                                                     </td>
                                                                     <td className={`p-1 border border-slate-800/50 text-right font-black text-xs ${isTotal ? 'text-white' : 'text-[var(--text-primary)]'} ${cellBg}`}>
                                                                         {currencyFormatter.format(v.t)}
