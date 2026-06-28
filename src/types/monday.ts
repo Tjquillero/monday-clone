@@ -30,27 +30,62 @@ export interface Group {
   lng?: number;
 }
 
+// All valid column types. Add new types here — renderer registry in CellRenderer.tsx must match.
+export type ColumnType =
+  | 'status'
+  | 'priority'
+  | 'people'
+  | 'date'
+  | 'numbers'
+  | 'text'
+  | 'checkbox'
+  | 'tags'
+  | 'timeline'
+  | 'dropdown';
+
 export interface ColumnLabel {
   id: string;
   title: string;
   color: string;
 }
 
-export interface ColumnOptions {
-  labels?: ColumnLabel[];  // status, priority, tags columns
-  default?: string;        // default label id
-  multiple?: boolean;      // people column
-  includeTime?: boolean;   // date column
-  format?: string;         // numbers: 'number' | 'currency'
+// Per-type options shapes. Values stored in board_columns.options JSONB.
+// Use helper functions in columnUtils.ts to access these safely.
+export interface LabelOptions {
+  labels: ColumnLabel[];
+  default?: string;
+}
+export interface PeopleOptions {
+  multiple?: boolean;
+}
+export interface DateOptions {
+  includeTime?: boolean;
+}
+export interface NumberOptions {
+  format?: 'number' | 'currency';
   decimals?: number;
   symbol?: string;
 }
+
+// Union of all possible options shapes stored in board_columns.options
+export type ColumnOptions = LabelOptions | PeopleOptions | DateOptions | NumberOptions | Record<string, never>;
+
+/** @deprecated Use LabelOptions, PeopleOptions, DateOptions, NumberOptions directly */
+export type LegacyColumnOptions = {
+  labels?: ColumnLabel[];
+  default?: string;
+  multiple?: boolean;
+  includeTime?: boolean;
+  format?: string;
+  decimals?: number;
+  symbol?: string;
+};
 
 export interface Column {
   id: string;
   key?: string | null;     // stable lookup key for items.values (null → use id)
   title: string;
-  type: string;
+  type: ColumnType | string; // string fallback for unknown types from DB
   width: number;
   position?: number;
   options?: ColumnOptions;

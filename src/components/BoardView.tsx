@@ -1,8 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { ChevronDown, Plus, GripVertical, ChevronRight, CornerDownRight, Trash2, MapPin, Map, User, Check, Clock, AlertTriangle, Leaf, Umbrella, Layers } from 'lucide-react';
-import { Item, Group, Column, ActivityTemplate } from '@/types/monday';
+import { ChevronDown, Plus, GripVertical, ChevronRight, CornerDownRight, Trash2, MapPin, Settings2, Leaf, Umbrella, Layers } from 'lucide-react';
+import { Item, Group, Column, ColumnType, ActivityTemplate } from '@/types/monday';
+import { getColumnValueKey } from '@/utils/columnUtils';
+import { CellRenderer } from '@/components/columns/CellRenderer';
+import { ColumnEditorPanel } from '@/components/columns/ColumnEditorPanel';
+import { AddColumnButton } from '@/components/columns/AddColumnButton';
 import { LocationPicker } from '@/components/LocationPicker';
 import {
   SortableContext,
@@ -74,10 +78,6 @@ interface SortableRowProps {
   onUpdateItem: (groupId: string, itemId: number | string, field: string, value: string | number | null) => void;
   onUpdateItemValue: (groupId: string, itemId: number | string, columnId: string, value: string | number | null) => void;
   onOpenItem: (groupId: string, item: Item, tab?: 'updates' | 'details' | 'evidence' | 'attachments' | 'execution' | 'dependencies' | 'location') => void;
-  getStatusColor: (status: string) => string;
-  getNextStatus: (currentStatus: string) => string;
-  getPriorityColor: (priority: string) => string;
-  getNextPriority: (currentPriority: string) => string;
   onDeleteItem: (itemId: number | string) => void;
   activityTemplates: ActivityTemplate[];
   isAdmin?: boolean;
@@ -87,18 +87,14 @@ interface SortableRowProps {
   onUpdateSubItemValue: (groupId: string, parentId: number | string, subItemId: number | string, columnId: string, value: string | number | null) => void;
 }
 
-function SortableRow({ 
-  item, 
-  group, 
-  columns, 
-  onUpdateItem, 
-  onUpdateItemValue, 
+function SortableRow({
+  item,
+  group,
+  columns,
+  onUpdateItem,
+  onUpdateItemValue,
   onOpenItem,
   onAddSubItem,
-  getStatusColor,
-  getNextStatus,
-  getPriorityColor,
-  getNextPriority,
   onDeleteItem,
   activityTemplates,
   isAdmin,
@@ -140,12 +136,12 @@ function SortableRow({
   const getZoneValue = () => {
     if (item.values['zone']) return item.values['zone'];
     const zoneColumn = columns.find(col => col.title?.toLowerCase().includes('zona'));
-    return zoneColumn ? item.values[zoneColumn.id] : null;
+    return zoneColumn ? item.values[getColumnValueKey(zoneColumn)] : null;
   };
 
   const getColValue = (col: Column) => {
     if (!col) return null;
-    const val = item.values[col.id];
+    const val = item.values[getColumnValueKey(col)];
     if (val !== undefined && val !== null && val !== '') return val;
     const title = (col.title || '').toLowerCase();
     if (title.includes('rendimiento')) return item.values['rend'];
@@ -244,82 +240,34 @@ function SortableRow({
          
          {columns.map(col => (
            <div key={col.id} className="border-r border-[var(--border-color)] h-full flex items-center justify-center relative">
-              {col.type === 'people' && (
-                <div 
-                  className="flex items-center gap-2 px-3 py-1 bg-slate-500/5 rounded-xl border border-[var(--border-color)] hover:bg-white/10 transition-all cursor-pointer group/avatar"
-                  onClick={(e) => {
-                      e.stopPropagation();
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      setActivePicker({ itemId: item.id, colId: col.id, position: { top: rect.bottom + 5, left: rect.left } });
-                  }}
-                >
-                  <div className={`w-6 h-6 rounded-full ${getAvatarColor(responsible)} flex items-center justify-center text-white text-[10px] font-black uppercase border border-white/20 shadow-lg`}>
-                    {responsible.charAt(0)}
-                  </div>
-                  <span className="text-[10px] font-bold text-slate-400 group-hover/avatar:text-[var(--text-primary)] transition-colors hidden xl:inline">{responsible}</span>
-                  
-                  {activePicker?.itemId === item.id && activePicker?.colId === col.id && (
-                    <PersonnelPicker 
-                      currentValue={responsible}
-                      onSelect={(id, name) => { onUpdateItemValue(group.id, item.id, col.id, name); setActivePicker(null); }}
-                      onClose={() => setActivePicker(null)}
-                      position={activePicker.position}
-                    />
-                  )}
-                </div>
-              )}
-
-              {col.type === 'status' && (
-                 <button 
-                  onClick={() => onUpdateItemValue(group.id, item.id, col.id, getNextStatus(status))}
-                  className={`group/status relative overflow-hidden w-full h-[32px] mx-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${getStatusColor(status)} ${status === 'Working on it' ? 'animate-pulse-orange shadow-[0_0_15px_#f59e0b40]' : ''}`}
-                >
-                   <span className="relative z-10">{status === 'Done' ? 'Completado' : status === 'Working on it' ? 'En Proceso' : status === 'Stuck' ? 'Bloqueado' : 'Pendiente'}</span>
-                   {status === 'Working on it' && <div className="absolute inset-x-0 bottom-0 h-[2px] bg-white/20 animate-progress-indeterminate" />}
-                </button>
-              )}
-
-              {col.type === 'priority' && (
-                 <button 
-                  onClick={() => onUpdateItemValue(group.id, item.id, col.id, getNextPriority(priority))}
-                  className={`w-full h-[28px] mx-4 rounded-lg text-[9px] font-black uppercase tracking-[0.15em] transition-all duration-300 flex items-center justify-center gap-2 border border-[var(--border-color)] ${getPriorityColor(priority)}`}
-                >
-                   <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: priority === 'High' ? '#ef4444' : priority === 'Medium' ? '#fbbf24' : '#10b981', boxShadow: '0 0 6px currentColor' }} />
-                   {priority === 'High' ? 'Alta' : priority === 'Medium' ? 'Media' : 'Baja'}
-                </button>
-              )}
-
-              {col.type === 'text' && (
-                <>
-                  {col.title.toUpperCase().includes('ZONA') ? (
-                    <select 
-                      value={getColValue(col) || ''}
-                      onChange={(e) => onUpdateItemValue(group.id, item.id, col.id, e.target.value)}
-                      className="w-full h-[28px] mx-2 bg-slate-500/5 border border-[var(--border-color)] rounded-lg text-[10px] font-black uppercase tracking-widest text-[#334155] focus:ring-1 focus:ring-[#3B7EF8] outline-none cursor-pointer appearance-none text-center"
-                    >
-                      <option value="">Seleccionar...</option>
-                      <option value="Zonas Verdes">Verdes</option>
-                      <option value="Playa">Playa</option>
-                      <option value="Zonas Duras">Duras</option>
-                    </select>
-                  ) : (
-                    <EditableCell 
-                      value={getColValue(col) || ''}
-                      onSave={(val) => onUpdateItemValue(group.id, item.id, col.id, val)}
-                      className="w-full text-center bg-transparent text-[11px] font-medium text-slate-400 focus:text-[#3B7EF8]"
-                    />
-                  )}
-                </>
-              )}
-
-              {(col.type === 'number' || col.type === 'numbers') && (
-                <EditableCell 
-                  type="number"
-                  value={getColValue(col) || 0}
-                  onSave={(val) => onUpdateItemValue(group.id, item.id, col.id, val)}
-                  className="w-full font-mono font-bold text-center bg-transparent text-xs text-[var(--text-primary)] focus:text-[#3B7EF8]"
-                />
-              )}
+             <CellRenderer
+               column={col}
+               item={item}
+               onUpdate={(key, value) => onUpdateItemValue(group.id, item.id, key, value)}
+               override={col.type === 'people' ? (
+                 <div
+                   className="flex items-center gap-2 px-3 py-1 bg-slate-500/5 rounded-xl border border-[var(--border-color)] hover:bg-white/10 transition-all cursor-pointer group/avatar"
+                   onClick={(e) => {
+                     e.stopPropagation();
+                     const rect = e.currentTarget.getBoundingClientRect();
+                     setActivePicker({ itemId: item.id, colId: getColumnValueKey(col), position: { top: rect.bottom + 5, left: rect.left } });
+                   }}
+                 >
+                   <div className={`w-6 h-6 rounded-full ${getAvatarColor(responsible)} flex items-center justify-center text-white text-[10px] font-black uppercase border border-white/20 shadow-lg`}>
+                     {responsible.charAt(0)}
+                   </div>
+                   <span className="text-[10px] font-bold text-slate-400 group-hover/avatar:text-[var(--text-primary)] transition-colors hidden xl:inline">{responsible}</span>
+                   {activePicker?.itemId === item.id && activePicker?.colId === getColumnValueKey(col) && (
+                     <PersonnelPicker
+                       currentValue={responsible}
+                       onSelect={(id, name) => { onUpdateItemValue(group.id, item.id, getColumnValueKey(col), name); setActivePicker(null); }}
+                       onClose={() => setActivePicker(null)}
+                       position={activePicker.position}
+                     />
+                   )}
+                 </div>
+               ) : undefined}
+             />
            </div>
          ))}
          
@@ -333,7 +281,7 @@ function SortableRow({
                 <div key={subItem.id} className="grid h-[36px] items-center border-b border-[var(--border-color)] hover:bg-slate-500/10" style={{ gridTemplateColumns: `30px 420px ${columns.map(c => `${c.width}px`).join(' ')} 1fr` }}>
                    <CornerDownRight className="w-3 h-3 text-[var(--text-secondary)] ml-3" />
                    <span className="text-[11px] font-medium text-[var(--text-secondary)] pl-2">{subItem.name}</span>
-                   {columns.map(c => <div key={c.id} className="text-center text-[10px] text-[var(--text-secondary)]">{(subItem.values as any)[c.id] || '-'}</div>)}
+                   {columns.map(c => <div key={c.id} className="text-center text-[10px] text-[var(--text-secondary)]">{(subItem.values as any)[getColumnValueKey(c)] || '-'}</div>)}
                 </div>
               ))}
           </motion.div>
@@ -356,53 +304,39 @@ interface BoardViewProps {
   onDeleteItem: (itemId: number | string) => void;
   onAddGroup: () => void;
   onUpdateGroup?: (groupId: string, updates: Record<string, any>) => void;
-  onAddColumn?: (type: string) => void;
+  onUpdateColumn?: (columnId: string, updates: Partial<Column>) => void;
+  onDeleteColumn?: (columnId: string) => void;
+  onAddColumn?: (type: ColumnType) => void;
   activityTemplates: ActivityTemplate[];
   isAdmin?: boolean;
   onCreateTemplate?: (template: Omit<ActivityTemplate, 'id' | 'created_at'>) => Promise<ActivityTemplate | void>;
 }
 
-export default function BoardView({ 
-  groups, columns, onAddItem, onUpdateItem, onUpdateItemValue, onOpenItem, onAddSubItem, onAddGroup, 
-  activityTemplates, isAdmin, onCreateTemplate, onUpdateItemValues, onDeleteItem, onUpdateSubItemValue
+export default function BoardView({
+  groups, columns, onAddItem, onUpdateItem, onUpdateItemValue, onOpenItem, onAddSubItem, onAddGroup,
+  activityTemplates, isAdmin, onCreateTemplate, onUpdateItemValues, onDeleteItem, onUpdateSubItemValue,
+  onUpdateColumn, onDeleteColumn, onAddColumn,
 }: BoardViewProps) {
   const [localGroups, setLocalGroups] = useState<Group[]>(groups);
   const [activeId, setActiveId] = useState<any>(null);
+  const [editingColumn, setEditingColumn] = useState<Column | null>(null);
 
   useEffect(() => { setLocalGroups(groups); }, [groups]);
 
-  const getStatusColor = (status: string) => {
-    const s = status?.toLowerCase() || '';
-    if (s.includes('done') || s.includes('terminado') || s.includes('completado')) {
-      return 'status-badge bg-[#10B981] text-white font-black shadow-sm';
-    }
-    if (s.includes('working') || s.includes('proceso') || s.includes('ejecución')) {
-      return 'status-badge bg-[#F59E0B] text-white font-black shadow-md border-2 border-white/20 scale-105';
-    }
-    if (s.includes('stuck') || s.includes('atascado') || s.includes('problema')) {
-      return 'status-badge bg-[#EF4444] text-white font-black shadow-sm';
-    }
-    return 'status-badge bg-[#334155] text-white font-black opacity-90'; // Pending / Default
-  };
-
-  const getPriorityColor = (priority: string) => {
-    const p = priority?.toLowerCase() || '';
-    if (p.includes('high') || p.includes('alta') || p.includes('urgente')) return 'status-badge bg-[#EF4444] text-white font-black';
-    if (p.includes('medium') || p.includes('media')) return 'status-badge bg-[#F59E0B] text-white font-black';
-    return 'status-badge bg-[#3B7EF8] text-white font-black';
-  };
-
-  const getNextStatus = (curr: string) => {
-     const flow = ['Not Started', 'Working on it', 'Done', 'Stuck'];
-     return flow[(flow.indexOf(curr) + 1) % flow.length];
-  };
-
-  const getNextPriority = (curr: string) => {
-     const flow = ['Low', 'Medium', 'High'];
-     return flow[(flow.indexOf(curr) + 1) % flow.length];
-  };
 
   return (
+    <div className="relative">
+    {/* Column editor side-panel */}
+    {editingColumn && onUpdateColumn && (
+      <div className="fixed inset-y-0 right-0 w-80 z-50 flex flex-col bg-[var(--bg-primary)] border-l border-[var(--border-color)] shadow-2xl">
+        <ColumnEditorPanel
+          column={editingColumn}
+          onUpdate={(updates) => { onUpdateColumn(editingColumn.id, updates); setEditingColumn(null); }}
+          onDelete={() => { onDeleteColumn?.(editingColumn.id); setEditingColumn(null); }}
+          onClose={() => setEditingColumn(null)}
+        />
+      </div>
+    )}
     <div className="space-y-12 pb-32">
        {localGroups.map((group, idx) => (
          <motion.div 
@@ -424,31 +358,45 @@ export default function BoardView({
             </div>
 
             <div className="overflow-x-auto custom-scrollbar">
-              <div 
+              <div
                 className="grid h-10 border-b border-[var(--border-color)] bg-transparent text-[10px] items-center font-black uppercase tracking-widest text-[var(--text-secondary)]"
                 style={{ gridTemplateColumns: `30px 6px 550px ${columns.map((c: Column) => `${c.width}px`).join(' ')} 1fr` }}
               >
-                 <div />
-                 <div />
-                 <div className="pl-14">Actividad</div>
-                 {columns.map((c: Column) => <div key={c.id} className="text-center">{c.title}</div>)}
+                <div />
+                <div />
+                <div className="pl-14">Actividad</div>
+                {columns.map((c: Column) => (
+                  <div key={c.id} className="relative group/colhdr flex items-center justify-center gap-1">
+                    <span className="truncate">{c.title}</span>
+                    {isAdmin && onUpdateColumn && (
+                      <button
+                        onClick={() => setEditingColumn(editingColumn?.id === c.id ? null : c)}
+                        className={`opacity-0 group-hover/colhdr:opacity-100 p-0.5 rounded transition-all hover:text-[#3B7EF8] ${editingColumn?.id === c.id ? 'opacity-100 text-[#3B7EF8]' : ''}`}
+                        title="Editar columna"
+                      >
+                        <Settings2 size={11} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {isAdmin && onAddColumn && (
+                  <div className="flex items-center">
+                    <AddColumnButton onAdd={onAddColumn} />
+                  </div>
+                )}
               </div>
 
               <div className="min-w-max">
                 {group.items.map(item => (
-                  <SortableRow 
-                    key={item.id} 
-                    item={item} 
-                    group={group} 
+                  <SortableRow
+                    key={item.id}
+                    item={item}
+                    group={group}
                     columns={columns}
                     onUpdateItem={onUpdateItem}
                     onUpdateItemValue={onUpdateItemValue}
                     onUpdateItemValues={onUpdateItemValues}
                     onOpenItem={onOpenItem}
-                    getStatusColor={getStatusColor}
-                    getPriorityColor={getPriorityColor}
-                    getNextStatus={getNextStatus}
-                    getNextPriority={getNextPriority}
                     activityTemplates={activityTemplates}
                     onAddSubItem={onAddSubItem}
                     onUpdateSubItemValue={onUpdateSubItemValue}
@@ -461,13 +409,14 @@ export default function BoardView({
        ))}
 
        {isAdmin && (
-         <button 
+         <button
            onClick={onAddGroup}
            className="w-full py-8 rounded-3xl border-2 border-dashed border-[var(--border-color)] text-slate-600 hover:border-[#3B7EF8]/20 hover:text-[#3B7EF8] hover:bg-[#3B7EF8]/5 transition-all font-black uppercase tracking-[0.2em] text-xs"
          >
             + Añadir Nuevo Grupo de Sitio
          </button>
        )}
+    </div>
     </div>
   );
 }

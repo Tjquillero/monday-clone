@@ -1,4 +1,4 @@
-import { Column, ColumnLabel } from '@/types/monday';
+import { Column, ColumnLabel, LabelOptions, PeopleOptions, DateOptions, NumberOptions } from '@/types/monday';
 
 // ─── board_columns.key — CONTRACT ─────────────────────────────────────────────
 //
@@ -19,26 +19,11 @@ import { Column, ColumnLabel } from '@/types/monday';
 //
 // ─── board_columns.options — FORMAT BY TYPE ───────────────────────────────────
 //
-// status / priority:
-//   {
-//     labels: [{ id: string, title: string, color: string }],
-//     default: string   // must match a label id
-//   }
-//   - `id` values MUST match what is stored in items.values (see Rule 4 above).
-//   - Current status ids:  "Not Started" | "Working on it" | "Done" | "Stuck"
-//   - Current priority ids: "Low" | "Medium" | "High"
-//
-// people:
-//   { multiple: boolean }
-//
-// date / timeline:
-//   { includeTime: boolean }
-//
-// numbers:
-//   { format: "number" | "currency", decimals: number, symbol?: string }
-//
-// text / checkbox / tags:
-//   {}   (empty object, reserved for future config)
+// status / priority / dropdown / tags:  LabelOptions: { labels: [...], default?: string }
+// people:                               PeopleOptions: { multiple?: boolean }
+// date / timeline:                      DateOptions:   { includeTime?: boolean }
+// numbers:                              NumberOptions:  { format?, decimals?, symbol? }
+// text / checkbox:                      {} (reserved for future config)
 
 /**
  * Returns the key used to read/write this column's value in items.values.
@@ -52,12 +37,31 @@ export function getColumnValueKey(column: Pick<Column, 'id' | 'key'>): string {
   return column.key ?? column.id;
 }
 
-/**
- * Returns the label definition for a given stored value,
- * using the column's options.labels array.
- */
+// ─── Type-safe options accessors ──────────────────────────────────────────────
+
+export function getLabelOptions(col: Column): LabelOptions | undefined {
+  const labelTypes = ['status', 'priority', 'dropdown', 'tags'];
+  if (!labelTypes.includes(col.type)) return undefined;
+  const opts = col.options as LabelOptions | undefined;
+  return opts?.labels ? opts : undefined;
+}
+
+export function getPeopleOptions(col: Column): PeopleOptions {
+  return (col.type === 'people' ? col.options : undefined) as PeopleOptions ?? {};
+}
+
+export function getDateOptions(col: Column): DateOptions {
+  return (['date', 'timeline'].includes(col.type) ? col.options : undefined) as DateOptions ?? {};
+}
+
+export function getNumberOptions(col: Column): NumberOptions {
+  return (['numbers', 'number'].includes(col.type) ? col.options : undefined) as NumberOptions ?? {};
+}
+
+// ─── Label helpers ─────────────────────────────────────────────────────────────
+
 export function getColumnLabel(column: Column, value: string): ColumnLabel | undefined {
-  return column.options?.labels?.find(l => l.id === value);
+  return getLabelOptions(column)?.labels?.find(l => l.id === value);
 }
 
 /** Returns the display color for a value. Falls back to neutral gray. */
@@ -68,4 +72,19 @@ export function getColumnLabelColor(column: Column, value: string): string {
 /** Returns the display title for a value. Falls back to the raw stored value. */
 export function getColumnLabelTitle(column: Column, value: string): string {
   return getColumnLabel(column, value)?.title ?? value;
+}
+
+/** Cycles to the next label id in the labels array. */
+export function getNextLabelId(column: Column, currentId: string): string {
+  const labels = getLabelOptions(column)?.labels;
+  if (!labels || labels.length === 0) return currentId;
+  const idx = labels.findIndex(l => l.id === currentId);
+  return labels[(idx + 1) % labels.length].id;
+}
+
+/** Returns the default label id, or the first label if no default is set. */
+export function getDefaultLabelId(column: Column): string {
+  const opts = getLabelOptions(column);
+  if (!opts?.labels?.length) return '';
+  return opts.default ?? opts.labels[0].id;
 }

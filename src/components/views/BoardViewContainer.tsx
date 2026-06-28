@@ -16,9 +16,11 @@ import { sortableKeyboardCoordinates, arrayMove } from '@dnd-kit/sortable';
 import BoardView from '@/components/BoardView';
 import { useBoard, useBoardColumns, useBoardGroups, useActivityTemplates, useTaskDependencies } from '@/hooks/useBoardData';
 import { useBoardMutations } from '@/hooks/useBoardMutations';
+import { useColumnMutations } from '@/hooks/useColumnMutations';
 import { useAuth } from '@/contexts/AuthContext';
 import { isActivityItem } from '@/utils/itemUtils';
-import { Group, Item } from '@/types/monday';
+import { getColumnValueKey, getDefaultLabelId } from '@/utils/columnUtils';
+import { Column, ColumnType, Group, Item } from '@/types/monday';
 import { supabase } from '@/lib/supabaseClient';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -46,6 +48,7 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
   const { data: dependencies } = useTaskDependencies(board?.id);
 
   const { addItem, updateItem, deleteItem } = useBoardMutations(board?.id);
+  const { createColumn, updateColumn, deleteColumn } = useColumnMutations(board?.id);
 
   const [activeId, setActiveId] = useState<string | number | null>(null);
 
@@ -57,9 +60,11 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
   const activityGroups = useMemo(() => {
     if (!groups || !columns) return [];
     
-    // Identificar columnas de estado y prioridad
-    const statusColId = columns.find(c => c.type === 'status')?.id;
-    const priorityColId = columns.find(c => c.type === 'priority')?.id;
+    // Lookup keys in items.values (semantic key or UUID fallback)
+    const statusCol = columns.find(c => c.type === 'status');
+    const priorityCol = columns.find(c => c.type === 'priority');
+    const statusKey = statusCol ? getColumnValueKey(statusCol) : null;
+    const priorityKey = priorityCol ? getColumnValueKey(priorityCol) : null;
 
     return groups
       .filter(g => !g.title.toUpperCase().includes('PRESUPUESTO'))
@@ -78,11 +83,11 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
             const matchesSearch = searchTerms.includes(searchQuery.toLowerCase());
 
             // 2. Filtro de Estado
-            const itemStatus = statusColId ? item.values[statusColId] : null;
+            const itemStatus = statusKey ? item.values[statusKey] : null;
             const matchesStatus = filters.status.length === 0 || (itemStatus && filters.status.includes(itemStatus));
 
             // 3. Filtro de Prioridad
-            const itemPriority = priorityColId ? item.values[priorityColId] : null;
+            const itemPriority = priorityKey ? item.values[priorityKey] : null;
             const matchesPriority = filters.priority.length === 0 || (itemPriority && filters.priority.includes(itemPriority));
 
             // 4. Filtro por Persona
@@ -99,15 +104,28 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
   const handleAddItem = (groupId: string, name: string, template?: any) => {
     const initialValues: any = { ...template, item_type: 'activity' };
     columns?.forEach(col => {
-      if (col.type === 'status') initialValues[col.id] = 'Not Started';
-      else if (col.type === 'priority') initialValues[col.id] = 'Low';
-      else if (!initialValues[col.id]) initialValues[col.id] = '';
+      const key = getColumnValueKey(col);
+      const defaultVal = getDefaultLabelId(col);
+      if (defaultVal) initialValues[key] = defaultVal;
+      else if (!initialValues[key]) initialValues[key] = '';
     });
     addItem.mutate({ groupId, name, initialValues });
   };
 
-  const handleUpdateItemValue = (groupId: string, itemId: string | number, columnId: string, value: any) => {
-    updateItem.mutate({ itemId, updates: { [columnId]: value }, isValuesUpdate: true });
+  const handleUpdateItemValue = (groupId: string, itemId: string | number, columnKey: string, value: any) => {
+    updateItem.mutate({ itemId, updates: { [columnKey]: value }, isValuesUpdate: true });
+  };
+
+  const handleUpdateColumn = (columnId: string, updates: Partial<Column>) => {
+    updateColumn.mutate({ columnId, updates });
+  };
+
+  const handleDeleteColumn = (columnId: string) => {
+    deleteColumn.mutate(columnId);
+  };
+
+  const handleAddColumn = (type: ColumnType) => {
+    createColumn.mutate(type);
   };
 
   const handleDeleteItem = (itemId: string | number) => {
@@ -165,9 +183,9 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <BoardView 
-        groups={activityGroups} 
-        columns={columns?.filter(c => !['people', 'unit_price', 'cant', 'category', 'rubro'].includes(c.id)) || []}
+      <BoardView
+        groups={activityGroups}
+        columns={columns?.filter(c => !['unit_price', 'cant', 'category', 'rubro'].includes(c.id)) || []}
         activityTemplates={activityTemplates || []}
         isAdmin={isAdmin}
         onCreateTemplate={async (template) => {
@@ -180,6 +198,9 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
         onUpdateItemValue={handleUpdateItemValue}
         onUpdateItemValues={(groupId, itemId, updates) => updateItem.mutate({ itemId, updates, isValuesUpdate: true })}
         onOpenItem={onOpenItem}
+        onUpdateColumn={handleUpdateColumn}
+        onDeleteColumn={handleDeleteColumn}
+        onAddColumn={handleAddColumn}
         onAddSubItem={async (groupId, parentId) => {
            await supabase.from('items').insert({
              group_id: groupId,
@@ -199,17 +220,6 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
         onUpdateGroup={async (groupId, updates) => {
            await supabase.from('groups').update(updates).eq('id', groupId);
            queryClient.invalidateQueries({ queryKey: ['groups', board?.id] });
-        }}
-        onAddColumn={async (type) => {
-           // Basic logic for adding column
-           await supabase.from('board_columns').insert({
-             board_id: board?.id,
-             title: 'Nueva Columna',
-             type,
-             width: 150,
-             position: columns?.length || 0
-           });
-           queryClient.invalidateQueries({ queryKey: ['columns', board?.id] });
         }}
       />
     </DndContext>
