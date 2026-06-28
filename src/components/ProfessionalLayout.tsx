@@ -118,13 +118,32 @@ export default function ProfessionalLayout({ children }: { children: React.React
 
       if (templateId) {
         const template = templates.find(t => t.id === templateId);
-        if (template && template.structure) {
-          const { groups: templateGroups, columns: templateColumns } = template.structure as any;
-          if (templateColumns && templateColumns.length > 0) {
-            await supabase.from('board_columns').insert(templateColumns.map((c: any, index: number) => ({ board_id: newBoard.id, title: c.title, type: c.type, width: c.width || 150, position: index })));
+        if (template) {
+          if (template.columns.length > 0) {
+            await supabase.from('board_columns').insert(
+              template.columns.map(c => ({
+                board_id: newBoard.id,
+                title: c.title,
+                type: c.type,
+                key: c.key,
+                width: c.width,
+                position: c.position,
+                options: c.options,
+                required: c.required,
+                hidden: c.hidden,
+                editable: true,
+              }))
+            );
           }
-          if (templateGroups && templateGroups.length > 0) {
-            await supabase.from('groups').insert(templateGroups.map((g: any, index: number) => ({ board_id: newBoard.id, title: g.title, color: g.color || '#c4c4c4', position: index })));
+          if (template.groups.length > 0) {
+            await supabase.from('groups').insert(
+              template.groups.map(g => ({
+                board_id: newBoard.id,
+                title: g.title,
+                color: g.color,
+                position: g.position,
+              }))
+            );
           }
         }
       } else {

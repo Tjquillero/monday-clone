@@ -2,11 +2,20 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  X, Plus, Layout, Check, ChevronRight, Sparkles, FolderPlus,
-  Briefcase, Sun, BarChart, Terminal, Zap, Cpu
+import {
+  X, Layout, ChevronRight, Sparkles, Terminal, Zap,
+  Cpu, BarChart, FileText, AlertTriangle, Wrench, LucideIcon
 } from 'lucide-react';
 import { useTemplates } from '@/hooks/useTemplates';
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  layout:          Layout,
+  tool:            Cpu,
+  wrench:          Wrench,
+  'file-text':     FileText,
+  'alert-triangle': AlertTriangle,
+  'bar-chart':     BarChart,
+};
 
 interface NewBoardModalProps {
   isOpen: boolean;
@@ -34,10 +43,9 @@ export default function NewBoardModal({ isOpen, onClose, onCreate }: NewBoardMod
     }
   };
 
-  const getTemplateEmoji = (name: string) => {
-    if (name.includes('Construcción')) return <BarChart size={18} />;
-    if (name.includes('Mantenimiento')) return <Cpu size={18} />;
-    return <Layout size={18} />;
+  const getTemplateIcon = (icon: string) => {
+    const Icon = ICON_MAP[icon] ?? Layout;
+    return <Icon size={18} />;
   };
 
   return (
@@ -136,13 +144,14 @@ export default function NewBoardModal({ isOpen, onClose, onCreate }: NewBoardMod
                       />
 
                       {templates.map((template) => (
-                        <TemplateCard 
-                           key={template.id}
-                           isSelected={selectedTemplateId === template.id}
-                           onClick={() => setSelectedTemplateId(template.id)}
-                           icon={getTemplateEmoji(template.name)}
-                           title={template.name.toUpperCase().replace(' ', '_')}
-                           desc={`Optimizado para ${template.name.split(' ')[0]}`}
+                        <TemplateCard
+                          key={template.id}
+                          isSelected={selectedTemplateId === template.id}
+                          onClick={() => setSelectedTemplateId(template.id)}
+                          icon={getTemplateIcon(template.icon)}
+                          iconColor={template.color}
+                          title={template.name.toUpperCase().replace(/ /g, '_')}
+                          desc={template.description}
                         />
                       ))}
                     </div>
@@ -177,23 +186,31 @@ function StepIndicator({ active, label }: { active: boolean, label: string }) {
   );
 }
 
-function TemplateCard({ isSelected, onClick, icon, title, desc }: any) {
+function TemplateCard({ isSelected, onClick, icon, iconColor, title, desc }: {
+  isSelected: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  iconColor?: string;
+  title: string;
+  desc: string;
+}) {
   return (
     <button
       onClick={onClick}
       className={`p-6 rounded-[2rem] text-left transition-all duration-500 border-2 flex flex-col h-full relative group ${
-        isSelected 
-          ? 'bg-[#3B7EF8]/5 border-[#3B7EF8] shadow-[0_0_40px_rgba(59,126,248,0.15)] scale-[1.03]' 
+        isSelected
+          ? 'bg-[#3B7EF8]/5 border-[#3B7EF8] shadow-[0_0_40px_rgba(59,126,248,0.15)] scale-[1.03]'
           : 'bg-[var(--bg-secondary)]/30 border-[var(--border-color)] hover:border-slate-800'
       }`}
     >
-      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-6 transition-all duration-500 shadow-xl ${
-        isSelected ? 'bg-[var(--bg-secondary)] text-[#3B7EF8] border border-[#3B7EF8]/30 shadow-[0_0_20px_rgba(59,126,248,0.2)]' : 'bg-[var(--bg-secondary)] text-slate-600 border border-[var(--border-color)] shadow-inner'
-      }`}>
+      <div
+        className="w-12 h-12 rounded-2xl flex items-center justify-center mb-6 transition-all duration-500 shadow-xl bg-[var(--bg-secondary)] border border-[var(--border-color)]"
+        style={{ color: isSelected ? (iconColor ?? '#3B7EF8') : undefined }}
+      >
         {icon}
       </div>
       <p className={`font-black text-sm mb-2 uppercase italic tracking-tight ${isSelected ? 'text-white font-mono' : 'text-slate-400'}`}>{title}</p>
-      <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest leading-none">{desc}</p>
+      <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest leading-tight">{desc}</p>
       {isSelected && <div className="absolute top-4 right-4 text-[#3B7EF8] animate-pulse"><Zap size={14} fill="currentColor" /></div>}
     </button>
   );
