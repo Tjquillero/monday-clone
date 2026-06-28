@@ -349,8 +349,7 @@ export default function BoardView({
     if (oldIndex === -1 || newIndex === -1) return;
     const reordered = arrayMove(localColumns, oldIndex, newIndex);
     setLocalColumns(reordered);
-    // Commit 2 will call onReorderColumns here
-    // onReorderColumns?.(reordered.map(c => c.id));
+    onReorderColumns?.(reordered.map(c => c.id));
   };
 
 

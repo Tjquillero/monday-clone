@@ -110,15 +110,44 @@ export function useColumnMutations(boardId: string | undefined) {
     onSuccess: invalidate,
   });
 
-  // Reorder: accepts the full ordered array of columns, writes new positions.
+  // Reorder: single RPC call (one transaction, no partial-failure risk).
+  // Optimistic update: React Query cache is patched immediately so the
+  // UI responds without waiting for the round-trip. On error, the cache
+  // is rolled back to the previous state.
   const reorderColumns = useMutation({
     mutationFn: async (orderedIds: string[]) => {
-      const updates = orderedIds.map((id, i) =>
-        supabase.from('board_columns').update({ position: i * 10 }).eq('id', id)
-      );
-      await Promise.all(updates);
+      if (!boardId) throw new Error('boardId required');
+      const { error } = await supabase.rpc('reorder_board_columns', {
+        p_board_id:    boardId,
+        p_ordered_ids: orderedIds,
+      });
+      if (error) throw error;
     },
-    onSuccess: invalidate,
+    onMutate: async (orderedIds: string[]) => {
+      // Cancel any in-flight refetches to avoid overwriting the optimistic update
+      await queryClient.cancelQueries({ queryKey: ['columns', boardId] });
+
+      // Snapshot current cache for rollback
+      const previous = queryClient.getQueryData<Column[]>(['columns', boardId]);
+
+      // Apply optimistic order
+      queryClient.setQueryData<Column[]>(['columns', boardId], old => {
+        if (!old) return old;
+        const byId = new Map(old.map(c => [c.id, c]));
+        return orderedIds
+          .map((id, i) => ({ ...byId.get(id)!, position: i * 10 }))
+          .filter(Boolean);
+      });
+
+      return { previous };
+    },
+    onError: (_err, _ids, ctx) => {
+      // Rollback to snapshot on failure
+      if (ctx?.previous) {
+        queryClient.setQueryData(['columns', boardId], ctx.previous);
+      }
+    },
+    onSettled: invalidate,
   });
 
   return { createColumn, updateColumn, deleteColumn, reorderColumns };

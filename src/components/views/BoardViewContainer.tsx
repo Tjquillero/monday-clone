@@ -52,7 +52,7 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
   const { data: dependencies } = useTaskDependencies(board?.id);
 
   const { addItem, updateItem, deleteItem } = useBoardMutations(board?.id);
-  const { createColumn, updateColumn, deleteColumn } = useColumnMutations(board?.id);
+  const { createColumn, updateColumn, deleteColumn, reorderColumns } = useColumnMutations(board?.id);
   const { views: savedViews, saveView, deleteView } = useBoardViews(board?.id);
   const defaultLoadedRef = useRef(false);
 
@@ -140,6 +140,10 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
 
   const handleAddColumn = (type: ColumnType) => {
     createColumn.mutate(type);
+  };
+
+  const handleReorderColumns = (orderedIds: string[]) => {
+    reorderColumns.mutate(orderedIds);
   };
 
   const handleSaveView = async (name: string) => {
@@ -245,6 +249,7 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
         onUpdateColumn={handleUpdateColumn}
         onDeleteColumn={handleDeleteColumn}
         onAddColumn={handleAddColumn}
+        onReorderColumns={handleReorderColumns}
         onAddSubItem={async (groupId, parentId) => {
            await supabase.from('items').insert({
              group_id: groupId,
