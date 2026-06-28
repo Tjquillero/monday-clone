@@ -108,14 +108,16 @@ export function useBoardView(
     setActiveView(v => ({ ...v, sorts: v.sorts.filter(s => s.id !== id) }));
   }, []);
 
-  const toggleColumn = useCallback((columnId: string) => {
+  // visibleColumns stores getColumnValueKey(col) — semantic key for system columns,
+  // UUID for user columns — so saved views survive column UUID changes.
+  const toggleColumn = useCallback((columnKey: string) => {
     setActiveView(v => {
-      const allIds = columns?.map(c => c.id) ?? [];
-      const current = v.visibleColumns.length ? v.visibleColumns : allIds;
-      const next = current.includes(columnId)
-        ? current.filter(id => id !== columnId)
-        : [...current, columnId];
-      return { ...v, visibleColumns: next.length === allIds.length ? [] : next };
+      const allKeys = columns?.map(c => c.key ?? c.id) ?? [];
+      const current = v.visibleColumns.length ? v.visibleColumns : allKeys;
+      const next = current.includes(columnKey)
+        ? current.filter(k => k !== columnKey)
+        : [...current, columnKey];
+      return { ...v, visibleColumns: next.length === allKeys.length ? [] : next };
     });
   }, [columns]);
 
@@ -172,7 +174,7 @@ export function useBoardView(
   const visibleColumns = useMemo<Column[]>(() => {
     if (!columns) return [];
     if (!activeView.visibleColumns.length) return columns;
-    return columns.filter(c => activeView.visibleColumns.includes(c.id));
+    return columns.filter(c => activeView.visibleColumns.includes(c.key ?? c.id));
   }, [columns, activeView.visibleColumns]);
 
   return {

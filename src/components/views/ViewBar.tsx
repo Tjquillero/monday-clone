@@ -164,7 +164,7 @@ function ColumnToggle({ columns, visibleIds, onToggle, onClose }: ColumnTogglePr
     return () => document.removeEventListener('mousedown', h);
   }, [onClose]);
 
-  const effectiveVisible = visibleIds.length ? visibleIds : columns.map(c => c.id);
+  const effectiveVisible = visibleIds.length ? visibleIds : columns.map(c => getColumnValueKey(c));
 
   return (
     <div ref={ref} className="absolute top-full right-0 mt-1 w-52 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl shadow-2xl z-50 overflow-hidden">
@@ -173,11 +173,12 @@ function ColumnToggle({ columns, visibleIds, onToggle, onClose }: ColumnTogglePr
       </div>
       <div className="py-1 max-h-64 overflow-y-auto custom-scrollbar">
         {columns.map(col => {
-          const visible = effectiveVisible.includes(col.id);
+          const colKey = getColumnValueKey(col);
+          const visible = effectiveVisible.includes(colKey);
           return (
             <button
               key={col.id}
-              onClick={() => onToggle(col.id)}
+              onClick={() => onToggle(colKey)}
               className="w-full flex items-center gap-3 px-3 py-2 hover:bg-[var(--bg-secondary)]/30 transition-all text-left"
             >
               <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${visible ? 'bg-[#3B7EF8] border-[#3B7EF8]' : 'border-[var(--border-color)]'}`}>
