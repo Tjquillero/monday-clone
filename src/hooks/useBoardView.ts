@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { Group, Item, Column } from '@/types/monday';
 import { BoardView, FilterRule, SortRule, FilterOperator, BLANK_VIEW } from '@/types/views';
 
@@ -62,9 +62,22 @@ export function useBoardView(
     visibleColumns: initialView?.visibleColumns ?? [],
     ...initialView,
   });
-  const [savedSnapshot, setSavedSnapshot] = useState(JSON.stringify(activeView));
+  const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify({
+    id: '__local__', boardId: '', name: 'Sin filtros',
+    filters: initialView?.filters ?? [],
+    sorts: initialView?.sorts ?? [],
+    visibleColumns: initialView?.visibleColumns ?? [],
+    ...initialView,
+  }));
 
-  const isDirty = JSON.stringify(activeView) !== savedSnapshot;
+  // Stable ref to current activeView so callbacks don't need it in their dep array
+  const activeViewRef = useRef(activeView);
+  activeViewRef.current = activeView;
+
+  const isDirty = useMemo(
+    () => JSON.stringify(activeView) !== savedSnapshot,
+    [activeView, savedSnapshot]
+  );
 
   // ── Public setters ─────────────────────────────────────────────────────────
 
@@ -111,15 +124,23 @@ export function useBoardView(
     setSavedSnapshot(JSON.stringify(view));
   }, []);
 
+  // Uses ref so the callback is stable (no stale closure on activeView)
   const markSaved = useCallback((savedId?: string) => {
-    setActiveView(v => savedId ? { ...v, id: savedId } : v);
-    setSavedSnapshot(JSON.stringify({ ...activeView, id: savedId ?? activeView.id }));
-  }, [activeView]);
+    setActiveView(prev => {
+      const next = savedId ? { ...prev, id: savedId } : prev;
+      // Update snapshot synchronously with the same value
+      setSavedSnapshot(JSON.stringify(next));
+      return next;
+    });
+  }, []);
 
   const reset = useCallback(() => {
-    setActiveView(v => ({ ...v, ...BLANK_VIEW }));
-    setSavedSnapshot(JSON.stringify({ ...activeView, ...BLANK_VIEW }));
-  }, [activeView]);
+    setActiveView(prev => {
+      const next = { ...prev, ...BLANK_VIEW };
+      setSavedSnapshot(JSON.stringify(next));
+      return next;
+    });
+  }, []);
 
   // ── Computed groups (filtered + sorted) ────────────────────────────────────
 

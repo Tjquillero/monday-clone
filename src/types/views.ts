@@ -40,6 +40,7 @@ export interface BoardView {
   sorts: SortRule[];
   visibleColumns: string[];  // column ids; empty = show all
   groupBy?: string;          // column key to group by (future)
+  version?: number;          // schema version — bump when FilterRule/SortRule shape changes
   createdBy?: string;
   createdAt?: string;
 }

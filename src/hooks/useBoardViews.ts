@@ -14,6 +14,7 @@ function rowToView(row: any): BoardView {
     sorts: row.sorts ?? [],
     visibleColumns: row.visible_columns ?? [],
     groupBy: row.settings?.groupBy,
+    version: row.settings?.schema_version ?? 1,
     createdBy: row.created_by,
     createdAt: row.created_at,
   };
@@ -51,7 +52,7 @@ export function useBoardViews(boardId: string | undefined) {
         filters: view.filters,
         sorts: view.sorts,
         visible_columns: view.visibleColumns,
-        settings: view.groupBy ? { groupBy: view.groupBy } : {},
+        settings: { schema_version: 1, ...(view.groupBy ? { groupBy: view.groupBy } : {}) },
       };
 
       if (view.id) {

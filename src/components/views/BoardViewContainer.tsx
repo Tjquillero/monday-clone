@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   closestCenter,
   KeyboardSensor,
@@ -54,6 +54,7 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
   const { addItem, updateItem, deleteItem } = useBoardMutations(board?.id);
   const { createColumn, updateColumn, deleteColumn } = useColumnMutations(board?.id);
   const { views: savedViews, saveView, deleteView } = useBoardViews(board?.id);
+  const defaultLoadedRef = useRef(false);
 
   const [activeId, setActiveId] = useState<string | number | null>(null);
 
@@ -102,6 +103,16 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
     const rule = activeView.sorts.find(s => s.id === id);
     if (rule) addSort({ ...rule, direction: rule.direction === 'asc' ? 'desc' : 'asc' } as SortRule);
   };
+
+  // Auto-load the default saved view the first time views are available
+  useEffect(() => {
+    if (defaultLoadedRef.current || savedViews.length === 0) return;
+    const defaultView = savedViews.find((v: import('@/types/views').BoardView) => v.isDefault);
+    if (defaultView) {
+      loadView(defaultView);
+      defaultLoadedRef.current = true;
+    }
+  }, [savedViews, loadView]);
 
   // Handlers
   const handleAddItem = (groupId: string, name: string, template?: any) => {
@@ -200,7 +211,7 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
         onAddFilter={addFilter}
         onUpdateFilter={updateFilter}
         onRemoveFilter={removeFilter}
-        onClearFilters={() => { clearFilters(); reset(); }}
+        onClearFilters={() => reset()}
         onAddSort={addSort}
         onRemoveSort={removeSort}
         onToggleSortDir={handleToggleSortDir}
