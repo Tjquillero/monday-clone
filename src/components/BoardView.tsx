@@ -7,19 +7,22 @@ import { getColumnValueKey } from '@/utils/columnUtils';
 import { CellRenderer } from '@/components/columns/CellRenderer';
 import { ColumnEditorPanel } from '@/components/columns/ColumnEditorPanel';
 import { AddColumnButton } from '@/components/columns/AddColumnButton';
+import { SortableColumnHeader } from '@/components/columns/SortableColumnHeader';
 import { LocationPicker } from '@/components/LocationPicker';
 import {
   SortableContext,
   verticalListSortingStrategy,
+  horizontalListSortingStrategy,
   useSortable,
   arrayMove
 } from '@dnd-kit/sortable';
-import { 
-  DndContext, 
-  closestCorners, 
-  KeyboardSensor, 
-  PointerSensor, 
-  useSensor, 
+import {
+  DndContext,
+  closestCorners,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
   useSensors,
   DragOverlay,
   defaultDropAnimationSideEffects,
@@ -307,6 +310,7 @@ interface BoardViewProps {
   onUpdateColumn?: (columnId: string, updates: Partial<Column>) => void;
   onDeleteColumn?: (columnId: string) => void;
   onAddColumn?: (type: ColumnType) => void;
+  onReorderColumns?: (orderedIds: string[]) => void;
   activityTemplates: ActivityTemplate[];
   isAdmin?: boolean;
   onCreateTemplate?: (template: Omit<ActivityTemplate, 'id' | 'created_at'>) => Promise<ActivityTemplate | void>;
@@ -315,13 +319,39 @@ interface BoardViewProps {
 export default function BoardView({
   groups, columns, onAddItem, onUpdateItem, onUpdateItemValue, onOpenItem, onAddSubItem, onAddGroup,
   activityTemplates, isAdmin, onCreateTemplate, onUpdateItemValues, onDeleteItem, onUpdateSubItemValue,
-  onUpdateColumn, onDeleteColumn, onAddColumn,
+  onUpdateColumn, onDeleteColumn, onAddColumn, onReorderColumns,
 }: BoardViewProps) {
   const [localGroups, setLocalGroups] = useState<Group[]>(groups);
+  const [localColumns, setLocalColumns] = useState<Column[]>(columns);
   const [activeId, setActiveId] = useState<any>(null);
   const [editingColumn, setEditingColumn] = useState<Column | null>(null);
 
   useEffect(() => { setLocalGroups(groups); }, [groups]);
+  // Sync localColumns from prop — but NOT while a column drag is in progress
+  const colDraggingRef = useRef(false);
+  useEffect(() => {
+    if (!colDraggingRef.current) setLocalColumns(columns);
+  }, [columns]);
+
+  // Sensors for the column DndContext — separate from the outer item/group sensors
+  const colSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
+
+  const handleColumnDragStart = () => { colDraggingRef.current = true; };
+
+  const handleColumnDragEnd = (event: DragEndEvent) => {
+    colDraggingRef.current = false;
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = localColumns.findIndex(c => c.id === active.id);
+    const newIndex = localColumns.findIndex(c => c.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(localColumns, oldIndex, newIndex);
+    setLocalColumns(reordered);
+    // Commit 2 will call onReorderColumns here
+    // onReorderColumns?.(reordered.map(c => c.id));
+  };
 
 
   return (
@@ -358,33 +388,42 @@ export default function BoardView({
             </div>
 
             <div className="overflow-x-auto custom-scrollbar">
-              <div
-                className="grid h-10 border-b border-[var(--border-color)] bg-transparent text-[10px] items-center font-black uppercase tracking-widest text-[var(--text-secondary)]"
-                style={{ gridTemplateColumns: `30px 6px 550px ${columns.map((c: Column) => `${c.width}px`).join(' ')} 1fr` }}
+              {/* Column header row — has its own DndContext so it doesn't
+                  interfere with the outer item/group DndContext in BoardViewContainer */}
+              <DndContext
+                sensors={colSensors}
+                collisionDetection={closestCenter}
+                onDragStart={handleColumnDragStart}
+                onDragEnd={handleColumnDragEnd}
               >
-                <div />
-                <div />
-                <div className="pl-14">Actividad</div>
-                {columns.map((c: Column) => (
-                  <div key={c.id} className="relative group/colhdr flex items-center justify-center gap-1">
-                    <span className="truncate">{c.title}</span>
-                    {isAdmin && onUpdateColumn && (
-                      <button
-                        onClick={() => setEditingColumn(editingColumn?.id === c.id ? null : c)}
-                        className={`opacity-0 group-hover/colhdr:opacity-100 p-0.5 rounded transition-all hover:text-[#3B7EF8] ${editingColumn?.id === c.id ? 'opacity-100 text-[#3B7EF8]' : ''}`}
-                        title="Editar columna"
-                      >
-                        <Settings2 size={11} />
-                      </button>
+                <SortableContext
+                  items={localColumns.map(c => c.id)}
+                  strategy={horizontalListSortingStrategy}
+                >
+                  <div
+                    className="grid h-10 border-b border-[var(--border-color)] bg-transparent text-[10px] items-center font-black uppercase tracking-widest text-[var(--text-secondary)]"
+                    style={{ gridTemplateColumns: `30px 6px 550px ${localColumns.map((c: Column) => `${c.width}px`).join(' ')} 1fr` }}
+                  >
+                    <div />
+                    <div />
+                    <div className="pl-14">Actividad</div>
+                    {localColumns.map((c: Column) => (
+                      <SortableColumnHeader
+                        key={c.id}
+                        column={c}
+                        isAdmin={isAdmin}
+                        isEditing={editingColumn?.id === c.id}
+                        onEdit={onUpdateColumn ? (col) => setEditingColumn(editingColumn?.id === col.id ? null : col) : undefined}
+                      />
+                    ))}
+                    {isAdmin && onAddColumn && (
+                      <div className="flex items-center">
+                        <AddColumnButton onAdd={onAddColumn} />
+                      </div>
                     )}
                   </div>
-                ))}
-                {isAdmin && onAddColumn && (
-                  <div className="flex items-center">
-                    <AddColumnButton onAdd={onAddColumn} />
-                  </div>
-                )}
-              </div>
+                </SortableContext>
+              </DndContext>
 
               <div className="min-w-max">
                 {group.items.map(item => (
@@ -392,7 +431,7 @@ export default function BoardView({
                     key={item.id}
                     item={item}
                     group={group}
-                    columns={columns}
+                    columns={localColumns}
                     onUpdateItem={onUpdateItem}
                     onUpdateItemValue={onUpdateItemValue}
                     onUpdateItemValues={onUpdateItemValues}
