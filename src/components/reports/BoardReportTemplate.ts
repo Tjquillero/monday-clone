@@ -1,37 +1,26 @@
 import { Group, Column, Item } from '@/types/monday';
+import { getColumnValueKey, getColumnLabelTitle, getColumnLabelColor } from '@/utils/columnUtils';
 
 export function generateBoardReportHtml(boardName: string, groups: Group[], columns: Column[]) {
-  const dateStr = new Date().toLocaleDateString('es-ES', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
+  const dateStr = new Date().toLocaleDateString('es-ES', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
   });
 
   const getColValue = (item: Item, col: Column) => {
-    const val = item.values[col.id];
+    const val = item.values[getColumnValueKey(col)];
     if (val === undefined || val === null) return '-';
     return val;
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Done': return 'bg-emerald-500 text-white';
-      case 'Working on it': return 'bg-amber-500 text-white';
-      case 'Stuck': return 'bg-rose-500 text-white';
-      case 'Not Started': return 'bg-gray-400 text-white';
-      default: return 'bg-gray-200 text-gray-800';
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'High': return 'bg-purple-700 text-white';
-      case 'Critical': return 'bg-gray-900 text-white';
-      case 'Medium': return 'bg-blue-500 text-white';
-      case 'Low': return 'bg-sky-400 text-white';
-      default: return 'bg-gray-200 text-gray-800';
-    }
+  // Returns inline style for label cells using DB-driven options (no hardcoded map)
+  const getLabelCellHtml = (col: Column, val: string, small = false) => {
+    const title = getColumnLabelTitle(col, val);
+    const color = getColumnLabelColor(col, val);
+    const size = small ? 'font-size:8px;padding:2px 6px' : 'font-size:10px;padding:3px 8px';
+    return `<span style="background:${color};color:#fff;border-radius:4px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;${size}">${title}</span>`;
   };
 
   const groupsHtml = groups.map(group => `
@@ -58,10 +47,9 @@ export function generateBoardReportHtml(boardName: string, groups: Group[], colu
                 const val = getColValue(item, col);
                 let cellContent = val;
                 
-                if (col.type === 'status') {
-                   cellContent = `<span class="px-2 py-1 rounded text-[10px] font-bold uppercase ${getStatusColor(String(val))}">${val}</span>`;
-                } else if (col.type === 'priority') {
-                   cellContent = `<span class="px-2 py-1 rounded text-[10px] font-bold uppercase ${getPriorityColor(String(val))}">${val}</span>`;
+                const hasLabels = col.type === 'status' || col.type === 'priority' || col.type === 'dropdown' || col.type === 'tags';
+                if (hasLabels && val !== '-') {
+                  cellContent = getLabelCellHtml(col, String(val));
                 }
 
                 return `<td class="py-3 px-2 text-center text-slate-600">${cellContent}</td>`;
@@ -75,10 +63,11 @@ export function generateBoardReportHtml(boardName: string, groups: Group[], colu
                  ${columns.map(col => {
                     const val = getColValue(sub, col);
                     let cellContent = val;
-                    if (col.type === 'status') {
-                       cellContent = `<span class="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${getStatusColor(String(val))}">${val}</span>`;
+                    const hasLabels = col.type === 'status' || col.type === 'priority' || col.type === 'dropdown';
+                    if (hasLabels && val !== '-') {
+                      cellContent = getLabelCellHtml(col, String(val), true);
                     }
-                    return `<td class="py-2 px-2 text-center text-slate-400">${col.type === 'status' || col.type === 'priority' ? cellContent : val}</td>`;
+                    return `<td class="py-2 px-2 text-center text-slate-400">${cellContent}</td>`;
                  }).join('')}
               </tr>
             `).join('')}

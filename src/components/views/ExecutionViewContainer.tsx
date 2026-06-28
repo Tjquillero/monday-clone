@@ -6,6 +6,7 @@ import { useBoard, useBoardColumns, useBoardGroups, useActivityTemplates, useTas
 import { useBoardMutations } from '@/hooks/useBoardMutations';
 import { useAuth } from '@/contexts/AuthContext';
 import { isActivityItem } from '@/utils/itemUtils';
+import { getColumnValueKey } from '@/utils/columnUtils';
 import { supabase } from '@/lib/supabaseClient';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -36,8 +37,10 @@ export default function ExecutionViewContainer({ searchQuery, selectedGroupId, f
   const activityGroups = useMemo(() => {
     if (!groups || !columns) return [];
 
-    const statusColId = columns.find(c => c.type === 'status')?.id;
-    const priorityColId = columns.find(c => c.type === 'priority')?.id;
+    const statusCol = columns.find(c => c.type === 'status');
+    const priorityCol = columns.find(c => c.type === 'priority');
+    const statusColId = statusCol ? getColumnValueKey(statusCol) : undefined;
+    const priorityColId = priorityCol ? getColumnValueKey(priorityCol) : undefined;
 
     return groups
       .filter(g => !g.title.toUpperCase().includes('PRESUPUESTO'))

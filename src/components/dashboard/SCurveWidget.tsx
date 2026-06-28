@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect } from 'react';
 import { Group, Item, Column } from '@/types/monday';
+import { getColumnValueKey } from '@/utils/columnUtils';
 import { format, eachWeekOfInterval, startOfWeek, endOfWeek, isAfter, isBefore, addWeeks, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ResponsiveContainer, ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
@@ -32,11 +33,13 @@ export default function SCurveWidget({ groups, columns, activeSiteId: propActive
         ? groups 
         : groups.filter(g => g.id === activeSiteId);
 
-    // Dynamic Column Mapping
-    // Dynamic Column Mapping
-    const timelineCol = columns.find(c => c.type === 'timeline' || c.type === 'date' || ['cronograma', 'fecha', 'timeline'].some(term => c.title.toLowerCase().includes(term))) || { id: 'timeline' };
-    const priceCol = columns.find(c => ['precio', 'unit_price', 'costo', 'valor'].some(term => c.id === term || c.title.toLowerCase().includes(term))) || { id: 'unit_price' };
-    const qtyCol = columns.find(c => ['cant', 'm2', 'volumen', 'metrado'].some(term => c.id === term || c.title.toLowerCase().includes(term))) || { id: 'cant' };
+    // Dynamic Column Mapping — uses semantic key (getColumnValueKey) not UUID
+    const timelineCol = columns.find(c => c.type === 'timeline' || c.type === 'date' || ['cronograma', 'fecha', 'timeline'].some(term => c.title.toLowerCase().includes(term))) || { id: 'timeline', key: 'timeline' };
+    const priceCol = columns.find(c => ['precio', 'unit_price', 'costo', 'valor'].some(term => c.id === term || c.title.toLowerCase().includes(term))) || { id: 'unit_price', key: null };
+    const qtyCol = columns.find(c => ['cant', 'm2', 'volumen', 'metrado'].some(term => c.id === term || c.title.toLowerCase().includes(term))) || { id: 'cant', key: null };
+    const timelineKey = getColumnValueKey(timelineCol as Column);
+    const priceKey = getColumnValueKey(priceCol as Column);
+    const qtyKey = getColumnValueKey(qtyCol as Column);
 
     let minDate = new Date();
     let maxDate = new Date();
@@ -48,7 +51,7 @@ export default function SCurveWidget({ groups, columns, activeSiteId: propActive
             return;
         }
         
-        const tVal = item.values[timelineCol.id] || item.values['timeline'];
+        const tVal = item.values[timelineKey] || item.values['timeline'];
         const startStr = typeof tVal === 'object' ? tVal?.from : tVal;
         const endStr = typeof tVal === 'object' ? tVal?.to : tVal;
         
@@ -98,8 +101,8 @@ export default function SCurveWidget({ groups, columns, activeSiteId: propActive
             item.subItems.forEach(sub => calculateTotalValue(sub));
             return;
         }
-        const qty = parseFloat(item.values[qtyCol.id] || 0);
-        const price = parseFloat(item.values[priceCol.id] || 0);
+        const qty = parseFloat(item.values[qtyKey] || 0);
+        const price = parseFloat(item.values[priceKey] || 0);
         totalProjectValue += (qty * price);
     };
 
@@ -115,12 +118,12 @@ export default function SCurveWidget({ groups, columns, activeSiteId: propActive
                 return;
             }
 
-            const qty = parseFloat(item.values[qtyCol.id] || 0);
-            const price = parseFloat(item.values[priceCol.id] || 0);
+            const qty = parseFloat(item.values[qtyKey] || 0);
+            const price = parseFloat(item.values[priceKey] || 0);
             const budget = qty * price;
             
             // Planned (Linear Distribution over timeline)
-            const tVal = item.values[timelineCol.id] || item.values['timeline'];
+            const tVal = item.values[timelineKey] || item.values['timeline'];
             const startStr = typeof tVal === 'object' ? tVal?.from : tVal;
             const endStr = typeof tVal === 'object' ? tVal?.to : tVal;
             const start = startStr ? new Date(startStr) : null;

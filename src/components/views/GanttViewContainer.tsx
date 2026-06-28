@@ -5,6 +5,7 @@ import TacticalOperationsView from '@/components/TacticalOperationsView';
 import { useBoard, useBoardGroups, useBoardColumns, useTaskDependencies } from '@/hooks/useBoardData';
 import { useBoardMutations } from '@/hooks/useBoardMutations';
 import { isActivityItem } from '@/utils/itemUtils';
+import { getColumnValueKey } from '@/utils/columnUtils';
 
 interface GanttViewContainerProps {
   searchQuery: string;
@@ -26,8 +27,10 @@ export default function GanttViewContainer({ searchQuery, selectedGroupId, filte
   // Filter logic remains the same
   const activityGroups = useMemo(() => {
     if (!groups || !columns) return [];
-    const statusColId = columns.find(c => c.type === 'status')?.id;
-    const priorityColId = columns.find(c => c.type === 'priority')?.id;
+    const statusCol = columns.find(c => c.type === 'status');
+    const priorityCol = columns.find(c => c.type === 'priority');
+    const statusColId = statusCol ? getColumnValueKey(statusCol) : undefined;
+    const priorityColId = priorityCol ? getColumnValueKey(priorityCol) : undefined;
 
     return groups
       .filter(g => !selectedGroupId || g.id === selectedGroupId)

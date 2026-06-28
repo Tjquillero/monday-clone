@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { 
+import {
   closestCenter,
   KeyboardSensor,
   PointerSensor,
@@ -14,13 +14,17 @@ import {
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates, arrayMove } from '@dnd-kit/sortable';
 import BoardView from '@/components/BoardView';
+import { ViewBar } from '@/components/views/ViewBar';
 import { useBoard, useBoardColumns, useBoardGroups, useActivityTemplates, useTaskDependencies } from '@/hooks/useBoardData';
 import { useBoardMutations } from '@/hooks/useBoardMutations';
 import { useColumnMutations } from '@/hooks/useColumnMutations';
+import { useBoardView } from '@/hooks/useBoardView';
+import { useBoardViews } from '@/hooks/useBoardViews';
 import { useAuth } from '@/contexts/AuthContext';
 import { isActivityItem } from '@/utils/itemUtils';
 import { getColumnValueKey, getDefaultLabelId } from '@/utils/columnUtils';
 import { Column, ColumnType, Group, Item } from '@/types/monday';
+import { SortRule } from '@/types/views';
 import { supabase } from '@/lib/supabaseClient';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -49,6 +53,7 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
 
   const { addItem, updateItem, deleteItem } = useBoardMutations(board?.id);
   const { createColumn, updateColumn, deleteColumn } = useColumnMutations(board?.id);
+  const { views: savedViews, saveView, deleteView } = useBoardViews(board?.id);
 
   const [activeId, setActiveId] = useState<string | number | null>(null);
 
@@ -57,10 +62,9 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const activityGroups = useMemo(() => {
+  // Pre-filter: search text + sidebar filters + exclude budget groups/non-activity items
+  const baseGroups = useMemo(() => {
     if (!groups || !columns) return [];
-    
-    // Lookup keys in items.values (semantic key or UUID fallback)
     const statusCol = columns.find(c => c.type === 'status');
     const priorityCol = columns.find(c => c.type === 'priority');
     const statusKey = statusCol ? getColumnValueKey(statusCol) : null;
@@ -74,31 +78,30 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
         items: g.items
           .filter(isActivityItem)
           .filter(item => {
-            // 1. Busqueda por Texto
-            const searchTerms = [
-              item.name,
-              item.description || '',
-              ...Object.values(item.values || {}).map(v => String(v))
-            ].join(' ').toLowerCase();
+            const searchTerms = [item.name, item.description || '', ...Object.values(item.values || {}).map(v => String(v))].join(' ').toLowerCase();
             const matchesSearch = searchTerms.includes(searchQuery.toLowerCase());
-
-            // 2. Filtro de Estado
             const itemStatus = statusKey ? item.values[statusKey] : null;
             const matchesStatus = filters.status.length === 0 || (itemStatus && filters.status.includes(itemStatus));
-
-            // 3. Filtro de Prioridad
             const itemPriority = priorityKey ? item.values[priorityKey] : null;
             const matchesPriority = filters.priority.length === 0 || (itemPriority && filters.priority.includes(itemPriority));
-
-            // 4. Filtro por Persona
-            const itemPersonId = item.personnel_id;
-            const matchesPerson = filters.person.length === 0 || (itemPersonId && filters.person.includes(itemPersonId));
-
+            const matchesPerson = filters.person.length === 0 || (item.personnel_id && filters.person.includes(item.personnel_id));
             return matchesSearch && matchesStatus && matchesPriority && matchesPerson;
-          })
+          }),
       }))
       .filter(g => g.items.length > 0 || (searchQuery === '' && filters.status.length === 0 && filters.priority.length === 0 && !selectedGroupId));
   }, [groups, columns, searchQuery, selectedGroupId, filters]);
+
+  // View engine: filter + sort from useBoardView on top of baseGroups
+  const {
+    activeView, isDirty, filteredGroups: activityGroups, visibleColumns: viewColumns,
+    addFilter, updateFilter, removeFilter, clearFilters,
+    addSort, removeSort, toggleColumn, loadView, markSaved, reset,
+  } = useBoardView(baseGroups, columns?.filter(c => !['unit_price', 'cant', 'category', 'rubro'].includes(c.id)));
+
+  const handleToggleSortDir = (id: string) => {
+    const rule = activeView.sorts.find(s => s.id === id);
+    if (rule) addSort({ ...rule, direction: rule.direction === 'asc' ? 'desc' : 'asc' } as SortRule);
+  };
 
   // Handlers
   const handleAddItem = (groupId: string, name: string, template?: any) => {
@@ -126,6 +129,15 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
 
   const handleAddColumn = (type: ColumnType) => {
     createColumn.mutate(type);
+  };
+
+  const handleSaveView = async (name: string) => {
+    const saved = await saveView.mutateAsync({
+      ...activeView,
+      name,
+      boardId: board!.id,
+    });
+    if (saved) markSaved(saved.id);
   };
 
   const handleDeleteItem = (itemId: string | number) => {
@@ -175,7 +187,28 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
 
   if (boardLoading) return <div className="p-8 text-center text-gray-500">Cargando tablero...</div>;
 
+  const allDisplayColumns = columns?.filter(c => !['unit_price', 'cant', 'category', 'rubro'].includes(c.id)) ?? [];
+
   return (
+    <>
+      <ViewBar
+        columns={allDisplayColumns}
+        savedViews={savedViews}
+        activeView={activeView}
+        isDirty={isDirty}
+        onLoadView={loadView}
+        onAddFilter={addFilter}
+        onUpdateFilter={updateFilter}
+        onRemoveFilter={removeFilter}
+        onClearFilters={() => { clearFilters(); reset(); }}
+        onAddSort={addSort}
+        onRemoveSort={removeSort}
+        onToggleSortDir={handleToggleSortDir}
+        onToggleColumn={toggleColumn}
+        onSaveView={handleSaveView}
+        onDeleteView={(id) => deleteView.mutate(id)}
+        onReset={reset}
+      />
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
@@ -185,7 +218,7 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
     >
       <BoardView
         groups={activityGroups}
-        columns={columns?.filter(c => !['unit_price', 'cant', 'category', 'rubro'].includes(c.id)) || []}
+        columns={viewColumns}
         activityTemplates={activityTemplates || []}
         isAdmin={isAdmin}
         onCreateTemplate={async (template) => {
@@ -223,5 +256,6 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
         }}
       />
     </DndContext>
+    </>
   );
 }

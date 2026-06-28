@@ -19,6 +19,7 @@ import KanbanView from './KanbanView';
 import { useBoard, useBoardColumns, useBoardGroups } from '@/hooks/useBoardData';
 import { useBoardMutations } from '@/hooks/useBoardMutations';
 import { isActivityItem } from '@/utils/itemUtils';
+import { getColumnValueKey } from '@/utils/columnUtils';
 import { Item, Group, Column } from '@/types/monday';
 import { createPortal } from 'react-dom';
 
@@ -50,13 +51,12 @@ export default function KanbanViewContainer({ searchQuery, selectedGroupId, filt
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  // Identify status and priority columns
-  const statusCol = useMemo(() => {
-    return columns?.find(c => c.type === 'status');
-  }, [columns]);
+  // Identify status and priority columns — use semantic key, not UUID
+  const statusCol = useMemo(() => columns?.find(c => c.type === 'status'), [columns]);
 
   const priorityColId = useMemo(() => {
-    return columns?.find(c => c.type === 'priority')?.id;
+    const col = columns?.find(c => c.type === 'priority');
+    return col ? getColumnValueKey(col) : undefined;
   }, [columns]);
 
   const activityItems = useMemo(() => {
@@ -79,7 +79,7 @@ export default function KanbanViewContainer({ searchQuery, selectedGroupId, filt
         const matchesSearch = searchTerms.includes(searchQuery.toLowerCase());
 
         // 3. Filtro de Estado
-        const itemStatus = item.values[statusCol.id];
+        const itemStatus = item.values[getColumnValueKey(statusCol)];
         const matchesStatus = filters.status.length === 0 || (itemStatus && filters.status.includes(itemStatus));
 
         // 4. Filtro de Prioridad
