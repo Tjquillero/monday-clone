@@ -83,7 +83,7 @@ export default function ExecutionViewContainer({ searchQuery, selectedGroupId, f
   return (
     <ExecutionView 
       groups={activityGroups} 
-      columns={columns?.filter(c => !['people', 'unit_price', 'cant', 'category', 'rubro'].includes(c.id)) || []}
+      columns={columns?.filter(c => c.type !== 'people') || []}
       activityTemplates={activityTemplates || []}
       dependencies={taskDependencies || []}
       isAdmin={isAdmin}

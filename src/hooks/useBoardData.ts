@@ -92,13 +92,13 @@ export function useBoardColumns(boardId?: string) {
           await offlineDB.upsertRecords('board_columns', cols);
         }
         
-        return sortColumns(injectDomainColumns(cols));
+        return sortColumns(cols);
       } catch (error: any) {
         if (isNetworkError(error) && offlineDB) {
           console.log('[Offline] Board columns query failed due to network. Falling back to IndexedDB.');
           const localCols = await offlineDB.getTable('board_columns');
           const filteredCols = localCols.filter((c: any) => String(c.board_id) === String(boardId));
-          return sortColumns(injectDomainColumns(filteredCols));
+          return sortColumns(filteredCols);
         }
         throw error;
       }
@@ -110,29 +110,6 @@ export function useBoardColumns(boardId?: string) {
 
 function sortColumns(cols: Column[]): Column[] {
   return [...cols].sort((a, b) => (a.position || 0) - (b.position || 0));
-}
-
-// Motor columns (status, priority, people, date) are now real DB records seeded
-// by 20260629_board_columns_seed.sql — no longer injected here.
-//
-// Domain columns below are Mantenix-specific and still phantom until a board
-// template migration creates them as real records. Tracked for removal once
-// a Mantenix template seed exists.
-function injectDomainColumns(cols: any[]): Column[] {
-  const result = [...cols];
-  if (!result.some((c) => c.id === 'unit_price' || c.title?.includes('Precio'))) {
-    result.push({ id: 'unit_price', title: 'Precio Unitario', type: 'numbers', width: 140, position: 900 });
-  }
-  if (!result.some((c) => c.id === 'cant' || c.title?.includes('Cant'))) {
-    result.push({ id: 'cant', title: 'Cantidad', type: 'numbers', width: 100, position: 901 });
-  }
-  if (!result.some((c) => c.id === 'category' || c.title?.includes('Categor'))) {
-    result.push({ id: 'category', title: 'Categoría', type: 'text', width: 150, position: 902 });
-  }
-  if (!result.some((c) => c.id === 'rubro')) {
-    result.push({ id: 'rubro', title: 'Rubro Mayor', type: 'text', width: 150, position: 903 });
-  }
-  return result;
 }
 
 export function useBoardGroups(boardId?: string) {

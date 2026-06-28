@@ -97,7 +97,7 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
     activeView, isDirty, filteredGroups: activityGroups, visibleColumns: viewColumns,
     addFilter, updateFilter, removeFilter, clearFilters,
     addSort, removeSort, toggleColumn, loadView, markSaved, reset,
-  } = useBoardView(baseGroups, columns?.filter(c => !['unit_price', 'cant', 'category', 'rubro'].includes(c.id)));
+  } = useBoardView(baseGroups, columns ?? []);
 
   const handleToggleSortDir = (id: string) => {
     const rule = activeView.sorts.find(s => s.id === id);
@@ -202,7 +202,7 @@ export default function BoardViewContainer({ searchQuery, selectedGroupId, filte
 
   if (boardLoading) return <div className="p-8 text-center text-gray-500">Cargando tablero...</div>;
 
-  const allDisplayColumns = columns?.filter(c => !['unit_price', 'cant', 'category', 'rubro'].includes(c.id)) ?? [];
+  const allDisplayColumns = columns ?? [];
 
   return (
     <>
