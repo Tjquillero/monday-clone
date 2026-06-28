@@ -324,7 +324,9 @@ export default function BoardView({
   const [localGroups, setLocalGroups] = useState<Group[]>(groups);
   const [localColumns, setLocalColumns] = useState<Column[]>(columns);
   const [activeId, setActiveId] = useState<any>(null);
+  const [colDragActiveId, setColDragActiveId] = useState<string | null>(null);
   const [editingColumn, setEditingColumn] = useState<Column | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setLocalGroups(groups); }, [groups]);
   // Sync localColumns from prop — but NOT while a column drag is in progress
@@ -338,10 +340,14 @@ export default function BoardView({
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
-  const handleColumnDragStart = () => { colDraggingRef.current = true; };
+  const handleColumnDragStart = (event: DragStartEvent) => {
+    colDraggingRef.current = true;
+    setColDragActiveId(String(event.active.id));
+  };
 
   const handleColumnDragEnd = (event: DragEndEvent) => {
     colDraggingRef.current = false;
+    setColDragActiveId(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIndex = localColumns.findIndex(c => c.id === active.id);
@@ -351,6 +357,10 @@ export default function BoardView({
     setLocalColumns(reordered);
     onReorderColumns?.(reordered.map(c => c.id));
   };
+
+  const activeColForOverlay = colDragActiveId
+    ? localColumns.find(c => c.id === colDragActiveId)
+    : null;
 
 
   return (
@@ -386,14 +396,16 @@ export default function BoardView({
                </button>
             </div>
 
-            <div className="overflow-x-auto custom-scrollbar">
-              {/* Column header row — has its own DndContext so it doesn't
-                  interfere with the outer item/group DndContext in BoardViewContainer */}
+            <div className="overflow-x-auto custom-scrollbar" ref={scrollContainerRef}>
+              {/* Column header row — isolated DndContext so it doesn't conflict
+                  with the outer item/group DndContext in BoardViewContainer.
+                  'Nombre' column is pinned (disabled drag). */}
               <DndContext
                 sensors={colSensors}
                 collisionDetection={closestCenter}
                 onDragStart={handleColumnDragStart}
                 onDragEnd={handleColumnDragEnd}
+                autoScroll={{ layoutShiftCompensation: false }}
               >
                 <SortableContext
                   items={localColumns.map(c => c.id)}
@@ -422,6 +434,19 @@ export default function BoardView({
                     )}
                   </div>
                 </SortableContext>
+
+                {/* Floating ghost column while dragging */}
+                <DragOverlay dropAnimation={null}>
+                  {activeColForOverlay && (
+                    <div
+                      className="flex items-center justify-center gap-1 h-10 rounded-lg border border-[#3B7EF8]/40 bg-[#3B7EF8]/10 text-[10px] font-black uppercase tracking-widest text-[#3B7EF8] shadow-xl backdrop-blur-sm px-3"
+                      style={{ width: `${activeColForOverlay.width ?? 120}px`, cursor: 'grabbing' }}
+                    >
+                      <GripVertical size={11} className="opacity-60" />
+                      <span className="truncate">{activeColForOverlay.title}</span>
+                    </div>
+                  )}
+                </DragOverlay>
               </DndContext>
 
               <div className="min-w-max">
