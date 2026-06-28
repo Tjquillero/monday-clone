@@ -30,12 +30,33 @@ export interface Group {
   lng?: number;
 }
 
+export interface ColumnLabel {
+  id: string;
+  title: string;
+  color: string;
+}
+
+export interface ColumnOptions {
+  labels?: ColumnLabel[];  // status, priority, tags columns
+  default?: string;        // default label id
+  multiple?: boolean;      // people column
+  includeTime?: boolean;   // date column
+  format?: string;         // numbers: 'number' | 'currency'
+  decimals?: number;
+  symbol?: string;
+}
+
 export interface Column {
   id: string;
+  key?: string | null;     // stable lookup key for items.values (null → use id)
   title: string;
   type: string;
   width: number;
   position?: number;
+  options?: ColumnOptions;
+  required?: boolean;
+  editable?: boolean;
+  hidden?: boolean;
 }
 
 export interface Personnel {

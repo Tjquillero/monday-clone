@@ -129,9 +129,12 @@ export default function ProfessionalLayout({ children }: { children: React.React
         }
       } else {
         await supabase.from('board_columns').insert([
-          { board_id: newBoard.id, title: 'Estado', type: 'status', position: 0 },
-          { board_id: newBoard.id, title: 'Responsable', type: 'people', position: 1 },
-          { board_id: newBoard.id, title: 'Fecha', type: 'date', position: 2 }
+          { board_id: newBoard.id, title: 'Estado',      type: 'status',   key: 'status',   position: 0, required: true,
+            options: { labels: [{ id: 'Not Started', title: 'Pendiente', color: '#334155' }, { id: 'Working on it', title: 'En proceso', color: '#F59E0B' }, { id: 'Done', title: 'Completado', color: '#10B981' }, { id: 'Stuck', title: 'Bloqueado', color: '#EF4444' }], default: 'Not Started' } },
+          { board_id: newBoard.id, title: 'Prioridad',   type: 'priority', key: 'priority', position: 1,
+            options: { labels: [{ id: 'Low', title: 'Baja', color: '#3B7EF8' }, { id: 'Medium', title: 'Media', color: '#F59E0B' }, { id: 'High', title: 'Alta', color: '#EF4444' }], default: 'Low' } },
+          { board_id: newBoard.id, title: 'Responsable', type: 'people',   key: 'people',   position: 2, options: { multiple: true } },
+          { board_id: newBoard.id, title: 'Fecha',       type: 'date',     key: 'date',     position: 3, options: { includeTime: false } },
         ]);
         await supabase.from('groups').insert({ board_id: newBoard.id, title: 'Grupo 1', position: 0 });
       }
