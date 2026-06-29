@@ -9,7 +9,7 @@ import {
   Maximize2, Eye, ShieldCheck, Gauge, Layers, Info as InfoIcon,
   Table2, DollarSign, GitGraph, Zap, Download, Layout,
   Star, ChevronDown, FileText, FileSpreadsheet,
-  Sun, Moon, Scissors, Sprout, Wrench, Shovel
+  Sun, Moon, Scissors, Sprout, Wrench, Shovel, ClipboardList
 } from 'lucide-react';
 import { useState, useMemo, useEffect, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -28,6 +28,9 @@ import FinancialViewContainer from '@/components/views/FinancialViewContainer';
 import KanbanViewContainer from '@/components/views/KanbanViewContainer';
 import ReportsViewContainer from '@/components/views/ReportsViewContainer';
 
+import WorkOrdersContainer from '@/components/work-orders/WorkOrdersContainer';
+import WeeklyPlannerContainer from '@/components/views/WeeklyPlannerContainer';
+
 import MantenixMap from '@/components/MantenixMap';
 import ItemModal from '@/components/modals/ItemModal';
 import ConfirmModal from '@/components/modals/ConfirmModal';
@@ -45,7 +48,7 @@ function DashboardContent() {
   const boardId = rawBoardId || undefined;
 
   // 1. ALL STATES FIRST
-  const [currentView, setCurrentView] = useState<'board' | 'map' | 'dashboards' | 'execution' | 'financial' | 'gantt' | 'kanban' | 'reports' | 'notifications'>('board');
+  const [currentView, setCurrentView] = useState<'board' | 'map' | 'dashboards' | 'execution' | 'financial' | 'gantt' | 'kanban' | 'reports' | 'notifications' | 'work-orders' | 'planner'>('board');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -87,7 +90,7 @@ function DashboardContent() {
 
   useEffect(() => {
     const viewParam = searchParams ? searchParams.get('view') : null;
-    if (viewParam && ['board', 'map', 'dashboards', 'execution', 'financial', 'gantt', 'kanban', 'reports', 'notifications'].includes(viewParam)) {
+    if (viewParam && ['board', 'map', 'dashboards', 'execution', 'financial', 'gantt', 'kanban', 'reports', 'notifications', 'planner'].includes(viewParam)) {
       setCurrentView(viewParam as any);
     }
   }, [searchParams]);
@@ -162,6 +165,8 @@ function DashboardContent() {
             { id: 'map', label: 'Mapa', icon: MapPin },
             { id: 'financial', label: 'Costos', icon: DollarSign },
             { id: 'gantt', label: 'Ops', icon: GitGraph },
+            { id: 'work-orders', label: 'Ordenes', icon: ClipboardList },
+            { id: 'planner', label: 'Planner', icon: CalendarIcon },
           ].map((tab) => {
             const isActive = currentView === tab.id;
             return (
@@ -265,6 +270,8 @@ function DashboardContent() {
             {currentView === 'kanban' && <div className="h-full overflow-auto p-8 custom-scrollbar"><KanbanViewContainer searchQuery={searchQuery} selectedGroupId={selectedGroupId} filters={activeFilters} onOpenItem={openItemModal} /></div>}
             {currentView === 'reports' && <div className="h-full overflow-auto custom-scrollbar"><ReportsViewContainer /></div>}
             {currentView === 'notifications' && <div className="h-full overflow-auto custom-scrollbar"><NotificationsView /></div>}
+            {currentView === 'work-orders' && <div className="h-full overflow-auto custom-scrollbar"><WorkOrdersContainer /></div>}
+            {currentView === 'planner' && <WeeklyPlannerContainer boardId={board?.id} selectedGroupId={selectedGroupId} groups={groups} />}
           </motion.div>
         </AnimatePresence>
       </main>
