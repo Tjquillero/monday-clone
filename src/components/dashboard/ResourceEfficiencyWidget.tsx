@@ -106,6 +106,7 @@ export default function ResourceEfficiencyWidget({ boardId, groups, activityTemp
     data: scopeMappings,
     isLoading: mappingsLoading,
     isError: mappingsIsError,
+    error: mappingsErr,
   } = useScopeMappings();
 
   // Adapter: DB rows → same Record<scope_key, ActivityRule[]> shape the algorithm expects
@@ -349,7 +350,7 @@ export default function ResourceEfficiencyWidget({ boardId, groups, activityTemp
   // Tres estados de los estándares — distintos del error de resource_analysis
   const isMigrationMissing =
     (standardsIsError && standardsErr instanceof SchedulerMigrationMissingError) ||
-    (mappingsIsError);
+    (mappingsIsError && mappingsErr instanceof SchedulerMigrationMissingError);
   const isStandardsQueryError = (standardsIsError || mappingsIsError) && !isMigrationMissing;
   const hasNoStandards =
     !standardsLoading && !mappingsLoading && !standardsIsError && !mappingsIsError &&
