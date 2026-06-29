@@ -1,4 +1,4 @@
-import { buildWeeklyPlanningContext, calculateWeekNumber, getWeekBounds, ZoneInfo, WeekInfo } from './weeklyPlanner';
+import { buildWeeklyPlanningContext, calculateContractWeek, getWeekBounds, ZoneInfo, WeekInfo } from './weeklyPlanner';
 import { ActivityStandard, ScopeMapping } from '@/types/scheduler';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ const PLAZA_QTY = { arbustos: 2295 };
 // calculateWeekNumber
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('calculateWeekNumber', () => {
+describe('calculateContractWeek', () => {
   it.each([
     [1, 1], [7, 1],
     [8, 2], [14, 2],
@@ -52,7 +52,7 @@ describe('calculateWeekNumber', () => {
     [22, 4], [28, 4], [30, 4], // junio tiene 30 días; 31 no existe en este mes
   ])('día %d del mes → semana %d', (day, expectedWeek) => {
     const date = new Date(`2026-06-${String(day).padStart(2, '0')}`);
-    expect(calculateWeekNumber(date)).toBe(expectedWeek);
+    expect(calculateContractWeek(date)).toBe(expectedWeek);
   });
 });
 

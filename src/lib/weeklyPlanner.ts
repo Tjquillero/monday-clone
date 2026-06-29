@@ -46,11 +46,14 @@ function addDays(date: Date, days: number): Date {
 // Helpers exportados — usados por el hook y testeables por separado
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Determina el número de semana de planificación (1–4) a partir del lunes
-// de inicio. Semanas del mes: 1–7→1, 8–14→2, 15–21→3, 22+→4.
-// Usa getUTCDate() para evitar desplazamiento de día en zonas horarias
-// donde UTC midnight se convierte en el día anterior (UTC-X).
-export function calculateWeekNumber(weekStart: Date): number {
+// Semana del contrato (1–4) para una fecha de inicio de semana.
+//
+// IMPORTANTE — este NO es el número de semana ISO (ISO 8601).
+// Es el número de período de planificación del contrato, basado en el día
+// del mes: 1–7→1, 8–14→2, 15–21→3, 22–31→4. Siempre cuatro períodos
+// por mes, independiente del año o de cuántos días tiene el mes.
+// Usa getUTCDate() para evitar desplazamiento de día en zonas UTC-X.
+export function calculateContractWeek(weekStart: Date): number {
   return Math.min(4, Math.ceil(weekStart.getUTCDate() / 7));
 }
 

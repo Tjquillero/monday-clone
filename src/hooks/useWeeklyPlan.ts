@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { WeeklyPlanningContext, SchedulerMigrationMissingError } from '@/types/scheduler';
 import { getSiteCapacity } from '@/lib/siteCapacity';
-import { buildWeeklyPlanningContext, calculateWeekNumber } from '@/lib/weeklyPlanner';
+import { buildWeeklyPlanningContext, calculateContractWeek } from '@/lib/weeklyPlanner';
 import { useContractStandards, useScopeMappings } from './useActivityStandards';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ export function useWeeklyPlan(
 
     const week = {
       start: weekStart,
-      number: calculateWeekNumber(weekStart),
+      number: calculateContractWeek(weekStart),
       workingDays: 5,
     };
 
