@@ -1,0 +1,116 @@
+// Tipos del Maintenance Scheduling Engine
+// Ref: docs/MAINTENANCE_SCHEDULING_ENGINE_v1.md
+
+export type ActivityPriority = 'must_execute' | 'preferred' | 'flexible';
+export type ActivityCategory = 'ZONA VERDE' | 'ZONA DURA' | 'ZONA DE PLAYA';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Entidades de base de datos
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ActivityStandard {
+  id: string;
+  board_id: string;
+  group_id: string | null;   // null = estándar del contrato; UUID = excepción del sitio
+  activity_key: string;
+  name: string;
+  category: ActivityCategory;
+  unit: string;
+  rendimiento: number;
+  frecuencia: number;
+  priority: ActivityPriority;
+  version: number;
+  effective_from: string;    // ISO date string (DATE en PG)
+  effective_to: string | null;
+  source: string;
+  created_at: string;
+}
+
+export interface ScopeMapping {
+  activity_key: string;
+  scope_key: string;
+  weight: number;
+}
+
+export interface PerformanceObservation {
+  id: string;
+  activity_key: string;
+  work_order_id: string | null;
+  board_id: string;
+  group_id: string;
+  observed_rendimiento: number;
+  qty_executed: number | null;
+  jornales_used: number | null;
+  observation_date: string;
+  source: string;
+  notes: string | null;
+  created_at: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Contrato de la IA — entrada y salida para Gemini
+// Ref: WeeklyPlanningContext en el documento funcional
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface PlanningActivity {
+  activity_key: string;
+  name: string;
+  category: ActivityCategory;
+  priority: ActivityPriority;
+  qty: number;
+  unit: string;
+  rendimiento: number;
+  frecuencia: number;
+  theoretical_journals_month: number;
+  theoretical_journals_week: number;
+  rules: Array<{ rule_type: string; rule_value: Record<string, unknown> }>;
+}
+
+export interface WeeklyPlanningContext {
+  week: {
+    start: string;         // ISO date
+    end: string;
+    number: number;        // 1–4 dentro del mes
+    working_days: number;
+  };
+  zone: {
+    id: string;
+    name: string;
+    daily_capacity: number;
+    available_capacity: number;
+  };
+  activities: PlanningActivity[];
+  capacity: {
+    weekly_available: number;
+    weekly_required: number;
+    feasible: boolean;
+    deficit: number;
+  };
+  constraints: {
+    incompatible_pairs: Array<[string, string]>;
+    dependencies: Array<{ before: string; after: string }>;
+    weather_sensitive: string[];
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Errores de dominio
+// ─────────────────────────────────────────────────────────────────────────────
+
+export class ActivityStandardNotFound extends Error {
+  readonly boardId: string;
+  readonly groupId: string | null;
+  readonly activityKey: string;
+
+  constructor(boardId: string, groupId: string | null, activityKey: string) {
+    const scope = groupId ? `sitio ${groupId}` : 'contrato';
+    super(
+      `Sin estándar activo para "${activityKey}" en board "${boardId}" (${scope}). ` +
+      `Verifica que board_activity_standards tenga una fila con effective_to IS NULL.`
+    );
+    this.name = 'ActivityStandardNotFound';
+    this.boardId = boardId;
+    this.groupId = groupId;
+    this.activityKey = activityKey;
+  }
+}
