@@ -4,6 +4,9 @@ import { useState, useEffect, useMemo, Fragment } from 'react';
 import { Group, ActivityTemplate, EfficiencyRow, ResourceAnalysisDBRow } from '@/types/monday';
 import { Database, AlertCircle, Table, MapPin, DollarSign } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
+import { useContractStandards, useScopeMappings } from '@/hooks/useActivityStandards';
+import { WORKING_DAYS_MONTH } from '@/lib/schedulerMath';
+import { ActivityStandard, ScopeMapping, SchedulerMigrationMissingError } from '@/types/scheduler';
 
 interface ResourceEfficiencyWidgetProps {
   boardId: string | null;
@@ -35,53 +38,44 @@ const SCOPE_ITEMS = [
     { id: 'corte_troncos', name: 'CORTE DE TRONCOS', unit: 'UND' },
 ];
 
-const STANDARD_MAPPINGS: Record<string, Array<{ name: string, unit: string, rend: number, freq: number, category: string }>> = {
-    'total_paisajismo': [
-        { name: 'Limpieza General', unit: 'm2/dia', rend: 7500, freq: 2.083, category: 'ZONA VERDE' },
-    ],
-    'grama': [
-        { name: 'Op Guadaña', unit: 'm2/dia', rend: 5000, freq: 25, category: 'ZONA VERDE' },
-        { name: 'Riego general Grama', unit: 'm2/dia', rend: 3500, freq: 2.083, category: 'ZONA VERDE' },
-        { name: 'TC Insecticida y Fungicida', unit: 'm2/dia', rend: 3500, freq: 150, category: 'ZONA VERDE' },
-        { name: 'TC Herbicida Grama', unit: 'm2/dia', rend: 2400, freq: 50, category: 'ZONA VERDE' },
-        { name: 'Fertil Grama', unit: 'm2/dia', rend: 3500, freq: 150, category: 'ZONA VERDE' },
-    ],
-    'arbustos': [
-        { name: 'Plateo', unit: 'und/dia', rend: 160, freq: 12.5, category: 'ZONA VERDE' },
-        { name: 'Poda Arbustos y CS', unit: 'm2/dia', rend: 1495, freq: 12.5, category: 'ZONA VERDE' },
-        { name: 'Mto Cama Siembra', unit: 'm2/dia', rend: 450, freq: 6.25, category: 'ZONA VERDE' },
-        { name: 'Riego general Arbusto', unit: 'm2/dia', rend: 3500, freq: 2.083, category: 'ZONA VERDE' },
-        { name: 'TC Insect y Fung Arbus', unit: 'm2/dia', rend: 2400, freq: 50, category: 'ZONA VERDE' },
-        { name: 'Fertil Arbust y Cubresul', unit: 'm2/dia', rend: 3500, freq: 150, category: 'ZONA VERDE' },
-    ],
-    'arboles': [
-        { name: 'Poda Arboles y Palmas', unit: 'und/dia', rend: 450, freq: 75, category: 'ZONA VERDE' },
-        { name: 'Riego general Arboles', unit: 'und/dia', rend: 480, freq: 3.125, category: 'ZONA VERDE' },
-        { name: 'TC Insecticida y Fung Arb', unit: 'und/dia', rend: 360, freq: 50, category: 'ZONA VERDE' },
-        { name: 'Fertil Arb y Palmas Comp', unit: 'und/dia', rend: 240, freq: 150, category: 'ZONA VERDE' },
-        { name: 'Fertil Arb y Palmas Quim', unit: 'und/dia', rend: 490, freq: 150, category: 'ZONA VERDE' },
-    ],
-    'zona_dura': [
-        { name: 'Limpieza General Zonas Duras', unit: 'm2/dia', rend: 10000, freq: 1, category: 'ZONA DURA' },
-    ],
-    'limpieza_marmol': [
-        { name: 'Limpieza general mármol', unit: 'm2/dia', rend: 600, freq: 1, category: 'ZONA DURA' },
-    ],
-    'zona_playa': [
-        { name: 'Acopio y limpieza manual', unit: 'm2/dia', rend: 3000, freq: 25, category: 'ZONA DE PLAYA' }
-    ],
-    'trasiego_playa': [
-        { name: 'Arrume con tractor (trasiego)', unit: 'm2/dia', rend: 5000, freq: 4, category: 'ZONA DE PLAYA' }
-    ],
-    'limpieza_manual': [
-        { name: 'Limpieza Manual (Extra)', unit: 'm2/dia', rend: 3000, freq: 25, category: 'ZONA DE PLAYA' }
-    ],
-    'corte_troncos': [
-        { name: 'Corte de troncos', unit: 'und/dia', rend: 15, freq: 4, category: 'ZONA DE PLAYA' }
-    ]
-};
+// ─────────────────────────────────────────────────────────────────────────────
+// buildActivityMappings
+//
+// Convierte filas de board_activity_standards + activity_scope_mappings al
+// mismo shape que tenía STANDARD_MAPPINGS. El algoritmo de cálculo no se
+// modifica — solo cambia la fuente de datos.
+//
+// rowId usa rule.name (no activity_key) para mantener compatibilidad con
+// las claves existentes en resource_analysis.workers_data.
+// ─────────────────────────────────────────────────────────────────────────────
 
-const WORKING_DAYS_MONTH = 25;
+type ActivityRule = { name: string; unit: string; rend: number; freq: number; category: string };
+
+function buildActivityMappings(
+  standards: ActivityStandard[],
+  scopeMappings: ScopeMapping[],
+): Record<string, ActivityRule[]> {
+  const scopeByKey = new Map<string, string[]>();
+  for (const m of scopeMappings) {
+    const keys = scopeByKey.get(m.activity_key) ?? [];
+    keys.push(m.scope_key);
+    scopeByKey.set(m.activity_key, keys);
+  }
+
+  const result: Record<string, ActivityRule[]> = {};
+  for (const s of standards) {
+    for (const scopeKey of scopeByKey.get(s.activity_key) ?? []) {
+      (result[scopeKey] ??= []).push({
+        name: s.name,
+        unit: s.unit,
+        rend: s.rendimiento,
+        freq: s.frecuencia,
+        category: s.category,
+      });
+    }
+  }
+  return result;
+}
 
 export default function ResourceEfficiencyWidget({ boardId, groups, activityTemplates }: ResourceEfficiencyWidgetProps) {
   const [activeSiteId, setActiveSiteId] = useState<string>('');
@@ -99,6 +93,26 @@ export default function ResourceEfficiencyWidget({ boardId, groups, activityTemp
 
   // State: Map<SiteId, Wage>
   const [wageInputs, setWageInputs] = useState<Record<string, number>>({});
+
+  // Standards — source of truth from Supabase (replaces STANDARD_MAPPINGS)
+  const {
+    data: contractStandards,
+    isLoading: standardsLoading,
+    isError: standardsIsError,
+    error: standardsErr,
+  } = useContractStandards(boardId ?? undefined);
+
+  const {
+    data: scopeMappings,
+    isLoading: mappingsLoading,
+    isError: mappingsIsError,
+  } = useScopeMappings();
+
+  // Adapter: DB rows → same Record<scope_key, ActivityRule[]> shape the algorithm expects
+  const activityMappings = useMemo(
+    () => buildActivityMappings(contractStandards ?? [], scopeMappings ?? []),
+    [contractStandards, scopeMappings],
+  );
 
   // Initialize active site
   useEffect(() => {
@@ -273,10 +287,10 @@ export default function ResourceEfficiencyWidget({ boardId, groups, activityTemp
       let totalCost = 0;
 
       // 1. Iterate over defined Scope Rules
-      Object.keys(STANDARD_MAPPINGS).forEach(scopeKey => {
+      Object.keys(activityMappings).forEach(scopeKey => {
           const qty = currentInputs[scopeKey] || 0;
           if (qty > 0) {
-              const rules = STANDARD_MAPPINGS[scopeKey];
+              const rules = activityMappings[scopeKey];
               rules.forEach(rule => {
                   const factor = rule.freq / WORKING_DAYS_MONTH;
                   const denominator = rule.rend * factor;
@@ -327,10 +341,19 @@ export default function ResourceEfficiencyWidget({ boardId, groups, activityTemp
       }).filter(g => g.rows.length > 0);
 
       return { groups, totalJornales, totalCost };
-  }, [activeSiteId, scopeInputs, assignedWorkers, wageInputs]);
+  }, [activeSiteId, scopeInputs, assignedWorkers, wageInputs, activityMappings]);
 
 
   if (!mounted) return null;
+
+  // Tres estados de los estándares — distintos del error de resource_analysis
+  const isMigrationMissing =
+    (standardsIsError && standardsErr instanceof SchedulerMigrationMissingError) ||
+    (mappingsIsError);
+  const isStandardsQueryError = (standardsIsError || mappingsIsError) && !isMigrationMissing;
+  const hasNoStandards =
+    !standardsLoading && !mappingsLoading && !standardsIsError && !mappingsIsError &&
+    (contractStandards?.length ?? 0) === 0;
 
   return (
     <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 flex flex-col gap-8 font-sans">
@@ -349,6 +372,18 @@ export default function ResourceEfficiencyWidget({ boardId, groups, activityTemp
                     <div className="mt-4 flex items-center gap-2 bg-amber-50 text-amber-700 px-4 py-2 rounded-xl border border-amber-100 text-[11px] font-bold uppercase tracking-wider shadow-sm animate-pulse">
                         <Database size={14} />
                         <span>Respaldo Activado: {dbError === 'relation "resource_analysis" does not exist' ? 'Tabla no encontrada en Supabase' : 'Offline'}</span>
+                    </div>
+                )}
+                {isMigrationMissing && (
+                    <div className="mt-4 flex items-center gap-2 bg-rose-50 text-rose-700 px-4 py-2 rounded-xl border border-rose-200 text-[11px] font-bold uppercase tracking-wider shadow-sm">
+                        <AlertCircle size={14} />
+                        <span>Migración pendiente — Aplica 20260708_scheduler_engine.sql en Supabase Dashboard</span>
+                    </div>
+                )}
+                {isStandardsQueryError && !isMigrationMissing && (
+                    <div className="mt-4 flex items-center gap-2 bg-rose-50 text-rose-700 px-4 py-2 rounded-xl border border-rose-200 text-[11px] font-bold uppercase tracking-wider shadow-sm">
+                        <AlertCircle size={14} />
+                        <span>Error al cargar estándares de actividad</span>
                     </div>
                 )}
             </div>
@@ -449,7 +484,13 @@ export default function ResourceEfficiencyWidget({ boardId, groups, activityTemp
                                     <td colSpan={11} className="p-8 text-center">
                                         <div className="flex flex-col items-center justify-center text-gray-400">
                                             <AlertCircle className="mb-2 opacity-50" />
-                                            <p>Ingresa cantidades en el cuadro de la izquierda para ver el cálculo.</p>
+                                            {hasNoStandards ? (
+                                                <p>Este contrato aún no tiene estándares configurados.<br />
+                                                <span className="text-[10px] font-mono mt-1 block">Inserta actividades en <code>board_activity_standards</code> para este board.</span>
+                                                </p>
+                                            ) : (
+                                                <p>Ingresa cantidades en el cuadro de la izquierda para ver el cálculo.</p>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>

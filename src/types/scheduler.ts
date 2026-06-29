@@ -97,6 +97,20 @@ export interface WeeklyPlanningContext {
 // Errores de dominio
 // ─────────────────────────────────────────────────────────────────────────────
 
+export class SchedulerMigrationMissingError extends Error {
+  readonly tableName: string;
+
+  constructor(tableName: string) {
+    super(
+      `Tabla "${tableName}" no encontrada. ` +
+      `Aplica la migración 20260708_scheduler_engine.sql en el Dashboard de Supabase ` +
+      `antes de usar el módulo de planificación.`
+    );
+    this.name = 'SchedulerMigrationMissingError';
+    this.tableName = tableName;
+  }
+}
+
 export class ActivityStandardNotFound extends Error {
   readonly boardId: string;
   readonly groupId: string | null;

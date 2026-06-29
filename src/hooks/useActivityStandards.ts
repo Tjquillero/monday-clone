@@ -4,8 +4,10 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import {
   ActivityStandard,
+  ScopeMapping,
   PerformanceObservation,
   ActivityStandardNotFound,
+  SchedulerMigrationMissingError,
 } from '@/types/scheduler';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -113,11 +115,35 @@ export function useContractStandards(boardId: string | undefined) {
         .is('effective_to', null)
         .order('activity_key');
 
+      if (error?.code === '42P01') throw new SchedulerMigrationMissingError('board_activity_standards');
       if (error) throw error;
       return (data ?? []) as ActivityStandard[];
     },
     enabled: !!boardId,
     staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useScopeMappings
+// Catálogo global activity_key → scope_key. No depende del board.
+// Raramente cambia: staleTime 10 min.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function useScopeMappings() {
+  return useQuery({
+    queryKey: ['activity_scope_mappings'],
+    queryFn: async (): Promise<ScopeMapping[]> => {
+      const { data, error } = await supabase
+        .from('activity_scope_mappings')
+        .select('activity_key, scope_key, weight');
+
+      if (error?.code === '42P01') throw new SchedulerMigrationMissingError('activity_scope_mappings');
+      if (error) throw error;
+      return (data ?? []) as ScopeMapping[];
+    },
+    staleTime: 10 * 60_000,
     refetchOnWindowFocus: false,
   });
 }
