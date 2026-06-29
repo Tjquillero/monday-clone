@@ -6,7 +6,8 @@ import { Database, AlertCircle, Table, MapPin, DollarSign } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useContractStandards, useScopeMappings } from '@/hooks/useActivityStandards';
 import { WORKING_DAYS_MONTH } from '@/lib/schedulerMath';
-import { ActivityStandard, ScopeMapping, SchedulerMigrationMissingError } from '@/types/scheduler';
+import { SchedulerMigrationMissingError } from '@/types/scheduler';
+import { buildActivityMappings, ActivityRule } from '@/lib/schedulerAdapter';
 
 interface ResourceEfficiencyWidgetProps {
   boardId: string | null;
@@ -38,44 +39,6 @@ const SCOPE_ITEMS = [
     { id: 'corte_troncos', name: 'CORTE DE TRONCOS', unit: 'UND' },
 ];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// buildActivityMappings
-//
-// Convierte filas de board_activity_standards + activity_scope_mappings al
-// mismo shape que tenía STANDARD_MAPPINGS. El algoritmo de cálculo no se
-// modifica — solo cambia la fuente de datos.
-//
-// rowId usa rule.name (no activity_key) para mantener compatibilidad con
-// las claves existentes en resource_analysis.workers_data.
-// ─────────────────────────────────────────────────────────────────────────────
-
-type ActivityRule = { name: string; unit: string; rend: number; freq: number; category: string };
-
-function buildActivityMappings(
-  standards: ActivityStandard[],
-  scopeMappings: ScopeMapping[],
-): Record<string, ActivityRule[]> {
-  const scopeByKey = new Map<string, string[]>();
-  for (const m of scopeMappings) {
-    const keys = scopeByKey.get(m.activity_key) ?? [];
-    keys.push(m.scope_key);
-    scopeByKey.set(m.activity_key, keys);
-  }
-
-  const result: Record<string, ActivityRule[]> = {};
-  for (const s of standards) {
-    for (const scopeKey of scopeByKey.get(s.activity_key) ?? []) {
-      (result[scopeKey] ??= []).push({
-        name: s.name,
-        unit: s.unit,
-        rend: s.rendimiento,
-        freq: s.frecuencia,
-        category: s.category,
-      });
-    }
-  }
-  return result;
-}
 
 export default function ResourceEfficiencyWidget({ boardId, groups, activityTemplates }: ResourceEfficiencyWidgetProps) {
   const [activeSiteId, setActiveSiteId] = useState<string>('');
