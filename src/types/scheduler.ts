@@ -94,6 +94,83 @@ export interface WeeklyPlanningContext {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Phase 5 — Plans + Execution Events
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type PlanStatus =
+  | 'draft'
+  | 'published'
+  | 'in_progress'
+  | 'confirmed'
+  | 'closed'
+  | 'cancelled';
+
+export type ExecutionStatus = 'draft' | 'reported' | 'verified' | 'rejected';
+
+export type BoardRole = 'admin' | 'assistant' | 'supervisor' | 'leader' | 'viewer' | 'member';
+
+export interface WeeklyPlan {
+  id: string;
+  board_id: string;
+  group_id: string;
+  week_start: string;      // ISO date
+  period_number: number;   // 1–4 (calculateContractWeek)
+  status: PlanStatus;
+
+  published_by: string | null;
+  published_at: string | null;
+  confirmed_by: string | null;
+  confirmed_at: string | null;
+  closed_by: string | null;
+  closed_at: string | null;
+
+  created_by: string;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WeeklyPlanItem {
+  id: string;
+  plan_id: string;
+  planned_sequence: number;
+  activity_key: string;
+  activity_standard_id: string;
+  planned_rendimiento: number;    // snapshot del estándar al planificar
+  planned_frecuencia: number;
+  priority: ActivityPriority;
+  planned_qty: number;
+  unit: string;
+  planned_jr: number;
+  executed_qty: number;           // mantenido por trigger (reported + verified)
+  executed_jr: number;            // mantenido por trigger (reported + verified)
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WeeklyPlanItemExecution {
+  id: string;
+  plan_item_id: string;
+  execution_date: string;       // ISO date
+  crew_name: string | null;
+  crew_leader_id: string | null;
+  worker_count: number;
+  started_at: string;           // ISO timestamptz
+  finished_at: string;
+  executed_qty: number;
+  executed_jr: number;          // GENERATED: worker_count × duration_s / 28800
+  status: ExecutionStatus;
+  rejection_notes: string | null;
+  verified_by: string | null;
+  verified_at: string | null;
+  notes: string | null;
+  created_by: string;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Errores de dominio
 // ─────────────────────────────────────────────────────────────────────────────
 
