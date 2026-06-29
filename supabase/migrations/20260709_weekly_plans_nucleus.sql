@@ -2,17 +2,26 @@
 -- Phase 5 Nucleus: Weekly Plans + Execution Events
 --
 -- Tablas:
+--   board_roles                     — catálogo de roles (reemplaza CHECK constraint)
 --   weekly_plans                    — plan semanal por sitio
 --   weekly_plan_items               — línea por actividad (snapshot autosuficiente)
 --   weekly_plan_item_executions     — eventos de ejecución (fuente de verdad)
 --
--- Roles board_members (reemplaza admin|member|viewer del schema original):
+-- Roles (board_members.role → FK a board_roles):
 --   admin | assistant | supervisor | leader | viewer
 --
--- Funciones de transición de estado (SECURITY DEFINER):
---   publish_weekly_plan(uuid)       — draft → published
---   confirm_weekly_plan(uuid)       — in_progress → confirmed
---   close_weekly_plan(uuid)         — confirmed → closed + genera observaciones
+-- Funciones de autorización (usadas en RLS):
+--   can_manage_weekly_plan(board_id, user_id)  → admin, assistant
+--   can_report_execution(board_id, user_id)    → admin, assistant, leader
+--   can_verify_execution(board_id, user_id)    → admin, supervisor
+--
+-- Funciones de transición de estado (SECURITY DEFINER, validan rol + estado):
+--   publish_weekly_plan(uuid)           → admin, assistant  | draft → published
+--   report_execution(uuid)             → leader, assistant  | draft → reported
+--   verify_execution(uuid)             → supervisor, admin  | reported → verified
+--   reject_execution(uuid, text)       → supervisor, admin  | reported → rejected
+--   confirm_weekly_plan(uuid)          → assistant, admin   | in_progress → confirmed
+--   close_weekly_plan(uuid)            → admin              | confirmed → closed
 -- =============================================================================
 
 -- =============================================================================
@@ -28,35 +37,79 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- =============================================================================
--- 1. Reemplazar board_members.role CHECK
---    Schema original: ('admin', 'member', 'viewer')
---    Sin datos de producción — se reemplaza limpiamente.
+-- 1. Catálogo de roles (reemplaza CHECK inline en board_members)
+--
+--    Agregar un rol en el futuro = INSERT en esta tabla.
+--    No hay que tocar la definición de board_members.
 -- =============================================================================
 
+CREATE TABLE IF NOT EXISTS public.board_roles (
+  role         TEXT PRIMARY KEY,
+  description  TEXT NOT NULL,
+  display_order INT NOT NULL
+);
+
+INSERT INTO public.board_roles (role, description, display_order) VALUES
+  ('admin',      'Administrador: configuración, publicación y cierre de planes', 1),
+  ('assistant',  'Asistente operativo: crea y confirma cronogramas semanales',   2),
+  ('supervisor', 'Supervisor técnico: verifica calidad de ejecución en campo',   3),
+  ('leader',     'Líder de sitio: reporta actividades ejecutadas',               4),
+  ('viewer',     'Observador: solo lectura',                                     5)
+ON CONFLICT (role) DO NOTHING;
+
+-- Reemplazar CHECK inline por FK al catálogo
 DO $$ BEGIN
+  ALTER TABLE public.board_members DROP CONSTRAINT IF EXISTS board_members_role_check;
+  -- Convertir cualquier dato residual del rol deprecado 'member' antes de añadir la FK
+  UPDATE public.board_members SET role = 'viewer' WHERE role = 'member';
   ALTER TABLE public.board_members
-    DROP CONSTRAINT IF EXISTS board_members_role_check;
-  ALTER TABLE public.board_members
-    ADD CONSTRAINT board_members_role_check
-    CHECK (role IN ('admin', 'assistant', 'supervisor', 'leader', 'viewer'));
+    ADD CONSTRAINT board_members_role_fk
+    FOREIGN KEY (role) REFERENCES public.board_roles(role) ON UPDATE CASCADE;
 END $$;
 
--- Actualizar política de board_activity_standards: reemplaza 'member' por los nuevos
--- roles con permiso de escritura (admin y assistant).
-DROP POLICY IF EXISTS "Miembros pueden insertar estándares" ON public.board_activity_standards;
+-- Actualizar la política existente de board_activity_standards (sí usa IN literal, por ser
+-- una política de la migración anterior y no queremos acoplarla al catálogo en esta versión).
+DROP POLICY IF EXISTS "Miembros pueden insertar estándares"   ON public.board_activity_standards;
+DROP POLICY IF EXISTS "Asistentes y admins insertan estándares" ON public.board_activity_standards;
 CREATE POLICY "Asistentes y admins insertan estándares"
   ON public.board_activity_standards FOR INSERT
   WITH CHECK (get_user_board_role(board_id, auth.uid()) IN ('admin', 'assistant'));
 
 -- =============================================================================
--- 2. weekly_plans
+-- 2. Funciones de autorización reutilizables
+--
+--    STABLE → el planner puede cachear el resultado dentro de la misma query.
+--    Se usan en USING / WITH CHECK de las políticas RLS para evitar duplicar
+--    listas de roles en veinte lugares distintos.
+-- =============================================================================
+
+-- Quién puede crear planes o editar items en estado draft
+CREATE OR REPLACE FUNCTION public.can_manage_weekly_plan(p_board_id UUID, p_user_id UUID)
+RETURNS BOOLEAN LANGUAGE sql STABLE AS $$
+  SELECT get_user_board_role(p_board_id, p_user_id) IN ('admin', 'assistant')
+$$;
+
+-- Quién puede registrar ejecuciones en campo
+CREATE OR REPLACE FUNCTION public.can_report_execution(p_board_id UUID, p_user_id UUID)
+RETURNS BOOLEAN LANGUAGE sql STABLE AS $$
+  SELECT get_user_board_role(p_board_id, p_user_id) IN ('admin', 'assistant', 'leader')
+$$;
+
+-- Quién puede verificar o rechazar ejecuciones
+CREATE OR REPLACE FUNCTION public.can_verify_execution(p_board_id UUID, p_user_id UUID)
+RETURNS BOOLEAN LANGUAGE sql STABLE AS $$
+  SELECT get_user_board_role(p_board_id, p_user_id) IN ('admin', 'supervisor')
+$$;
+
+-- =============================================================================
+-- 3. weekly_plans
 --
 -- Estado:
 --   draft        → asistente edita el cronograma
 --   published    → entregado a líderes (bloquea edición de items)
---   in_progress  → primera ejecución registrada (automático por trigger)
+--   in_progress  → primera ejecución registrada (trigger automático)
 --   confirmed    → asistente validó documentación completa
---   closed       → período terminado, observaciones generadas
+--   closed       → período terminado, observaciones generadas en activity_performance_observations
 --   cancelled    → plan abortado
 -- =============================================================================
 
@@ -69,7 +122,7 @@ CREATE TABLE IF NOT EXISTS public.weekly_plans (
   status         TEXT    NOT NULL DEFAULT 'draft'
                  CHECK (status IN ('draft','published','in_progress','confirmed','closed','cancelled')),
 
-  -- Auditoría de transiciones
+  -- Timestamps de transición (trazabilidad de ciclo para KPI)
   published_by   UUID    REFERENCES auth.users(id),
   published_at   TIMESTAMPTZ,
   confirmed_by   UUID    REFERENCES auth.users(id),
@@ -77,14 +130,12 @@ CREATE TABLE IF NOT EXISTS public.weekly_plans (
   closed_by      UUID    REFERENCES auth.users(id),
   closed_at      TIMESTAMPTZ,
 
-  -- Auditoría estándar
   created_by     UUID    NOT NULL REFERENCES auth.users(id),
   updated_by     UUID    REFERENCES auth.users(id),
   created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
   UNIQUE (board_id, group_id, week_start)
-  -- UNIQUE crea implícitamente el índice de lookup más frecuente
 );
 
 CREATE TRIGGER trig_weekly_plans_updated_at
@@ -95,14 +146,14 @@ CREATE INDEX IF NOT EXISTS idx_weekly_plans_board_status
   ON public.weekly_plans (board_id, status);
 
 -- =============================================================================
--- 3. weekly_plan_items
+-- 4. weekly_plan_items
 --
 -- Snapshot autosuficiente: planned_rendimiento y planned_frecuencia no requieren
 -- JOIN a board_activity_standards para reconstruir cálculos históricos.
 -- activity_standard_id ON DELETE RESTRICT evita borrar estándares referenciados.
 --
 -- executed_qty y executed_jr son mantenidos por trigger fn_sync_plan_item_totals.
--- Solo cuentan ejecuciones con status IN ('reported', 'verified').
+-- Cuentan ejecuciones con status IN ('reported', 'verified').
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS public.weekly_plan_items (
@@ -119,8 +170,8 @@ CREATE TABLE IF NOT EXISTS public.weekly_plan_items (
   planned_qty          NUMERIC NOT NULL,
   unit                 TEXT    NOT NULL,
   planned_jr           NUMERIC NOT NULL,
-  executed_qty         NUMERIC NOT NULL DEFAULT 0,  -- mantenido por trigger
-  executed_jr          NUMERIC NOT NULL DEFAULT 0,  -- mantenido por trigger
+  executed_qty         NUMERIC NOT NULL DEFAULT 0,
+  executed_jr          NUMERIC NOT NULL DEFAULT 0,
   created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (plan_id, planned_sequence)
@@ -131,20 +182,19 @@ CREATE TRIGGER trig_weekly_plan_items_updated_at
   FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
 
 -- =============================================================================
--- 4. weekly_plan_item_executions
+-- 5. weekly_plan_item_executions
 --
 -- Fuente de verdad de la ejecución. Una fila por jornada por actividad.
--- executed_jr es GENERATED desde worker_count × duración / 28800 s (8h/jornada).
+-- executed_jr GENERATED desde worker_count × duración / 28800 s (8h estándar).
 --
 -- Estado de validación:
---   draft    → líder registró pero no envió
---   reported → líder envió, pendiente de verificación del supervisor
---   verified → supervisor aprobó calidad
---   rejected → supervisor rechazó (rejection_notes obligatorio)
+--   draft    → líder registró, no enviado
+--   reported → líder envió vía report_execution(), pendiente de supervisor
+--   verified → supervisor aprobó vía verify_execution()
+--   rejected → supervisor rechazó vía reject_execution() (rejection_notes obligatorio)
 --
--- CHECK constraints de integridad de estado:
---   verified requiere verified_by
---   rejected requiere rejection_notes
+-- Las transiciones de estado van SIEMPRE por funciones SECURITY DEFINER.
+-- El UPDATE directo solo permite editar campos de una ejecución draft propia.
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS public.weekly_plan_item_executions (
@@ -160,7 +210,6 @@ CREATE TABLE IF NOT EXISTS public.weekly_plan_item_executions (
   executed_jr      NUMERIC GENERATED ALWAYS AS (
     worker_count * EXTRACT(EPOCH FROM (finished_at - started_at)) / 28800.0
     -- 28800 s = 8 h/jornada estándar
-    -- TODO v2: mover jornada estándar a boards.workday_seconds
   ) STORED,
   status           TEXT    NOT NULL DEFAULT 'draft'
                    CHECK (status IN ('draft','reported','verified','rejected')),
@@ -189,15 +238,13 @@ CREATE INDEX IF NOT EXISTS idx_wpie_execution_date
   ON public.weekly_plan_item_executions (execution_date);
 
 -- =============================================================================
--- 5. Trigger: sincronizar totales ejecutados en weekly_plan_items
+-- 6. Trigger: sincronizar totales ejecutados en weekly_plan_items
 --
 -- Cuenta ejecuciones con status IN ('reported', 'verified'):
---   'reported' → visibilidad de progreso para el líder durante la semana
---   'verified' → contabilizado para el acta
---   'draft'    → no cuenta (no enviado)
---   'rejected' → no cuenta (invalidado por supervisor)
---
--- confirm_weekly_plan() verifica que no queden 'reported' antes de confirmar.
+--   reported → visibilidad de progreso durante la semana
+--   verified → contabilizado para el acta
+--   draft    → no cuenta (no enviado)
+--   rejected → no cuenta (invalidado)
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION public.fn_sync_plan_item_totals()
@@ -231,7 +278,7 @@ CREATE TRIGGER trig_sync_plan_item_totals
   FOR EACH ROW EXECUTE FUNCTION public.fn_sync_plan_item_totals();
 
 -- =============================================================================
--- 6. Trigger: published → in_progress automático al registrar la primera ejecución
+-- 7. Trigger: published → in_progress automático al registrar la primera ejecución
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION public.fn_auto_set_plan_in_progress()
@@ -244,7 +291,7 @@ BEGIN
   FROM   public.weekly_plan_items wpi
   WHERE  wpi.id     = NEW.plan_item_id
     AND  wp.id      = wpi.plan_id
-    AND  wp.status  = 'published';  -- solo si ya fue publicado
+    AND  wp.status  = 'published';
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -255,16 +302,25 @@ CREATE TRIGGER trig_auto_set_plan_in_progress
   FOR EACH ROW EXECUTE FUNCTION public.fn_auto_set_plan_in_progress();
 
 -- =============================================================================
--- 7. Funciones de transición de estado
+-- 8. Funciones de transición de estado
 --
--- Todas usan FOR UPDATE para serializar transiciones concurrentes.
--- SECURITY DEFINER les permite actualizar estados aunque el usuario
--- no tenga permiso directo de UPDATE (bloqueado por RLS).
+--    SECURITY DEFINER → pueden cambiar estado aunque el UPDATE directo esté
+--    bloqueado por RLS. Cada función valida rol Y estado previo.
 -- =============================================================================
 
+-- Helper interno: obtiene el board_id de un plan a partir de plan_item_id
+CREATE OR REPLACE FUNCTION public._get_board_id_for_execution(p_execution_id UUID)
+RETURNS UUID LANGUAGE sql STABLE SECURITY DEFINER AS $$
+  SELECT wp.board_id
+  FROM   public.weekly_plan_item_executions e
+  JOIN   public.weekly_plan_items           i  ON i.id  = e.plan_item_id
+  JOIN   public.weekly_plans                wp ON wp.id = i.plan_id
+  WHERE  e.id = p_execution_id
+$$;
+
 -- ── publish_weekly_plan ───────────────────────────────────────────────────────
--- Quién puede llamarla: asistente, admin
--- Precondición: status = 'draft'
+-- Quién: assistant, admin
+-- Transición: draft → published
 
 CREATE OR REPLACE FUNCTION public.publish_weekly_plan(p_plan_id UUID)
 RETURNS VOID AS $$
@@ -273,6 +329,9 @@ BEGIN
   SELECT * INTO v_plan FROM public.weekly_plans WHERE id = p_plan_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Plan % no encontrado', p_plan_id;
+  END IF;
+  IF NOT public.can_manage_weekly_plan(v_plan.board_id, auth.uid()) THEN
+    RAISE EXCEPTION 'Solo administradores y asistentes pueden publicar planes.';
   END IF;
   IF v_plan.status != 'draft' THEN
     RAISE EXCEPTION 'Solo se puede publicar un plan en estado draft. Estado actual: %', v_plan.status;
@@ -287,20 +346,125 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- ── report_execution ──────────────────────────────────────────────────────────
+-- Quién: leader, assistant, admin (el creador de la ejecución)
+-- Transición: draft → reported
+-- El supervisor recibe notificación implícita al ver status = 'reported'.
+
+CREATE OR REPLACE FUNCTION public.report_execution(p_execution_id UUID)
+RETURNS VOID AS $$
+DECLARE
+  v_exec    public.weekly_plan_item_executions%ROWTYPE;
+  v_board   UUID;
+BEGIN
+  SELECT * INTO v_exec FROM public.weekly_plan_item_executions WHERE id = p_execution_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Ejecución % no encontrada', p_execution_id;
+  END IF;
+
+  v_board := public._get_board_id_for_execution(p_execution_id);
+  IF NOT public.can_report_execution(v_board, auth.uid()) THEN
+    RAISE EXCEPTION 'Sin permiso para reportar ejecuciones en este board.';
+  END IF;
+  IF v_exec.created_by != auth.uid()
+     AND get_user_board_role(v_board, auth.uid()) NOT IN ('admin', 'assistant') THEN
+    RAISE EXCEPTION 'Solo el creador de la ejecución puede reportarla (o admin/asistente).';
+  END IF;
+  IF v_exec.status != 'draft' THEN
+    RAISE EXCEPTION 'Solo se puede reportar una ejecución en estado draft. Estado actual: %', v_exec.status;
+  END IF;
+
+  UPDATE public.weekly_plan_item_executions
+  SET    status     = 'reported',
+         updated_by = auth.uid()
+  WHERE  id = p_execution_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ── verify_execution ──────────────────────────────────────────────────────────
+-- Quién: supervisor, admin
+-- Transición: reported → verified
+
+CREATE OR REPLACE FUNCTION public.verify_execution(p_execution_id UUID)
+RETURNS VOID AS $$
+DECLARE
+  v_exec  public.weekly_plan_item_executions%ROWTYPE;
+  v_board UUID;
+BEGIN
+  SELECT * INTO v_exec FROM public.weekly_plan_item_executions WHERE id = p_execution_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Ejecución % no encontrada', p_execution_id;
+  END IF;
+
+  v_board := public._get_board_id_for_execution(p_execution_id);
+  IF NOT public.can_verify_execution(v_board, auth.uid()) THEN
+    RAISE EXCEPTION 'Solo supervisores y administradores pueden verificar ejecuciones.';
+  END IF;
+  IF v_exec.status != 'reported' THEN
+    RAISE EXCEPTION 'Solo se puede verificar una ejecución reportada. Estado actual: %', v_exec.status;
+  END IF;
+
+  UPDATE public.weekly_plan_item_executions
+  SET    status      = 'verified',
+         verified_by = auth.uid(),
+         verified_at = NOW(),
+         updated_by  = auth.uid()
+  WHERE  id = p_execution_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ── reject_execution ──────────────────────────────────────────────────────────
+-- Quién: supervisor, admin
+-- Transición: reported → rejected (devuelve al líder para corrección)
+
+CREATE OR REPLACE FUNCTION public.reject_execution(p_execution_id UUID, p_notes TEXT)
+RETURNS VOID AS $$
+DECLARE
+  v_exec  public.weekly_plan_item_executions%ROWTYPE;
+  v_board UUID;
+BEGIN
+  IF p_notes IS NULL OR trim(p_notes) = '' THEN
+    RAISE EXCEPTION 'rejection_notes es obligatorio al rechazar una ejecución.';
+  END IF;
+
+  SELECT * INTO v_exec FROM public.weekly_plan_item_executions WHERE id = p_execution_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Ejecución % no encontrada', p_execution_id;
+  END IF;
+
+  v_board := public._get_board_id_for_execution(p_execution_id);
+  IF NOT public.can_verify_execution(v_board, auth.uid()) THEN
+    RAISE EXCEPTION 'Solo supervisores y administradores pueden rechazar ejecuciones.';
+  END IF;
+  IF v_exec.status != 'reported' THEN
+    RAISE EXCEPTION 'Solo se puede rechazar una ejecución reportada. Estado actual: %', v_exec.status;
+  END IF;
+
+  UPDATE public.weekly_plan_item_executions
+  SET    status          = 'rejected',
+         rejection_notes = p_notes,
+         updated_by      = auth.uid()
+  WHERE  id = p_execution_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- ── confirm_weekly_plan ───────────────────────────────────────────────────────
--- Quién puede llamarla: asistente, admin
--- Precondición: status IN ('in_progress', 'published')
--- Valida: no quedan ejecuciones en estado 'reported' (pendientes del supervisor)
+-- Quién: assistant, admin
+-- Transición: in_progress | published → confirmed
+-- Gate: no puede quedar ninguna ejecución en estado 'reported' (pendiente del supervisor)
 
 CREATE OR REPLACE FUNCTION public.confirm_weekly_plan(p_plan_id UUID)
 RETURNS VOID AS $$
 DECLARE
-  v_plan      public.weekly_plans%ROWTYPE;
-  v_pending   INT;
+  v_plan    public.weekly_plans%ROWTYPE;
+  v_pending INT;
 BEGIN
   SELECT * INTO v_plan FROM public.weekly_plans WHERE id = p_plan_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Plan % no encontrado', p_plan_id;
+  END IF;
+  IF NOT public.can_manage_weekly_plan(v_plan.board_id, auth.uid()) THEN
+    RAISE EXCEPTION 'Solo administradores y asistentes pueden confirmar planes.';
   END IF;
   IF v_plan.status NOT IN ('in_progress', 'published') THEN
     RAISE EXCEPTION
@@ -308,17 +472,16 @@ BEGIN
       v_plan.status;
   END IF;
 
-  -- Gate: todas las ejecuciones enviadas deben estar verificadas por el supervisor
   SELECT COUNT(*) INTO v_pending
   FROM   public.weekly_plan_item_executions e
-  JOIN   public.weekly_plan_items i ON i.id = e.plan_item_id
+  JOIN   public.weekly_plan_items           i ON i.id = e.plan_item_id
   WHERE  i.plan_id = p_plan_id
     AND  e.status  = 'reported';
 
   IF v_pending > 0 THEN
     RAISE EXCEPTION
-      '% ejecución(es) pendiente(s) de verificación por el supervisor. '
-      'El supervisor debe aprobar o rechazar antes de confirmar el informe.',
+      '% ejecución(es) pendiente(s) de verificación. '
+      'El supervisor debe verificar o rechazar antes de confirmar el informe.',
       v_pending;
   END IF;
 
@@ -332,9 +495,9 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ── close_weekly_plan ─────────────────────────────────────────────────────────
--- Quién puede llamarla: admin
--- Precondición: status = 'confirmed'
--- Efecto: genera activity_performance_observations y cierra el plan.
+-- Quién: admin únicamente
+-- Transición: confirmed → closed
+-- Efecto: genera activity_performance_observations (cierra el ciclo de retroalimentación).
 
 CREATE OR REPLACE FUNCTION public.close_weekly_plan(p_plan_id UUID)
 RETURNS VOID AS $$
@@ -344,15 +507,16 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Plan % no encontrado', p_plan_id;
   END IF;
+  IF get_user_board_role(v_plan.board_id, auth.uid()) != 'admin' THEN
+    RAISE EXCEPTION 'Solo administradores pueden cerrar planes.';
+  END IF;
   IF v_plan.status != 'confirmed' THEN
-    RAISE EXCEPTION
-      'Solo se puede cerrar un plan confirmado. Estado actual: %', v_plan.status;
+    RAISE EXCEPTION 'Solo se puede cerrar un plan confirmado. Estado actual: %', v_plan.status;
   END IF;
 
-  -- Insertar observaciones de rendimiento real para el siguiente ciclo de planificación.
-  -- Solo items con ejecución verificada (executed_jr > 0).
-  -- Mapeo de columnas a activity_performance_observations:
-  --   observed_rendimiento = executed_qty / executed_jr  (m²/JR, und/JR, etc.)
+  -- Generar observaciones de rendimiento real.
+  -- Mapeo a columnas de activity_performance_observations (schema 20260708):
+  --   observed_rendimiento = executed_qty / executed_jr
   --   qty_executed         = executed_qty
   --   jornales_used        = executed_jr
   INSERT INTO public.activity_performance_observations
@@ -363,7 +527,7 @@ BEGIN
     v_plan.board_id,
     v_plan.group_id,
     i.activity_key,
-    i.executed_qty / i.executed_jr,   -- rendimiento observado
+    i.executed_qty / i.executed_jr,
     i.executed_qty,
     i.executed_jr,
     v_plan.week_start,
@@ -382,20 +546,18 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- =============================================================================
--- 8. work_orders: enlace nullable al plan
+-- 9. work_orders: enlace nullable al plan
 -- =============================================================================
 
 ALTER TABLE public.work_orders
   ADD COLUMN IF NOT EXISTS weekly_plan_item_id UUID
   REFERENCES public.weekly_plan_items(id) ON DELETE SET NULL;
--- NULL → OT reactiva/correctiva/emergencia
--- NOT NULL → OT planificada, trazable al cronograma semanal
 
 COMMENT ON COLUMN public.work_orders.weekly_plan_item_id IS
   'NULL = OT reactiva. NOT NULL = OT planificada (KPI: % trabajo planificado vs reactivo).';
 
 -- =============================================================================
--- 9. RLS
+-- 10. RLS — usando las funciones de autorización centralizadas
 -- =============================================================================
 
 ALTER TABLE public.weekly_plans               ENABLE ROW LEVEL SECURITY;
@@ -410,7 +572,7 @@ CREATE POLICY "Miembros del board ven sus planes"
 
 CREATE POLICY "Asistentes y admins crean planes"
   ON public.weekly_plans FOR INSERT
-  WITH CHECK (get_user_board_role(board_id, auth.uid()) IN ('admin', 'assistant'));
+  WITH CHECK (public.can_manage_weekly_plan(board_id, auth.uid()));
 
 -- UPDATE directo bloqueado: toda transición pasa por funciones SECURITY DEFINER
 CREATE POLICY "UPDATE de planes solo via funciones de transición"
@@ -428,20 +590,19 @@ CREATE POLICY "Miembros del board ven items del plan"
   USING (
     EXISTS (
       SELECT 1 FROM public.weekly_plans wp
-      WHERE wp.id = plan_id
-        AND get_user_board_role(wp.board_id, auth.uid()) IS NOT NULL
+      WHERE  wp.id = plan_id
+        AND  get_user_board_role(wp.board_id, auth.uid()) IS NOT NULL
     )
   );
 
--- Solo se pueden crear/editar items cuando el plan está en draft
 CREATE POLICY "Asistentes y admins crean items en planes draft"
   ON public.weekly_plan_items FOR INSERT
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM public.weekly_plans wp
-      WHERE wp.id = plan_id
-        AND wp.status = 'draft'
-        AND get_user_board_role(wp.board_id, auth.uid()) IN ('admin', 'assistant')
+      WHERE  wp.id     = plan_id
+        AND  wp.status = 'draft'
+        AND  public.can_manage_weekly_plan(wp.board_id, auth.uid())
     )
   );
 
@@ -450,9 +611,9 @@ CREATE POLICY "Edición de items solo en planes draft"
   USING (
     EXISTS (
       SELECT 1 FROM public.weekly_plans wp
-      WHERE wp.id = plan_id
-        AND wp.status = 'draft'
-        AND get_user_board_role(wp.board_id, auth.uid()) IN ('admin', 'assistant')
+      WHERE  wp.id     = plan_id
+        AND  wp.status = 'draft'
+        AND  public.can_manage_weekly_plan(wp.board_id, auth.uid())
     )
   );
 
@@ -461,9 +622,9 @@ CREATE POLICY "DELETE de items solo en planes draft"
   USING (
     EXISTS (
       SELECT 1 FROM public.weekly_plans wp
-      WHERE wp.id = plan_id
-        AND wp.status = 'draft'
-        AND get_user_board_role(wp.board_id, auth.uid()) IN ('admin', 'assistant')
+      WHERE  wp.id     = plan_id
+        AND  wp.status = 'draft'
+        AND  public.can_manage_weekly_plan(wp.board_id, auth.uid())
     )
   );
 
@@ -480,34 +641,28 @@ CREATE POLICY "Miembros del board ven ejecuciones"
     )
   );
 
--- Líderes, asistentes y admins registran ejecuciones
-CREATE POLICY "Líderes y asistentes registran ejecuciones"
+CREATE POLICY "Líderes y asistentes crean ejecuciones"
   ON public.weekly_plan_item_executions FOR INSERT
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM public.weekly_plan_items wpi
       JOIN   public.weekly_plans wp ON wp.id = wpi.plan_id
-      WHERE  wpi.id = plan_item_id
+      WHERE  wpi.id    = plan_item_id
         AND  wp.status IN ('published', 'in_progress')
-        AND  get_user_board_role(wp.board_id, auth.uid())
-               IN ('admin', 'assistant', 'leader', 'supervisor')
+        AND  public.can_report_execution(wp.board_id, auth.uid())
     )
   );
 
--- Edición: solo el creador o admin; solo ejecuciones draft o reported
-CREATE POLICY "Edición de ejecuciones propias no verificadas"
+-- UPDATE directo: solo editar datos de una ejecución draft propia (antes de reportar).
+-- Las transiciones de estado (report/verify/reject) van por funciones SECURITY DEFINER.
+CREATE POLICY "Edición de ejecuciones draft propias"
   ON public.weekly_plan_item_executions FOR UPDATE
   USING (
-    (created_by = auth.uid() AND status IN ('draft', 'reported'))
-    OR EXISTS (
-      SELECT 1 FROM public.weekly_plan_items wpi
-      JOIN   public.weekly_plans wp ON wp.id = wpi.plan_id
-      WHERE  wpi.id = plan_item_id
-        AND  get_user_board_role(wp.board_id, auth.uid()) IN ('admin', 'supervisor')
-    )
+    created_by = auth.uid()
+    AND status = 'draft'
   );
 
--- DELETE: bloqueado — los eventos de ejecución son inmutables
+-- DELETE bloqueado: los eventos de ejecución son inmutables
 CREATE POLICY "DELETE de ejecuciones bloqueado"
   ON public.weekly_plan_item_executions FOR DELETE
   TO authenticated USING (false);
