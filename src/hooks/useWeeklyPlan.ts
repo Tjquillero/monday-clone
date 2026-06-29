@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { WeeklyPlanningContext, SchedulerMigrationMissingError } from '@/types/scheduler';
 import { getSiteCapacity } from '@/lib/siteCapacity';
 import { buildWeeklyPlanningContext, calculateContractWeek } from '@/lib/weeklyPlanner';
+import { WORKING_DAYS_WEEK } from '@/lib/schedulerMath';
 import { useContractStandards, useScopeMappings } from './useActivityStandards';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -101,7 +102,7 @@ export function useWeeklyPlan(
     const week = {
       start: weekStart,
       number: calculateContractWeek(weekStart),
-      workingDays: 5,
+      workingDays: WORKING_DAYS_WEEK,
     };
 
     return buildWeeklyPlanningContext(standards, scopeMappings, scopeQuantities, zone, week);

@@ -9,6 +9,9 @@
  */
 
 export const WORKING_DAYS_MONTH = 25;
+export const WORKING_DAYS_WEEK = 5;
+export const CONTRACT_PERIODS_PER_MONTH = 4;
+export const DAYS_PER_CONTRACT_PERIOD = 7;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos de retorno

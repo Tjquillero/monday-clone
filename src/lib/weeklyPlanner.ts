@@ -7,6 +7,8 @@ import {
 } from '@/types/scheduler';
 import {
   WORKING_DAYS_MONTH,
+  CONTRACT_PERIODS_PER_MONTH,
+  DAYS_PER_CONTRACT_PERIOD,
   calculateTheoreticalJournals,
   calculateWeeklyDistribution,
   calculateCapacityUsage,
@@ -50,11 +52,14 @@ function addDays(date: Date, days: number): Date {
 //
 // IMPORTANTE — este NO es el número de semana ISO (ISO 8601).
 // Es el número de período de planificación del contrato, basado en el día
-// del mes: 1–7→1, 8–14→2, 15–21→3, 22–31→4. Siempre cuatro períodos
-// por mes, independiente del año o de cuántos días tiene el mes.
+// del mes. Siempre CONTRACT_PERIODS_PER_MONTH períodos por mes,
+// independiente del año o de cuántos días tenga el mes.
 // Usa getUTCDate() para evitar desplazamiento de día en zonas UTC-X.
 export function calculateContractWeek(weekStart: Date): number {
-  return Math.min(4, Math.ceil(weekStart.getUTCDate() / 7));
+  return Math.min(
+    CONTRACT_PERIODS_PER_MONTH,
+    Math.ceil(weekStart.getUTCDate() / DAYS_PER_CONTRACT_PERIOD),
+  );
 }
 
 // Devuelve el lunes y el viernes de la semana (ISO date strings).
@@ -108,7 +113,7 @@ export function buildWeeklyPlanningContext(
       if (qty <= 0) continue;
 
       const jr_month = calculateTheoreticalJournals(qty, s.rendimiento, s.frecuencia);
-      const distribution = calculateWeeklyDistribution(jr_month, 4);
+      const distribution = calculateWeeklyDistribution(jr_month, CONTRACT_PERIODS_PER_MONTH);
       const jr_week = distribution[week.number - 1] ?? 0;
 
       activities.push({
