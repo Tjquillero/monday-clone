@@ -72,8 +72,7 @@ export default function ResourceEfficiencyWidget({ boardId, groups, activityTemp
     error: mappingsErr,
   } = useScopeMappings();
 
-  // Adapter: DB rows → same Record<scope_key, ActivityRule[]> shape the algorithm expects
-  const activityMappings = useMemo(
+  const activityMappings = useMemo<Record<string, ActivityRule[]>>(
     () => buildActivityMappings(contractStandards ?? [], scopeMappings ?? []),
     [contractStandards, scopeMappings],
   );
