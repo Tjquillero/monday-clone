@@ -102,6 +102,10 @@ BEGIN
   -- Serializa inserciones concurrentes: la segunda espera hasta que
   -- la primera confirme su UPDATE, evitando que ambas vean la misma
   -- fila activa y produzcan duplicados.
+  -- ORDER BY + LIMIT 1: determinismo defensivo.
+  -- Si el invariante "un solo activo" se rompe manualmente (migración de emergencia,
+  -- inserción directa en SQL), el trigger sigue siendo correcto: bloquea y cierra
+  -- el registro más reciente en lugar de fallar o elegir uno arbitrario.
   SELECT version INTO v_prev_version
   FROM public.board_activity_standards
   WHERE board_id     = NEW.board_id
@@ -112,6 +116,8 @@ BEGIN
         )
     AND effective_to IS NULL
     AND id != NEW.id
+  ORDER BY effective_from DESC
+  LIMIT 1
   FOR UPDATE;
 
   IF FOUND THEN
@@ -239,12 +245,25 @@ CREATE POLICY "Miembros del board pueden ver estándares"
   ON public.board_activity_standards FOR SELECT
   USING (get_user_board_role(board_id, auth.uid()) IS NOT NULL);
 
--- Solo INSERT está permitido — UPDATE y DELETE bloqueados intencionalmente.
+-- Solo INSERT está permitido — UPDATE y DELETE bloqueados por RLS.
 -- El historial de versiones es inmutable: nuevas versiones via INSERT,
 -- el trigger cierra la fila anterior automáticamente.
+-- El trigger fn_insert_activity_standard usa SECURITY DEFINER (corre como
+-- postgres) por lo que su UPDATE interno de effective_to no está afectado
+-- por estas políticas. Solo el rol 'authenticated' queda bloqueado.
 CREATE POLICY "Miembros pueden insertar estándares"
   ON public.board_activity_standards FOR INSERT
   WITH CHECK (get_user_board_role(board_id, auth.uid()) IN ('admin', 'member'));
+
+CREATE POLICY "UPDATE bloqueado — crear nueva versión con INSERT"
+  ON public.board_activity_standards FOR UPDATE
+  TO authenticated
+  USING (false);
+
+CREATE POLICY "DELETE bloqueado — historial de estándares es inmutable"
+  ON public.board_activity_standards FOR DELETE
+  TO authenticated
+  USING (false);
 
 -- activity_scope_mappings: catálogo de solo lectura para todos los autenticados
 CREATE POLICY "Lectura pública de scope mappings"
