@@ -6,9 +6,8 @@
 --   weekly_plan_items               — línea por actividad (snapshot autosuficiente)
 --   weekly_plan_item_executions     — eventos de ejecución (fuente de verdad)
 --
--- Roles board_members extendidos:
+-- Roles board_members (reemplaza admin|member|viewer del schema original):
 --   admin | assistant | supervisor | leader | viewer
---   (member se mantiene por compatibilidad, deprecado)
 --
 -- Funciones de transición de estado (SECURITY DEFINER):
 --   publish_weekly_plan(uuid)       — draft → published
@@ -29,8 +28,9 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- =============================================================================
--- 1. Extender board_members.role con nuevos valores
---    'member' se mantiene temporalmente por compatibilidad con código existente.
+-- 1. Reemplazar board_members.role CHECK
+--    Schema original: ('admin', 'member', 'viewer')
+--    Sin datos de producción — se reemplaza limpiamente.
 -- =============================================================================
 
 DO $$ BEGIN
@@ -38,15 +38,15 @@ DO $$ BEGIN
     DROP CONSTRAINT IF EXISTS board_members_role_check;
   ALTER TABLE public.board_members
     ADD CONSTRAINT board_members_role_check
-    CHECK (role IN ('admin', 'assistant', 'supervisor', 'leader', 'viewer', 'member'));
+    CHECK (role IN ('admin', 'assistant', 'supervisor', 'leader', 'viewer'));
 END $$;
 
--- También actualizar la política existente de board_activity_standards
--- que verificaba 'member' para incluir los nuevos roles con permiso de escritura.
+-- Actualizar política de board_activity_standards: reemplaza 'member' por los nuevos
+-- roles con permiso de escritura (admin y assistant).
 DROP POLICY IF EXISTS "Miembros pueden insertar estándares" ON public.board_activity_standards;
-CREATE POLICY "Miembros pueden insertar estándares"
+CREATE POLICY "Asistentes y admins insertan estándares"
   ON public.board_activity_standards FOR INSERT
-  WITH CHECK (get_user_board_role(board_id, auth.uid()) IN ('admin', 'assistant', 'member'));
+  WITH CHECK (get_user_board_role(board_id, auth.uid()) IN ('admin', 'assistant'));
 
 -- =============================================================================
 -- 2. weekly_plans
@@ -410,7 +410,7 @@ CREATE POLICY "Miembros del board ven sus planes"
 
 CREATE POLICY "Asistentes y admins crean planes"
   ON public.weekly_plans FOR INSERT
-  WITH CHECK (get_user_board_role(board_id, auth.uid()) IN ('admin', 'assistant', 'member'));
+  WITH CHECK (get_user_board_role(board_id, auth.uid()) IN ('admin', 'assistant'));
 
 -- UPDATE directo bloqueado: toda transición pasa por funciones SECURITY DEFINER
 CREATE POLICY "UPDATE de planes solo via funciones de transición"
@@ -441,7 +441,7 @@ CREATE POLICY "Asistentes y admins crean items en planes draft"
       SELECT 1 FROM public.weekly_plans wp
       WHERE wp.id = plan_id
         AND wp.status = 'draft'
-        AND get_user_board_role(wp.board_id, auth.uid()) IN ('admin', 'assistant', 'member')
+        AND get_user_board_role(wp.board_id, auth.uid()) IN ('admin', 'assistant')
     )
   );
 
@@ -452,7 +452,7 @@ CREATE POLICY "Edición de items solo en planes draft"
       SELECT 1 FROM public.weekly_plans wp
       WHERE wp.id = plan_id
         AND wp.status = 'draft'
-        AND get_user_board_role(wp.board_id, auth.uid()) IN ('admin', 'assistant', 'member')
+        AND get_user_board_role(wp.board_id, auth.uid()) IN ('admin', 'assistant')
     )
   );
 
@@ -463,7 +463,7 @@ CREATE POLICY "DELETE de items solo en planes draft"
       SELECT 1 FROM public.weekly_plans wp
       WHERE wp.id = plan_id
         AND wp.status = 'draft'
-        AND get_user_board_role(wp.board_id, auth.uid()) IN ('admin', 'assistant', 'member')
+        AND get_user_board_role(wp.board_id, auth.uid()) IN ('admin', 'assistant')
     )
   );
 
@@ -490,7 +490,7 @@ CREATE POLICY "Líderes y asistentes registran ejecuciones"
       WHERE  wpi.id = plan_item_id
         AND  wp.status IN ('published', 'in_progress')
         AND  get_user_board_role(wp.board_id, auth.uid())
-               IN ('admin', 'assistant', 'leader', 'supervisor', 'member')
+               IN ('admin', 'assistant', 'leader', 'supervisor')
     )
   );
 

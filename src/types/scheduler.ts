@@ -107,7 +107,7 @@ export type PlanStatus =
 
 export type ExecutionStatus = 'draft' | 'reported' | 'verified' | 'rejected';
 
-export type BoardRole = 'admin' | 'assistant' | 'supervisor' | 'leader' | 'viewer' | 'member';
+export type BoardRole = 'admin' | 'assistant' | 'supervisor' | 'leader' | 'viewer';
 
 export interface WeeklyPlan {
   id: string;
