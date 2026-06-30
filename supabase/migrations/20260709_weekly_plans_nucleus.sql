@@ -79,20 +79,13 @@ DO $$ BEGIN
     FOREIGN KEY (role) REFERENCES public.board_roles(role) ON UPDATE CASCADE;
 END $$;
 
--- Actualizar política de board_activity_standards para usar la función centralizada
--- (la migración anterior usaba una lista literal IN ('admin','assistant')).
-DROP POLICY IF EXISTS "Miembros pueden insertar estándares"     ON public.board_activity_standards;
-DROP POLICY IF EXISTS "Asistentes y admins insertan estándares" ON public.board_activity_standards;
-CREATE POLICY "Asistentes y admins insertan estándares"
-  ON public.board_activity_standards FOR INSERT
-  WITH CHECK (public.can_manage_weekly_plan(board_id, auth.uid()));
-
 -- =============================================================================
 -- 2. Funciones de autorización centralizadas
 --
 --    STABLE: el planner puede cachear el resultado dentro de la misma query.
 --    Sin SECURITY DEFINER: delegan en get_user_board_role que ya es SECURITY DEFINER.
 --    Un solo lugar para actualizar cuando cambie la política de roles.
+--    DEBEN definirse antes de cualquier política RLS que las use.
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION public.can_manage_weekly_plan(p_board_id UUID, p_user_id UUID)
@@ -109,6 +102,14 @@ CREATE OR REPLACE FUNCTION public.can_verify_execution(p_board_id UUID, p_user_i
 RETURNS BOOLEAN LANGUAGE sql STABLE AS $$
   SELECT get_user_board_role(p_board_id, p_user_id) IN ('admin', 'supervisor')
 $$;
+
+-- Actualizar política de board_activity_standards (migración anterior usaba lista literal).
+-- Va aquí porque depende de can_manage_weekly_plan() definida arriba.
+DROP POLICY IF EXISTS "Miembros pueden insertar estándares"     ON public.board_activity_standards;
+DROP POLICY IF EXISTS "Asistentes y admins insertan estándares" ON public.board_activity_standards;
+CREATE POLICY "Asistentes y admins insertan estándares"
+  ON public.board_activity_standards FOR INSERT
+  WITH CHECK (public.can_manage_weekly_plan(board_id, auth.uid()));
 
 -- =============================================================================
 -- 3. weekly_plans
