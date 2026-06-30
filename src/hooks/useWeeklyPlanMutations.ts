@@ -36,6 +36,8 @@ export interface PlanItemInput {
 
 export interface CreateExecutionInput {
   plan_item_id:    string;
+  plan_id:         string;       // para invalidación de caché específica
+  group_id:        string;       // para invalidación de caché específica
   execution_date:  string;       // ISO date
   crew_name?:      string | null;
   crew_leader_id?: string | null;
@@ -73,14 +75,16 @@ export function useWeeklyPlanMutations(boardId: string | undefined) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  // Helper: invalida las queries relevantes tras cualquier cambio en el plan
+  // Helper: invalida queries del plan y opcionalmente la lista del grupo.
+  // Si se conoce groupId, invalida solo ese grupo (evita refetch de todos los planes del board).
   const invalidatePlan = (planId: string, groupId?: string) => {
-    if (boardId) {
-      queryClient.invalidateQueries({ queryKey: weeklyPlanKeys.all(boardId) });
-      if (groupId) queryClient.invalidateQueries({ queryKey: weeklyPlanKeys.byGroup(boardId, groupId) });
-    }
     queryClient.invalidateQueries({ queryKey: weeklyPlanKeys.plan(planId) });
     queryClient.invalidateQueries({ queryKey: weeklyPlanKeys.items(planId) });
+    if (boardId && groupId) {
+      queryClient.invalidateQueries({ queryKey: weeklyPlanKeys.byGroup(boardId, groupId) });
+    } else if (boardId) {
+      queryClient.invalidateQueries({ queryKey: weeklyPlanKeys.all(boardId) });
+    }
   };
 
   // ── createPlan ──────────────────────────────────────────────────────────────
@@ -110,10 +114,9 @@ export function useWeeklyPlanMutations(boardId: string | undefined) {
   });
 
   // ── savePlanItems ───────────────────────────────────────────────────────────
-  // Reemplaza todos los items del plan (DELETE + INSERT).
-  // Solo válido en planes en estado 'draft' (el RLS lo refuerza en la DB).
-  // Operación no transaccional en cliente: si el INSERT falla tras el DELETE,
-  // el plan queda sin items (visible, recuperable repitiendo la operación).
+  // Reemplaza todos los items del plan en una sola transacción vía RPC.
+  // La función PostgreSQL hace DELETE + INSERT atómicos: si falla el INSERT,
+  // el DELETE se revierte y el plan nunca queda vacío.
 
   const savePlanItems = useMutation<
     WeeklyPlanItem[],
@@ -121,19 +124,11 @@ export function useWeeklyPlanMutations(boardId: string | undefined) {
     { planId: string; items: PlanItemInput[] }
   >({
     mutationFn: async ({ planId, items }) => {
-      const { error: delErr } = await supabase
-        .from('weekly_plan_items')
-        .delete()
-        .eq('plan_id', planId);
-      if (delErr) throw delErr;
-
-      if (items.length === 0) return [];
-
-      const { data, error: insErr } = await supabase
-        .from('weekly_plan_items')
-        .insert(items.map(item => ({ plan_id: planId, ...item })))
-        .select();
-      if (insErr) throw insErr;
+      const { data, error } = await supabase.rpc('replace_weekly_plan_items', {
+        p_plan_id: planId,
+        p_items:   items,
+      });
+      if (error) throw error;
       return (data ?? []) as WeeklyPlanItem[];
     },
     onSuccess: (_, { planId }) => {
@@ -188,21 +183,22 @@ export function useWeeklyPlanMutations(boardId: string | undefined) {
   // transiciona el plan a 'in_progress' si estaba en 'published'.
 
   const createExecution = useMutation<WeeklyPlanItemExecution, Error, CreateExecutionInput>({
-    mutationFn: async (input) => {
+    mutationFn: async ({ plan_id: _planId, group_id: _groupId, ...dbInput }) => {
       if (!user?.id) throw new Error('Usuario no autenticado');
       const { data, error } = await supabase
         .from('weekly_plan_item_executions')
-        .insert({ ...input, created_by: user.id })
+        .insert({ ...dbInput, created_by: user.id })
         .select()
         .single();
       if (error) throw error;
       return data as WeeklyPlanItemExecution;
     },
-    onSuccess: (exec) => {
+    onSuccess: (exec, { plan_id, group_id }) => {
       queryClient.invalidateQueries({ queryKey: weeklyPlanKeys.executions(exec.plan_item_id) });
-      queryClient.invalidateQueries({ queryKey: weeklyPlanKeys.items(exec.plan_item_id) });
-      // Invalidar el plan porque el trigger puede haber cambiado su estado
-      if (boardId) queryClient.invalidateQueries({ queryKey: weeklyPlanKeys.all(boardId) });
+      queryClient.invalidateQueries({ queryKey: weeklyPlanKeys.items(plan_id) });
+      // El plan puede haber transitado published → in_progress por el trigger
+      queryClient.invalidateQueries({ queryKey: weeklyPlanKeys.plan(plan_id) });
+      if (boardId) queryClient.invalidateQueries({ queryKey: weeklyPlanKeys.byGroup(boardId, group_id) });
     },
   });
 
