@@ -1,5 +1,11 @@
 'use client';
 
+// ============================================================================
+// LEGACY — eliminado de la navegación el 2026-07-01 (era la pestaña "Ops").
+// NO volver a conectar a la navegación. Pendiente decidir si se consolida
+// con el Cronograma (planner) o se elimina. Ver src/config/navigation.ts.
+// ============================================================================
+
 import { useMemo } from 'react';
 import TacticalOperationsView from '@/components/TacticalOperationsView';
 import { useBoard, useBoardGroups, useBoardColumns, useTaskDependencies } from '@/hooks/useBoardData';
