@@ -1,16 +1,17 @@
 'use client';
 
 import { Group, Column } from '@/types/monday';
-import { 
-  Calculator, Users, CheckCircle2, Calendar as CalendarIcon, 
-  MapPin, Wand2, TrendingUp, Filter, LayoutDashboard, 
+import {
+  Calculator, Users, CheckCircle2,
+  MapPin, Wand2, TrendingUp, Filter, LayoutDashboard,
   ChevronRight, Camera, Terminal, AlertTriangle, Clock,
-  MoreVertical, Plus, Settings, Search, Info, Activity,
+  MoreVertical, Plus, Settings, Search, Info,
   Maximize2, Eye, ShieldCheck, Gauge, Layers, Info as InfoIcon,
-  Table2, DollarSign, GitGraph, Zap, Download, Layout,
+  Zap, Download, Layout,
   Star, ChevronDown, FileText, FileSpreadsheet,
-  Sun, Moon, Scissors, Sprout, Wrench, Shovel, ClipboardList
+  Sun, Moon, Scissors, Sprout, Wrench, Shovel
 } from 'lucide-react';
+import { BOARD_TABS, VALID_VIEW_PARAMS, type BoardViewId } from '@/config/navigation';
 import { useState, useMemo, useEffect, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useBoard, useBoardColumns, useBoardGroups } from '@/hooks/useBoardData';
@@ -22,13 +23,11 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 
 import BoardViewContainer from '@/components/views/BoardViewContainer';
 import ExecutionViewContainer from '@/components/views/ExecutionViewContainer';
-import GanttViewContainer from '@/components/views/GanttViewContainer';
 import DashboardViewContainer from '@/components/views/DashboardViewContainer';
 import FinancialViewContainer from '@/components/views/FinancialViewContainer';
 import KanbanViewContainer from '@/components/views/KanbanViewContainer';
 import ReportsViewContainer from '@/components/views/ReportsViewContainer';
 
-import WorkOrdersContainer from '@/components/work-orders/WorkOrdersContainer';
 import WeeklyPlannerContainer from '@/components/views/WeeklyPlannerContainer';
 
 import MantenixMap from '@/components/MantenixMap';
@@ -48,7 +47,7 @@ function DashboardContent() {
   const boardId = rawBoardId || undefined;
 
   // 1. ALL STATES FIRST
-  const [currentView, setCurrentView] = useState<'board' | 'map' | 'dashboards' | 'execution' | 'financial' | 'gantt' | 'kanban' | 'reports' | 'notifications' | 'work-orders' | 'planner'>('board');
+  const [currentView, setCurrentView] = useState<BoardViewId>('board');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -79,7 +78,7 @@ function DashboardContent() {
 
   // 3. EFFECTS
   useEffect(() => {
-    const isDoodleVisible = !isDarkMode && (currentView === 'execution' || currentView === 'gantt' || currentView === 'map' || currentView === 'board');
+    const isDoodleVisible = !isDarkMode && (currentView === 'execution' || currentView === 'map' || currentView === 'board');
     if (isDoodleVisible) {
       document.body.classList.add('doodle-active');
     } else {
@@ -90,8 +89,8 @@ function DashboardContent() {
 
   useEffect(() => {
     const viewParam = searchParams ? searchParams.get('view') : null;
-    if (viewParam && ['board', 'map', 'dashboards', 'execution', 'financial', 'gantt', 'kanban', 'reports', 'notifications', 'planner'].includes(viewParam)) {
-      setCurrentView(viewParam as any);
+    if (viewParam && (VALID_VIEW_PARAMS as readonly string[]).includes(viewParam)) {
+      setCurrentView(viewParam as BoardViewId);
     }
   }, [searchParams]);
 
@@ -159,20 +158,12 @@ function DashboardContent() {
 
         {/* Center-Left: Tabs Nav */}
         <nav className="flex bg-black/40 rounded-lg p-0.5 border border-[var(--border-color)] shadow-inner min-w-max">
-          {[
-            { id: 'board', label: 'Tabla', icon: Table2 },
-            { id: 'execution', label: 'Ejecución', icon: Activity },
-            { id: 'map', label: 'Mapa', icon: MapPin },
-            { id: 'financial', label: 'Costos', icon: DollarSign },
-            { id: 'gantt', label: 'Ops', icon: GitGraph },
-            { id: 'work-orders', label: 'Ordenes', icon: ClipboardList },
-            { id: 'planner', label: 'Planner', icon: CalendarIcon },
-          ].map((tab) => {
+          {BOARD_TABS.map((tab) => {
             const isActive = currentView === tab.id;
             return (
               <button
                 key={tab.id}
-                onClick={() => setCurrentView(tab.id as any)}
+                onClick={() => setCurrentView(tab.id)}
                 className={`relative flex items-center gap-2 px-3 py-1.5 rounded-md text-[9px] font-black transition-all uppercase tracking-wider ${isActive ? 'text-white' : 'text-slate-600 hover:text-slate-400'}`}
               >
                 {isActive && (
@@ -254,7 +245,6 @@ function DashboardContent() {
             {currentView === 'financial' && <div className="h-full overflow-auto custom-scrollbar"><FinancialViewContainer /></div>}
             {currentView === 'board' && <div className="h-full overflow-auto p-4 custom-scrollbar"><BoardViewContainer searchQuery={searchQuery} selectedGroupId={selectedGroupId} filters={activeFilters} onOpenItem={openItemModal} /></div>}
             {currentView === 'execution' && <ExecutionViewContainer onOpenItem={openItemModal} searchQuery={searchQuery} selectedGroupId={selectedGroupId} filters={activeFilters} />}
-            {currentView === 'gantt' && <GanttViewContainer onOpenItem={openItemModal} searchQuery={searchQuery} selectedGroupId={selectedGroupId} filters={activeFilters} />}
             {currentView === 'map' && (
               <div className="h-full p-4">
                  <div className="industrial-card rounded-2xl overflow-hidden h-full border border-[#3B7EF8]/10 shadow-2xl">
@@ -270,7 +260,6 @@ function DashboardContent() {
             {currentView === 'kanban' && <div className="h-full overflow-auto p-8 custom-scrollbar"><KanbanViewContainer searchQuery={searchQuery} selectedGroupId={selectedGroupId} filters={activeFilters} onOpenItem={openItemModal} /></div>}
             {currentView === 'reports' && <div className="h-full overflow-auto custom-scrollbar"><ReportsViewContainer /></div>}
             {currentView === 'notifications' && <div className="h-full overflow-auto custom-scrollbar"><NotificationsView /></div>}
-            {currentView === 'work-orders' && <div className="h-full overflow-auto custom-scrollbar"><WorkOrdersContainer /></div>}
             {currentView === 'planner' && <WeeklyPlannerContainer boardId={board?.id} selectedGroupId={selectedGroupId} groups={groups} />}
           </motion.div>
         </AnimatePresence>

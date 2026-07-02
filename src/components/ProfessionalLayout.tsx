@@ -32,7 +32,7 @@ interface SidebarItem {
 const SIDEBAR_ITEMS: SidebarItem[] = [
   { icon: Home, label: 'Inicio', path: '/dashboard' },
   { icon: Briefcase, label: 'Planificación', path: '/projects' },
-  { icon: CheckSquare, label: 'Mis tareas', path: '/my-work' },
+  { icon: CheckSquare, label: 'Mis actividades', path: '/my-work' },
   { icon: Target, label: 'Objetivos', path: '/okrs' },
   { icon: Layout, label: 'Insumos', path: '/dashboard' },
 ];
