@@ -199,6 +199,8 @@ export function useWeeklyPlanMutations(boardId: string | undefined) {
       // El plan puede haber transitado published → in_progress por el trigger
       queryClient.invalidateQueries({ queryKey: weeklyPlanKeys.plan(plan_id) });
       if (boardId) queryClient.invalidateQueries({ queryKey: weeklyPlanKeys.byGroup(boardId, group_id) });
+      // Mis actividades (líder) agrega items por semana publicada
+      queryClient.invalidateQueries({ queryKey: ['weekly_plans', 'published_week'] });
     },
   });
 
@@ -237,6 +239,9 @@ export function useWeeklyPlanMutations(boardId: string | undefined) {
     onSuccess: (_, { planItemId }) => {
       queryClient.invalidateQueries({ queryKey: weeklyPlanKeys.executions(planItemId) });
       queryClient.invalidateQueries({ queryKey: weeklyPlanKeys.items(planItemId) });
+      // El trigger actualiza executed_qty/executed_jr del item (reported+verified):
+      // refrescar la vista agregada del líder
+      queryClient.invalidateQueries({ queryKey: ['weekly_plans', 'published_week'] });
     },
   });
 

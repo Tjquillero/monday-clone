@@ -1,13 +1,15 @@
 'use client';
 
-// Superficie del LÍDER — vista pura de solo lectura.
-// Muestra los weekly_plan_items del plan publicado/en ejecución de cada sitio
-// para la semana activa. El registro de jornadas (createExecution →
-// reportExecution) se conecta en la siguiente etapa.
+// Superficie del LÍDER — actividades del plan publicado/en ejecución de cada
+// sitio para la semana activa. Cada fila se expande para ver y registrar
+// jornadas (ItemExecutions); verificar/rechazar pertenece al Supervisor y
+// vive fuera de esta vista.
 
-import { MapPin, ClipboardCheck } from 'lucide-react';
+import { useState } from 'react';
+import { MapPin, ClipboardCheck, ChevronDown } from 'lucide-react';
 import { PublishedWeekPlan, PublishedWeekPlanItem } from '@/hooks/useWeeklyPlans';
 import { ActivityPriority, PlanStatus } from '@/types/scheduler';
+import ItemExecutions from './ItemExecutions';
 
 interface Props {
   plans: PublishedWeekPlan[];
@@ -28,14 +30,19 @@ function formatNumber(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-function ItemRow({ item }: { item: PublishedWeekPlanItem }) {
+function ItemRow({ item, planId, groupId }: { item: PublishedWeekPlanItem; planId: string; groupId: string }) {
+  const [expanded, setExpanded] = useState(false);
   const priority = PRIORITY_LABEL[item.priority] ?? PRIORITY_LABEL.flexible;
   const progress = item.planned_qty > 0
     ? Math.min(100, Math.round((item.executed_qty / item.planned_qty) * 100))
     : 0;
 
   return (
-    <div className="grid grid-cols-[1fr] md:grid-cols-[1fr_110px_140px_140px_160px] px-4 md:px-6 py-4 items-center gap-2 md:gap-0 hover:bg-slate-50/80 transition-colors">
+    <div>
+    <button
+      onClick={() => setExpanded((v) => !v)}
+      className="w-full text-left grid grid-cols-[1fr] md:grid-cols-[1fr_110px_140px_140px_160px_32px] px-4 md:px-6 py-4 items-center gap-2 md:gap-0 hover:bg-slate-50/80 transition-colors"
+    >
       <div className="min-w-0 pr-4">
         <p className="text-sm font-semibold text-slate-800 truncate">
           {item.standard?.name ?? item.activity_key}
@@ -75,6 +82,15 @@ function ItemRow({ item }: { item: PublishedWeekPlanItem }) {
           />
         </div>
       </div>
+
+      <div className="hidden md:flex justify-end">
+        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </div>
+    </button>
+
+    {expanded && (
+      <ItemExecutions planId={planId} groupId={groupId} planItemId={item.id} unit={item.unit} />
+    )}
     </div>
   );
 }
@@ -106,17 +122,20 @@ export default function ActividadesView({ plans }: Props) {
               </div>
             </header>
 
-            <div className="hidden md:grid grid-cols-[1fr_110px_140px_140px_160px] border-b border-slate-100 px-6 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+            <div className="hidden md:grid grid-cols-[1fr_110px_140px_140px_160px_32px] border-b border-slate-100 px-6 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
               <div>Actividad</div>
               <div>Prioridad</div>
               <div>Planificado</div>
               <div>Ejecutado</div>
               <div>Avance (JR)</div>
+              <div />
             </div>
 
             <div className="divide-y divide-slate-100">
               {plan.items.length > 0 ? (
-                plan.items.map((item) => <ItemRow key={item.id} item={item} />)
+                plan.items.map((item) => (
+                  <ItemRow key={item.id} item={item} planId={plan.id} groupId={plan.group_id} />
+                ))
               ) : (
                 <div className="px-6 py-8 text-center text-sm text-slate-400">
                   <ClipboardCheck className="w-6 h-6 mx-auto mb-2 text-slate-300" />
