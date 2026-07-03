@@ -9,10 +9,10 @@
     "lint": "eslint",
     "test": "jest",
     "typecheck": "tsc --noEmit",
-    "test:db:setup": "supabase db query --linked < supabase/tests/00_setup.sql",
+    "test:db:setup": "supabase db query --linked < supabase/test-hooks/00_setup.sql",
     "test:db": "supabase test db --linked supabase/tests/",
-    "test:db:teardown": "supabase db query --linked < supabase/tests/99_teardown.sql",
-    "ci": "supabase db reset && npm run typecheck && npm test"
+    "test:db:teardown": "supabase db query --linked < supabase/test-hooks/99_teardown.sql",
+    "ci": "supabase db reset && npm run typecheck && npm test && node scripts/test-db-ci.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
