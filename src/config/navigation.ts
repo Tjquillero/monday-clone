@@ -5,20 +5,29 @@
 // genérico. Nombres prohibidos: "OPS", "Operations", "Work Orders", "Planner"
 // y cualquier variante en inglés de un módulo de negocio.
 //
-// TABLERO
+// TABLERO (ribbon)
 // ├── Tabla        (board)      — hoja de actividades
 // ├── Ejecución    (execution)  — tablero de avance en campo
 // ├── Mapa         (map)        — geolocalización de sitios
 // ├── Costos       (financial)  — control financiero
 // └── Cronograma   (planner)    — planificación semanal
 //
-// Menú lateral: Inicio · Planificación · Mis actividades · Objetivos · Insumos
+// MENÚ LATERAL (sidebar)
+// ├── Inicio           (/dashboard)
+// ├── Planificación    (/projects)
+// ├── Mis actividades  (/my-work)
+// ├── Objetivos        (/okrs)
+// └── Insumos          (/dashboard)
 //
 // Flujo funcional del dominio:
-//   Asistente  → Cronograma   (publicar)
-//   Líder      → Actividades  (registrar jornadas)
-//   Supervisor → Verificación (aprobar / rechazar)
-//   → Reportes / Indicadores
+//   Asistente  → Cronograma       (publica el plan semanal)
+//   Líder      → Mis actividades  (registra jornadas)
+//   Supervisor → Verificación     (aprueba o rechaza jornadas)
+//                ↓
+//           Reportes / Indicadores
+//
+// Verificación aún no existe: su entrada al sidebar se registrará AQUÍ
+// cuando la pantalla esté construida, nunca antes ni inline.
 //
 // NO agregar, renombrar ni eliminar entradas sin decisión explícita del
 // propietario del producto. Toda vista nueva se registra aquí, nunca inline.
@@ -27,6 +36,7 @@
 
 import {
   Table2, Activity, MapPin, DollarSign, Calendar,
+  Home, Briefcase, CheckSquare, Target, Layout,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -63,4 +73,21 @@ export const BOARD_TABS: readonly BoardTab[] = [
 export const VALID_VIEW_PARAMS: readonly BoardViewId[] = [
   'board', 'execution', 'map', 'financial', 'planner',
   'dashboards', 'kanban', 'reports', 'notifications',
+] as const;
+
+export interface SidebarItem {
+  icon: LucideIcon;
+  label: string;
+  path: string;
+}
+
+/** Menú lateral — estructura congelada. */
+export const SIDEBAR_ITEMS: readonly SidebarItem[] = [
+  { icon: Home, label: 'Inicio', path: '/dashboard' },
+  { icon: Briefcase, label: 'Planificación', path: '/projects' },
+  { icon: CheckSquare, label: 'Mis actividades', path: '/my-work' },
+  { icon: Target, label: 'Objetivos', path: '/okrs' },
+  // Insumos aún no tiene módulo propio; apunta al dashboard de forma
+  // provisional hasta que exista su ruta.
+  { icon: Layout, label: 'Insumos', path: '/dashboard' },
 ] as const;

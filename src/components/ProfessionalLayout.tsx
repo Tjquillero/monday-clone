@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { 
-  Search, Bell, Plus, Layout, Users, Megaphone, 
-  Home, CheckSquare, ChevronLeft, ChevronRight, Folder, ChevronDown,
-  Menu, X as CloseIcon, LogOut, Target, PanelLeft, Briefcase, Settings, LucideIcon
+import {
+  Search, Bell, Plus, Users, Megaphone,
+  ChevronLeft, ChevronRight, Folder, ChevronDown,
+  Menu, X as CloseIcon, LogOut, PanelLeft, Settings
 } from 'lucide-react';
+import { SIDEBAR_ITEMS } from '@/config/navigation';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import Image from 'next/image';
@@ -22,20 +23,6 @@ import { useUI } from '@/contexts/UIContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTemplates } from '@/hooks/useTemplates';
 import { usePermissions, PERMISSIONS } from '@/hooks/usePermissions';
-
-interface SidebarItem {
-  icon: LucideIcon;
-  label: string;
-  path: string;
-}
-
-const SIDEBAR_ITEMS: SidebarItem[] = [
-  { icon: Home, label: 'Inicio', path: '/dashboard' },
-  { icon: Briefcase, label: 'Planificación', path: '/projects' },
-  { icon: CheckSquare, label: 'Mis actividades', path: '/my-work' },
-  { icon: Target, label: 'Objetivos', path: '/okrs' },
-  { icon: Layout, label: 'Insumos', path: '/dashboard' },
-];
 
 export default function ProfessionalLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
