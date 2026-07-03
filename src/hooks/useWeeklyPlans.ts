@@ -14,6 +14,7 @@ export const weeklyPlanKeys = {
   plan:       (planId: string)               => ['weekly_plan', planId] as const,
   items:      (planId: string)               => ['weekly_plan_items', planId] as const,
   executions: (planItemId: string)           => ['weekly_plan_executions', planItemId] as const,
+  publishedWeek: (weekStartISO: string)      => ['weekly_plans', 'published_week', weekStartISO] as const,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -81,6 +82,55 @@ export function useWeeklyPlanWithItems(planId: string | undefined) {
       };
     },
     enabled: !!planId,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// usePublishedWeekPlans
+//
+// Superficie del LÍDER (Mis actividades): planes publicados o en ejecución
+// de la semana indicada, con sus items y el nombre del estándar, a través de
+// TODOS los boards visibles para el usuario (RLS delimita la visibilidad —
+// no hay asignación individual por líder; criterio: items del grupo para el
+// plan publicado de la semana activa).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface PublishedWeekPlanItem extends WeeklyPlanItem {
+  standard: { name: string; category: string; unit: string } | null;
+}
+
+export interface PublishedWeekPlan extends WeeklyPlan {
+  group: { title: string; color: string | null } | null;
+  board: { name: string } | null;
+  items: PublishedWeekPlanItem[];
+}
+
+export function usePublishedWeekPlans(weekStartISO: string | undefined) {
+  return useQuery<PublishedWeekPlan[]>({
+    queryKey: weeklyPlanKeys.publishedWeek(weekStartISO!),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('weekly_plans')
+        .select(`
+          *,
+          group:groups(title, color),
+          board:boards(name),
+          items:weekly_plan_items(*, standard:board_activity_standards(name, category, unit))
+        `)
+        .eq('week_start', weekStartISO!)
+        .in('status', ['published', 'in_progress']);
+
+      if (error) throw error;
+
+      const plans = (data ?? []) as PublishedWeekPlan[];
+      for (const plan of plans) {
+        plan.items.sort((a, b) => a.planned_sequence - b.planned_sequence);
+      }
+      return plans;
+    },
+    enabled: !!weekStartISO,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });

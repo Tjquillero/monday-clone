@@ -7,22 +7,13 @@ import { useWeeklyPlans } from '@/hooks/useWeeklyPlans';
 import { useWeeklyPlanMutations, PlanItemInput } from '@/hooks/useWeeklyPlanMutations';
 import { useContractStandards } from '@/hooks/useActivityStandards';
 import { WeeklyPlan } from '@/types/scheduler';
+import { getMonday } from '@/lib/weeklyPlanner';
 import WeeklyPlannerView from '@/components/planner/WeeklyPlannerView';
 
 interface Props {
   boardId: string | undefined;
   selectedGroupId: string | null;
   groups: Group[] | undefined;
-}
-
-function getMonday(date: Date): Date {
-  const day = date.getUTCDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  return new Date(Date.UTC(
-    date.getUTCFullYear(),
-    date.getUTCMonth(),
-    date.getUTCDate() + diff,
-  ));
 }
 
 function shiftWeek(date: Date, direction: -1 | 1): Date {

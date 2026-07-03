@@ -62,6 +62,18 @@ export function calculateContractWeek(weekStart: Date): number {
   );
 }
 
+// Lunes (UTC) de la semana a la que pertenece una fecha.
+// Misma convención que weekly_plans.week_start.
+export function getMonday(date: Date): Date {
+  const day = date.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  return new Date(Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate() + diff,
+  ));
+}
+
 // Devuelve el lunes y el viernes de la semana (ISO date strings).
 export function getWeekBounds(weekStart: Date): { start: string; end: string } {
   return {
