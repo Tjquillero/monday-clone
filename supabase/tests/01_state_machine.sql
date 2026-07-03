@@ -1,6 +1,11 @@
 -- =============================================================================
 -- Tests: Máquina de estados de weekly_plans + triggers
 --
+-- CONTRATO DEL DOMINIO: docs/domain/workflow.md
+-- Este archivo es su especificación ejecutable. Si un cambio en la máquina de
+-- estados hace fallar estos tests o contradice ese documento, ambos deben
+-- actualizarse en el mismo cambio — nunca uno solo.
+--
 -- Cada test corre en su propio bloque SAVEPOINT para aislar fixtures.
 -- Todo el archivo está en una transacción que se revierte al final,
 -- por lo que no deja datos residuales en la base.

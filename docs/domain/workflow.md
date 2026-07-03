@@ -1,8 +1,12 @@
 # Flujo de estados del ciclo semanal — CONTRATO CONGELADO
 
 **Fuente de verdad:** `supabase/migrations/20260709_weekly_plans_nucleus.sql`
-(funciones `SECURITY DEFINER` + triggers + RLS) y su especificación ejecutable
-`supabase/tests/01_state_machine.sql` (45 tests pgTAP).
+(funciones `SECURITY DEFINER` + triggers + RLS).
+
+**Validación normativa:** `supabase/tests/01_state_machine.sql` (45 tests
+pgTAP, `npm run test:db` o `node scripts/test-db-ci.mjs`). Ese archivo
+referencia este documento y viceversa: un cambio en la máquina de estados
+actualiza ambos en el mismo commit, o no se hace.
 
 Este documento describe lo que la base de datos **ya hace cumplir**. No es una
 propuesta. Agregar, renombrar o "completar" un estado (`approved`, `completed`,
