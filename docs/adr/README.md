@@ -1,11 +1,12 @@
 # Architecture Decision Records (ADR) — Mantenix
 
-Este directorio registra las decisiones de arquitectura del proyecto: **por qué** se tomó una decisión, no **qué** es el negocio (eso vive en [`docs/domain/`](../domain/README.md)) ni **cómo** se implementa (eso vive en el código).
+Este directorio registra las decisiones de arquitectura del proyecto: **por qué** se tomó una decisión, no **qué** es el negocio (eso vive en [`docs/domain/`](../domain/README.md)) ni **cómo** se materializa hoy (eso vive en `docs/architecture/` y en el código).
 
 | Artefacto | Propósito |
 |---|---|
 | `docs/domain/` | Define el negocio |
 | `docs/adr/` (este directorio) | Explica por qué se tomó una decisión |
+| `docs/architecture/` | Traduce un concepto del dominio a su implementación actual (mapeos que envejecen con el código) |
 | Código fuente, migraciones y APIs | Implementan la decisión |
 
 ## Índice
@@ -13,6 +14,7 @@ Este directorio registra las decisiones de arquitectura del proyecto: **por qué
 | ADR | Título | Estado |
 |---|---|---|
 | [ADR-0001](./ADR-0001-domain-freeze.md) | Congelamiento del Dominio POA v1 | Aceptado |
+| [ADR-0002](./ADR-0002-schedule-contractual-source.md) | Fuente Contractual del Cronograma | Aceptado |
 
 ## Estados
 

@@ -8,10 +8,17 @@ Este directorio contiene los documentos de dominio congelados de Mantenix: el co
 |---|---|---|
 | [`poa-domain.md`](./poa-domain.md) | **Congelado (v1)** | Plan Operativo Anual: Contrato, POA, Versión del POA, Actividad del POA (POA_ACTIVITY), Cobertura por Zona, precio, frecuencia, cantidad contratada, NP. Reglas 1-19. |
 | [`workflow.md`](./workflow.md) | **Congelado (v1)** | Ciclo de estados semanal: transiciones de ejecución, verificación y rechazo. |
-| `schedule-domain.md` | Planeado | Pendiente de definición. Cronograma / Planificación: PROGRAMACIÓN, ASIGNACIÓN. Deriva del POA vigente, no lo modifica (ver Principio de Desacoplamiento del Cronograma en `poa-domain.md`). |
+| [`schedule-domain.md`](./schedule-domain.md) | Propuesto | Cronograma / Planificación, alcance v1 limitado a Programación. Deriva del POA vigente, no lo modifica (ver Principio de Desacoplamiento del Cronograma en `poa-domain.md`). Asignaciones, Calendario, Dependencias y Reprogramación quedan fuera de alcance por ahora. |
 | `execution-domain.md` | Planeado | Pendiente de definición. Ejecución de campo: jornadas, evidencia operativa, reporte del líder. |
 | `billing-domain.md` | Planeado | Pendiente de definición. Facturación: actas de cobro, liquidación, NP autorizados. |
 | `glossary.md` | Planeado | Pendiente de definición. Glosario transversal de términos compartidos entre subdominios. |
+
+## Otros directorios de documentación
+
+| Directorio | Propósito |
+|---|---|
+| [`docs/adr/`](../adr/README.md) | Por qué se tomó una decisión de arquitectura |
+| `docs/architecture/` | Cómo se materializa hoy un concepto del dominio en el esquema/código (ej. `schedule-mapping.md`) |
 
 ## Precedencia
 
