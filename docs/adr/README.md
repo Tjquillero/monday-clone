@@ -7,6 +7,7 @@ Este directorio registra las decisiones de arquitectura del proyecto: **por qué
 | `docs/domain/` | Define el negocio |
 | `docs/adr/` (este directorio) | Explica por qué se tomó una decisión |
 | `docs/architecture/` | Traduce un concepto del dominio a su implementación actual (mapeos que envejecen con el código) |
+| `docs/discovery/` | Evidencia de investigación sobre una decisión que aún depende de alguien fuera del repositorio. No es un ADR — se promueve a uno solo cuando esa decisión externa exista |
 | Código fuente, migraciones y APIs | Implementan la decisión |
 
 ## Índice
