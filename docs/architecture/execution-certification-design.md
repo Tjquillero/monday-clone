@@ -70,8 +70,39 @@ Este cambio, de implementarse, modificaría una función ya congelada en `workfl
 
 Cuando un plan llegue a `closed`, sus ejecuciones `verified` (con evidencia garantizada, si el gate del punto 5 se implementa) quedarían disponibles como fuente para una futura Acta. Este diseño no define esa estructura — depende de la decisión de negocio pendiente en `docs/discovery/billing-source-analysis.md`.
 
+## 7. UX propuesta: mobile-first para Líder y Supervisor
+
+La lógica de datos de las secciones 1-6 no impone ninguna interfaz particular, pero el flujo real (líder y supervisor trabajando en campo, no en oficina) debería condicionar el diseño de pantallas desde el inicio, no adaptarse después.
+
+**Principio rector propuesto:** una pantalla = una tarea. El administrador trabaja desde escritorio (Cronograma, POA, rendimientos, actas, facturación, informes); líder y supervisor trabajan desde el celular y no deberían ver esa capa administrativa en absoluto.
+
+**Líder de cuadrilla (móvil):**
+1. Mis actividades de hoy (lista, ya existe).
+2. Detalle de una actividad.
+3. Evidencias — tomar/agregar fotos.
+4. Confirmar cantidad ejecutada → guardar.
+
+Sin presupuestos, valores ni información administrativa visible.
+
+**Supervisor (móvil, cola de trabajo, no navegación por proyectos):** una bandeja de pendientes por verificar (actividad, sector, cantidad, miniaturas de evidencia), con dos acciones por tarjeta: **Aprobar** o **Observar** (motivo de una sola línea). Al terminar, "Sin actividades pendientes" — no un dashboard.
+
+### Componentes existentes (reutilizar)
+
+Estos componentes forman parte de la implementación actual y se reutilizarían. El objetivo no es reemplazarlos, sino reconectarlos al flujo operativo:
+
+- **`src/lib/offlineDB.ts`** + **`src/hooks/useOfflineSync.ts`** — cola de mutaciones en IndexedDB, sync automático al reconectar. Infraestructura de toda la app, no algo a diseñar de nuevo para este módulo.
+- **`src/components/modals/PhotoVerificationModal.tsx`** — ya implementa cámara, GPS (`navigator.geolocation`) y timestamp automático con galería de miniaturas, exactamente la interacción propuesta arriba. Hoy está huérfano: usa `URL.createObjectURL()` (blob local, no persiste) y su único consumidor (`ExecutionView.tsx`) no está enlazado en `navigation.ts` ni en `dashboard/page.tsx`.
+- **`entity_attachments`** — tabla ya existente (huérfana, RLS deny-by-default), destino real donde `PhotoVerificationModal` debería persistir en vez del blob local.
+
+### Componentes nuevos (construir)
+
+- **Cola de revisión del supervisor** — hoy "Verificación" es una entrada de sidebar sin construir (`workflow.md`). No existe ninguna pantalla de bandeja de pendientes.
+- **Compresión/redimensionamiento de imágenes** antes de subir — `PhotoVerificationModal` no lo hace hoy.
+- **Reconexión de `PhotoVerificationModal`** a subida real (Supabase Storage + `entity_attachments`, atado a `weekly_plan_item_execution_id` en vez de a un `itemId` genérico) — es trabajo nuevo aunque reutilice el componente visual.
+- **Gate de evidencia en `confirm_weekly_plan`** (sección 5).
+
 ---
 
 ## Próximo paso
 
-Si este diseño se aprueba para implementación, el trabajo sería acotado: reactivar `entity_attachments` con RLS para `weekly_plan_item_execution`, UI de carga de fotos en "Mis actividades" (líder), y el gate de evidencia en `confirm_weekly_plan` + actualización de `workflow.md`/pgTAP en el mismo cambio.
+Si este diseño se aprueba para implementación, el trabajo sería acotado: reactivar `entity_attachments` con RLS para `weekly_plan_item_execution`; reconectar `PhotoVerificationModal` a subida real + "Mis actividades" (líder); construir la bandeja de revisión del supervisor como cola de trabajo (no navegación); y el gate de evidencia en `confirm_weekly_plan` + actualización de `workflow.md`/pgTAP en el mismo cambio.
