@@ -11,6 +11,7 @@ export function useOfflineSync() {
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
   const [pendingCount, setPendingCount] = useState<number>(0);
+  const [conflictCount, setConflictCount] = useState<number>(0);
   const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null);
 
   const checkStatus = useCallback(async () => {
@@ -20,12 +21,20 @@ export function useOfflineSync() {
 
     if (offlineDB) {
       try {
-        const [mutations, commands, attachments] = await Promise.all([
+        const [mutations, commands, attachments]: [any[], DomainCommand[], PendingAttachment[]] = await Promise.all([
           offlineDB.getMutations(),
           offlineDB.getCommands(),
           offlineDB.getPendingAttachments(),
         ]);
         setPendingCount(mutations.length + commands.length + attachments.length);
+        // 'conflicto' es un subconjunto de lo pendiente que NUNCA se resuelve
+        // solo (Sección 5 del diseño offline) — se cuenta aparte para que la
+        // bandeja de conflictos sepa si hay algo que mostrar sin tener que
+        // adivinar a partir del conteo genérico.
+        setConflictCount(
+          commands.filter((c) => c.status === 'conflicto').length +
+          attachments.filter((a) => a.status === 'conflicto').length,
+        );
       } catch (e) {
         console.error('[offlineSync] Error reading mutations:', e);
       }
@@ -110,6 +119,7 @@ export function useOfflineSync() {
     }
 
     queryClient.invalidateQueries({ queryKey: ['domain_commands'] });
+    queryClient.invalidateQueries({ queryKey: ['offline_conflicts'] });
     return remaining;
   }, [queryClient]);
 
@@ -179,6 +189,7 @@ export function useOfflineSync() {
 
     queryClient.invalidateQueries({ queryKey: ['execution_attachments'] });
     queryClient.invalidateQueries({ queryKey: ['pending_attachments'] });
+    queryClient.invalidateQueries({ queryKey: ['offline_conflicts'] });
     return remaining;
   }, [queryClient]);
 
@@ -193,7 +204,7 @@ export function useOfflineSync() {
         const remainingAttachments = await syncPendingAttachments();
         const remaining = remainingCommands + remainingAttachments;
         setSyncStatus(remaining > 0 ? 'error' : 'synced');
-        setPendingCount(remaining);
+        await checkStatus(); // recalcula pendingCount Y conflictCount desde IndexedDB
         return;
       }
 
@@ -250,12 +261,12 @@ export function useOfflineSync() {
       const remainingAttachments = await syncPendingAttachments();
       const remaining = remainingCommands + remainingAttachments;
       setSyncStatus(remaining > 0 ? 'error' : 'synced');
-      setPendingCount(remaining);
+      await checkStatus(); // recalcula pendingCount Y conflictCount desde IndexedDB
     } catch (e) {
       console.error('[offlineSync] Sync loop failed:', e);
       setSyncStatus('error');
     }
-  }, [refreshLocalCache, replayDomainCommands, syncPendingAttachments]);
+  }, [refreshLocalCache, replayDomainCommands, syncPendingAttachments, checkStatus]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -294,6 +305,7 @@ export function useOfflineSync() {
     isOnline,
     syncStatus,
     pendingCount,
+    conflictCount,
     lastSyncAt,
     triggerSync,
     refreshLocalCache
