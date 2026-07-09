@@ -244,6 +244,48 @@ export class SchedulerMigrationMissingError extends Error {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MissingEvidenceError — confirm_weekly_plan, Gate 2 (evidencia)
+// Ref: docs/domain/workflow.md, supabase/migrations/20260717_confirm_plan_evidence_gate.sql
+//
+// El RPC rechaza con ERRCODE='MEVID' + DETAIL en JSON. Construir esta clase
+// a partir del error crudo de Supabase permite a la UI distinguir "falta
+// evidencia" de un error de permisos o de concurrencia sin comparar el
+// texto de `message` — y mostrar exactamente qué jornadas bloquean, no un
+// mensaje genérico.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const MISSING_EVIDENCE_ERRCODE = 'MEVID';
+
+export interface MissingEvidenceExecution {
+  execution_id: string;
+  activity_key: string;
+  activity_name: string;
+  execution_date: string;
+}
+
+export class MissingEvidenceError extends Error {
+  readonly executions: MissingEvidenceExecution[];
+
+  constructor(message: string, executions: MissingEvidenceExecution[]) {
+    super(message);
+    this.name = 'MissingEvidenceError';
+    this.executions = executions;
+  }
+
+  /** Construye la excepción a partir del error crudo de supabase.rpc(); null si no aplica. */
+  static fromSupabaseError(error: { code?: string; message?: string; details?: string | null } | null): MissingEvidenceError | null {
+    if (!error || error.code !== MISSING_EVIDENCE_ERRCODE) return null;
+    let executions: MissingEvidenceExecution[] = [];
+    try {
+      executions = error.details ? JSON.parse(error.details) : [];
+    } catch {
+      executions = [];
+    }
+    return new MissingEvidenceError(error.message ?? 'Faltan evidencias fotográficas.', executions);
+  }
+}
+
 export class ActivityStandardNotFound extends Error {
   readonly boardId: string;
   readonly groupId: string | null;

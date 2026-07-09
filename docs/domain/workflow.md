@@ -1,12 +1,14 @@
 # Flujo de estados del ciclo semanal — CONTRATO CONGELADO
 
 **Fuente de verdad:** `supabase/migrations/20260709_weekly_plans_nucleus.sql`
-(funciones `SECURITY DEFINER` + triggers + RLS).
+(funciones `SECURITY DEFINER` + triggers + RLS), con el Gate 2 de
+`confirm_weekly_plan` añadido en `supabase/migrations/20260717_confirm_plan_evidence_gate.sql`.
 
 **Validación normativa:** `supabase/tests/01_state_machine.sql` (45 tests
-pgTAP, `npm run test:db` o `node scripts/test-db-ci.mjs`). Ese archivo
-referencia este documento y viceversa: un cambio en la máquina de estados
-actualiza ambos en el mismo commit, o no se hace.
+pgTAP) + `supabase/tests/02_evidence_gate.sql` (6 tests pgTAP, específicos
+del Gate 2), `npm run test:db` o `node scripts/test-db-ci.mjs`. Estos
+archivos referencian este documento y viceversa: un cambio en la máquina de
+estados actualiza ambos en el mismo commit, o no se hace.
 
 Este documento describe lo que la base de datos **ya hace cumplir**. No es una
 propuesta. Agregar, renombrar o "completar" un estado (`approved`, `completed`,
@@ -28,7 +30,7 @@ cancelled: declarado en el CHECK, SIN transición implementada (ver nota).
 |---|---|---|---|
 | `draft → published` | admin, assistant | RPC `publish_weekly_plan` | Sella `published_by/at`. |
 | `published → in_progress` | **automática** | trigger `fn_auto_set_plan_in_progress` | Se dispara al insertar la **primera ejecución**. Nadie la llama a mano. |
-| `published \| in_progress → confirmed` | admin, assistant | RPC `confirm_weekly_plan` | **Gate:** 0 ejecuciones en `reported` — el supervisor debe verificar o rechazar todo antes. Sella `confirmed_by/at`. |
+| `published \| in_progress → confirmed` | admin, assistant | RPC `confirm_weekly_plan` | **Gate 1:** 0 ejecuciones en `reported` — el supervisor debe verificar o rechazar todo antes. **Gate 2 (evidencia):** toda ejecución `verified` del plan debe tener al menos una fila en `execution_attachments`; si falta alguna, la función rechaza con `ERRCODE = 'MEVID'`, `MESSAGE` legible con el conteo exacto y `DETAIL` en JSON listando `execution_id`/`activity_key`/`activity_name`/`execution_date` de cada jornada bloqueante — nunca un mensaje genérico. `draft` y `rejected` no participan del Gate 2. Sella `confirmed_by/at`. |
 | `confirmed → closed` | **solo admin** | RPC `close_weekly_plan` | **Efecto:** genera `activity_performance_observations` (`observed_rendimiento = executed_qty / executed_jr`) por cada item con `executed_jr > 0`; idempotente vía `NOT EXISTS`. Sella `closed_by/at`. Alimenta el siguiente ciclo de planificación. |
 
 - Los **items** del plan (`replace_weekly_plan_items`) solo se pueden modificar

@@ -414,6 +414,7 @@ DECLARE
   v_plan_id UUID;
   v_item_id UUID;
   v_std_id  UUID;
+  v_exec_id UUID;
 BEGIN
   v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_004', 4);
 
@@ -433,7 +434,13 @@ BEGIN
      executed_qty, status, verified_by, verified_at, created_by)
   VALUES (v_item_id, '2026-08-18', 1, '2026-08-18T07:00:00Z', '2026-08-18T15:00:00Z',
           80, 'verified', 'aaaaaaaa-0000-0000-0000-000000000004', NOW(),
-          'aaaaaaaa-0000-0000-0000-000000000003');
+          'aaaaaaaa-0000-0000-0000-000000000003')
+  RETURNING id INTO v_exec_id;
+
+  -- Gate de evidencia (20260717_confirm_plan_evidence_gate.sql): toda
+  -- ejecución verified necesita al menos una fila en execution_attachments.
+  INSERT INTO public.execution_attachments (execution_id, file_name, file_url)
+  VALUES (v_exec_id, 'evidencia.jpg', 'https://example.com/evidencia.jpg');
 
   PERFORM _test_set_user('aaaaaaaa-0000-0000-0000-000000000002');  -- assistant
   PERFORM public.confirm_weekly_plan(v_plan_id);
