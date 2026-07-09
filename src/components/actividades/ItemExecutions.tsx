@@ -7,9 +7,9 @@
 // Verificación (Supervisor): aquí NO se muestran esos controles.
 
 import { useState } from 'react';
-import { Plus, Loader2, Pencil, Send, Users, Clock, Camera } from 'lucide-react';
+import { Plus, Loader2, Pencil, Send, Users, Clock, Camera, CloudOff } from 'lucide-react';
 import { useWeeklyPlanExecutions } from '@/hooks/useWeeklyPlans';
-import { useWeeklyPlanMutations } from '@/hooks/useWeeklyPlanMutations';
+import { useWeeklyPlanMutations, useQueuedReportExecutionIds } from '@/hooks/useWeeklyPlanMutations';
 import { useExecutionAttachments } from '@/hooks/useExecutionAttachments';
 import { ExecutionStatus } from '@/types/scheduler';
 import JornadaForm from './JornadaForm';
@@ -53,10 +53,12 @@ function toCreateInput(planItemId: string, planId: string, groupId: string, v: J
 export default function ItemExecutions({ planId, groupId, planItemId, unit }: Props) {
   const { data: executions, isLoading } = useWeeklyPlanExecutions(planItemId);
   const { createExecution, updateDraftExecution, reportExecution } = useWeeklyPlanMutations(undefined);
+  const { data: queuedReportIds } = useQueuedReportExecutionIds();
 
   // 'closed' | 'new' | id de la ejecución en edición
   const [formMode, setFormMode] = useState<string>('closed');
   const [actionError, setActionError] = useState<string | null>(null);
+  const [queuedNotice, setQueuedNotice] = useState<string | null>(null);
 
   // Evidencia fotográfica — un modal a la vez, para la ejecución seleccionada
   const [evidenceExecId, setEvidenceExecId] = useState<string | null>(null);
@@ -99,9 +101,17 @@ export default function ItemExecutions({ planId, groupId, planItemId, unit }: Pr
 
   const handleReport = (executionId: string) => {
     setActionError(null);
+    setQueuedNotice(null);
     reportExecution.mutate(
       { executionId, planItemId },
-      { onError: (e) => setActionError(e.message) },
+      {
+        onSuccess: (result) => {
+          if (result.queued) {
+            setQueuedNotice('Sin conexión — se reportará automáticamente cuando vuelvas a tener señal.');
+          }
+        },
+        onError: (e) => setActionError(e.message),
+      },
     );
   };
 
@@ -163,7 +173,12 @@ export default function ItemExecutions({ planId, groupId, planItemId, unit }: Pr
               >
                 <Camera className="w-3 h-3" /> Evidencias
               </button>
-              {exec.status === 'draft' && (
+              {exec.status === 'draft' && queuedReportIds?.has(exec.id) && (
+                <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-lg">
+                  <CloudOff className="w-3 h-3" /> Pendiente de sincronizar
+                </span>
+              )}
+              {exec.status === 'draft' && !queuedReportIds?.has(exec.id) && (
                 <>
                   <button
                     onClick={() => { setActionError(null); setFormMode(exec.id); }}
@@ -203,6 +218,11 @@ export default function ItemExecutions({ planId, groupId, planItemId, unit }: Pr
       )}
 
       {actionError && <p className="text-xs font-semibold text-red-500">{actionError}</p>}
+      {queuedNotice && (
+        <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-600">
+          <CloudOff className="w-3.5 h-3.5" /> {queuedNotice}
+        </p>
+      )}
 
       {formMode === 'closed' && (
         <button

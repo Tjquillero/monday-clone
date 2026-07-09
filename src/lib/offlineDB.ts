@@ -2,7 +2,7 @@
 import { supabase } from './supabaseClient';
 
 const DB_NAME = 'mantenix_offline_db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 export function generateUUID(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -22,6 +22,37 @@ export interface OfflineMutation {
   action: 'insert' | 'update' | 'delete';
   payload: any;
   attempts: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Carril 2: comandos de dominio (docs/architecture/offline-certification-design.md,
+// Sección 3). Deliberadamente NO comparte cola/tienda con OfflineMutation: un
+// comando de dominio no es un insert/update/delete sobre una tabla, es una
+// intención de negocio ("reportar esta jornada") que el servidor valida y
+// ejecuta — el carril CRUD ya asume que toda escritura es directa a una tabla,
+// lo cual no aplica aquí. `status` empieza en 'queued' (encolado, ningún
+// intento de red todavía) y solo pasa a 'conflicto' ante un fallo semántico
+// del RPC — nunca se reintenta solo, ver Invariantes del diseño.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type DomainCommandType = 'REPORT_EXECUTION' | 'VERIFY_EXECUTION' | 'REJECT_EXECUTION' | 'UPLOAD_ATTACHMENT';
+export type DomainCommandStatus = 'queued' | 'pendiente' | 'sincronizando' | 'sincronizado' | 'error' | 'conflicto';
+
+export interface DomainCommandError {
+  code?: string;
+  message: string;
+}
+
+export interface DomainCommand {
+  id: string;              // UUID generado en el cliente — idempotencia (ver diseño)
+  type: DomainCommandType;
+  entity_id: string;       // execution_id, plan_id, etc.
+  payload: any;            // argumentos del comando, agnósticos del transporte
+  depends_on: string | null;
+  status: DomainCommandStatus;
+  attempts: number;
+  last_error: DomainCommandError | null;
+  created_at: number;
 }
 
 export class OfflineDB {
@@ -58,9 +89,16 @@ export class OfflineDB {
         if (!db.objectStoreNames.contains('weekly_plan_item_executions')) db.createObjectStore('weekly_plan_item_executions', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('board_activity_standards')) db.createObjectStore('board_activity_standards', { keyPath: 'id' });
 
-        // Cola de mutaciones pendientes
+        // Cola de mutaciones pendientes (carril 1: CRUD)
         if (!db.objectStoreNames.contains('mutations')) {
           db.createObjectStore('mutations', { keyPath: 'id', autoIncrement: true });
+        }
+
+        // Cola de comandos de dominio (carril 2) — Incremento 2 de
+        // offline-certification-design.md. keyPath 'id' (UUID cliente, no
+        // autoIncrement) porque ese mismo id es la clave de idempotencia.
+        if (!db.objectStoreNames.contains('domain_commands')) {
+          db.createObjectStore('domain_commands', { keyPath: 'id' });
         }
       };
 
@@ -213,6 +251,83 @@ export class OfflineDB {
           }
         };
         getRequest.onerror = () => reject(getRequest.error);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  // --- Carril 2: cola de comandos de dominio ---
+  async getCommands(): Promise<DomainCommand[]> {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      try {
+        const transaction = db.transaction('domain_commands', 'readonly');
+        const store = transaction.objectStore('domain_commands');
+        const request = store.getAll();
+
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(request.error);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  async addCommand(cmd: { type: DomainCommandType; entity_id: string; payload: any; depends_on?: string | null }): Promise<DomainCommand> {
+    const db = await this.init();
+    const command: DomainCommand = {
+      id: generateUUID(),
+      type: cmd.type,
+      entity_id: cmd.entity_id,
+      payload: cmd.payload,
+      depends_on: cmd.depends_on ?? null,
+      status: 'queued',
+      attempts: 0,
+      last_error: null,
+      created_at: Date.now(),
+    };
+    return new Promise((resolve, reject) => {
+      try {
+        const transaction = db.transaction('domain_commands', 'readwrite');
+        const request = transaction.objectStore('domain_commands').add(command);
+        request.onsuccess = () => resolve(command);
+        request.onerror = () => reject(request.error);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  async updateCommand(id: string, patch: Partial<Omit<DomainCommand, 'id'>>): Promise<void> {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      try {
+        const transaction = db.transaction('domain_commands', 'readwrite');
+        const store = transaction.objectStore('domain_commands');
+        const getRequest = store.get(id);
+        getRequest.onsuccess = () => {
+          const command = getRequest.result as DomainCommand;
+          if (!command) { resolve(); return; }
+          const updateRequest = store.put({ ...command, ...patch });
+          updateRequest.onsuccess = () => resolve();
+          updateRequest.onerror = () => reject(updateRequest.error);
+        };
+        getRequest.onerror = () => reject(getRequest.error);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  async removeCommand(id: string): Promise<void> {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      try {
+        const transaction = db.transaction('domain_commands', 'readwrite');
+        const request = transaction.objectStore('domain_commands').delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
       } catch (e) {
         reject(e);
       }

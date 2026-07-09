@@ -1,9 +1,12 @@
 // src/hooks/useOfflineSync.ts
 import { useEffect, useState, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
-import { offlineDB } from '@/lib/offlineDB';
+import { offlineDB, DomainCommand } from '@/lib/offlineDB';
+import { isNetworkError } from './useBoardData';
 
 export function useOfflineSync() {
+  const queryClient = useQueryClient();
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
   const [pendingCount, setPendingCount] = useState<number>(0);
@@ -16,8 +19,11 @@ export function useOfflineSync() {
 
     if (offlineDB) {
       try {
-        const mutations = await offlineDB.getMutations();
-        setPendingCount(mutations.length);
+        const [mutations, commands] = await Promise.all([
+          offlineDB.getMutations(),
+          offlineDB.getCommands(),
+        ]);
+        setPendingCount(mutations.length + commands.length);
       } catch (e) {
         console.error('[offlineSync] Error reading mutations:', e);
       }
@@ -53,15 +59,68 @@ export function useOfflineSync() {
     }
   }, []);
 
+  // Carril 2 (comandos de dominio): "un fallo transitorio se reintenta; un
+  // fallo semántico nunca se reintenta solo" (offline-certification-design.md,
+  // Sección 5) — por eso este replay NUNCA descarta un comando en conflicto
+  // como sí hace el carril CRUD con sus 3 intentos. Solo se llama después de
+  // que el carril CRUD terminó sin errores: REPORT_EXECUTION depende de que
+  // la ejecución exista en el servidor, y esa creación viaja por el carril 1
+  // (createExecution usa supabase.from(), no RPC) — simplificación deliberada
+  // de secuenciación en vez de un grafo depends_on entre carriles.
+  const replayDomainCommands = useCallback(async (): Promise<number> => {
+    if (!offlineDB || typeof window === 'undefined' || !window.navigator.onLine) return 0;
+    const commands: DomainCommand[] = await offlineDB.getCommands();
+    if (commands.length === 0) return 0;
+
+    console.log(`[offlineSync] Starting sync for ${commands.length} domain commands...`);
+    const stillQueuedIds = new Set(commands.map((c) => c.id));
+    let remaining = 0;
+
+    for (const cmd of commands) {
+      if (cmd.status === 'conflicto') { remaining += 1; continue; } // requiere intervención humana
+      if (cmd.depends_on && stillQueuedIds.has(cmd.depends_on)) { remaining += 1; continue; }
+
+      try {
+        let error: any = null;
+        if (cmd.type === 'REPORT_EXECUTION') {
+          const res = await supabase.rpc('report_execution', cmd.payload);
+          error = res.error;
+        } else {
+          error = { code: 'UNSUPPORTED_COMMAND', message: `Tipo de comando no soportado todavía: ${cmd.type}` };
+        }
+
+        if (!error) {
+          await offlineDB.removeCommand(cmd.id);
+          stillQueuedIds.delete(cmd.id);
+          console.log(`[offlineSync] Comando ${cmd.type} (${cmd.id}) sincronizado.`);
+        } else if (isNetworkError(error)) {
+          await offlineDB.updateCommand(cmd.id, { attempts: cmd.attempts + 1, last_error: { code: error.code, message: error.message } });
+          remaining += 1;
+        } else {
+          await offlineDB.updateCommand(cmd.id, { status: 'conflicto', last_error: { code: error.code, message: error.message } });
+          remaining += 1;
+          console.warn(`[offlineSync] Comando ${cmd.type} (${cmd.id}) en conflicto:`, error.message);
+        }
+      } catch (err: any) {
+        await offlineDB.updateCommand(cmd.id, { attempts: cmd.attempts + 1, last_error: { message: err?.message ?? 'Error desconocido' } });
+        remaining += 1;
+      }
+    }
+
+    queryClient.invalidateQueries({ queryKey: ['domain_commands'] });
+    return remaining;
+  }, [queryClient]);
+
   const triggerSync = useCallback(async () => {
     if (typeof window === 'undefined' || !window.navigator.onLine || !offlineDB) return;
-    
+
     setSyncStatus('syncing');
     try {
       const mutations = await offlineDB.getMutations();
       if (mutations.length === 0) {
-        setSyncStatus('synced');
-        setPendingCount(0);
+        const remainingCommands = await replayDomainCommands();
+        setSyncStatus(remainingCommands > 0 ? 'error' : 'synced');
+        setPendingCount(remainingCommands);
         return;
       }
 
@@ -106,17 +165,22 @@ export function useOfflineSync() {
         }
       }
 
-      setPendingCount(0);
-      setSyncStatus('synced');
       setLastSyncAt(new Date());
-      
+
       // Actualizar instantáneas locales
       await refreshLocalCache();
+
+      // Carril 2: solo se intenta después de que el carril CRUD terminó sin
+      // errores (ver nota en replayDomainCommands sobre la dependencia entre
+      // carriles).
+      const remainingCommands = await replayDomainCommands();
+      setSyncStatus(remainingCommands > 0 ? 'error' : 'synced');
+      setPendingCount(remainingCommands);
     } catch (e) {
       console.error('[offlineSync] Sync loop failed:', e);
       setSyncStatus('error');
     }
-  }, [refreshLocalCache]);
+  }, [refreshLocalCache, replayDomainCommands]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

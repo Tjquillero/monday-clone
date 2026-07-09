@@ -28,13 +28,21 @@ async function removeUser() {
   // error finding users" (visto en la práctica, no documentado por Supabase) —
   // cuando eso pasa, `data.users` llega vacío y este removeUser reportaba
   // "no existía" sin borrar nada, dejando el usuario E2E huérfano. Se resuelve
-  // el id vía sign-in normal (creds ya guardadas por este mismo script) en vez
-  // de depender de ese endpoint.
+  // el id por dos vías que no dependen de ese endpoint, en orden:
+  //   1. sign-in normal con las creds ya guardadas por este mismo script
+  //      (falla si credsPath ya se borró o la contraseña cambió).
+  //   2. admin.auth.admin.generateLink() — no envía nada, solo genera un link
+  //      y de paso devuelve data.user con el id; en la práctica no se vio
+  //      afectado por el mismo 500 que listUsers().
   let userId = null;
   if (fs.existsSync(credsPath)) {
     const { password } = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
     const { data: signIn } = await anon.auth.signInWithPassword({ email: EMAIL, password });
     userId = signIn?.user?.id ?? null;
+  }
+  if (!userId) {
+    const { data: link } = await admin.auth.admin.generateLink({ type: 'magiclink', email: EMAIL });
+    userId = link?.user?.id ?? null;
   }
   if (!userId) {
     const { data } = await admin.auth.admin.listUsers({ perPage: 1000 });

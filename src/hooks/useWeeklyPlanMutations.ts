@@ -1,7 +1,9 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { offlineDB, DomainCommand } from '@/lib/offlineDB';
+import { isNetworkError } from './useBoardData';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   WeeklyPlan, WeeklyPlanItem, WeeklyPlanItemExecution,
@@ -228,13 +230,31 @@ export function useWeeklyPlanMutations(boardId: string | undefined) {
 
   // ── reportExecution ─────────────────────────────────────────────────────────
   // draft → reported. La función SQL valida quién puede reportar y si es el creador.
+  //
+  // Sin conexión (o si el RPC falla por red aunque el navegador se crea
+  // online), en vez de lanzar el error se encola un comando de dominio
+  // REPORT_EXECUTION (carril 2, offline-certification-design.md) para que
+  // useOfflineSync lo reproduzca al reconectar. El servidor sigue siendo el
+  // único que ejecuta la transición de estado — este mutationFn nunca marca
+  // la ejecución como reportada localmente, solo registra la intención.
 
   const reportExecution = useMutation<
-    void, Error, { executionId: string; planItemId: string }
+    { queued: boolean }, Error, { executionId: string; planItemId: string }
   >({
     mutationFn: async ({ executionId }) => {
-      const { error } = await supabase.rpc('report_execution', { p_execution_id: executionId });
-      if (error) throw error;
+      const offline = typeof window !== 'undefined' && !window.navigator.onLine;
+      if (!offline) {
+        const { error } = await supabase.rpc('report_execution', { p_execution_id: executionId });
+        if (!error) return { queued: false };
+        if (!isNetworkError(error)) throw error; // fallo semántico real: no encolar, mostrar al líder
+      }
+      if (!offlineDB) throw new Error('Sin conexión y sin caché local disponible.');
+      await offlineDB.addCommand({
+        type: 'REPORT_EXECUTION',
+        entity_id: executionId,
+        payload: { p_execution_id: executionId },
+      });
+      return { queued: true };
     },
     onSuccess: (_, { planItemId }) => {
       queryClient.invalidateQueries({ queryKey: weeklyPlanKeys.executions(planItemId) });
@@ -242,6 +262,7 @@ export function useWeeklyPlanMutations(boardId: string | undefined) {
       // El trigger actualiza executed_qty/executed_jr del item (reported+verified):
       // refrescar la vista agregada del líder
       queryClient.invalidateQueries({ queryKey: ['weekly_plans', 'published_week'] });
+      queryClient.invalidateQueries({ queryKey: ['domain_commands'] });
     },
   });
 
@@ -294,4 +315,27 @@ export function useWeeklyPlanMutations(boardId: string | undefined) {
     verifyExecution,
     rejectExecution,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useQueuedReportExecutionIds
+//
+// IDs de ejecuciones con un comando REPORT_EXECUTION todavía en la cola de
+// dominio (carril 2) — sin sincronizar o en conflicto. La UI lo usa para no
+// dejar que el líder vuelva a tocar "Reportar" sobre algo que ya está en
+// camino (evita encolar un segundo comando redundante) mientras sigue offline
+// o antes de que useOfflineSync termine de reproducirlo al reconectar.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function useQueuedReportExecutionIds() {
+  return useQuery({
+    queryKey: ['domain_commands', 'REPORT_EXECUTION'],
+    queryFn: async (): Promise<Set<string>> => {
+      if (!offlineDB) return new Set();
+      const commands: DomainCommand[] = await offlineDB.getCommands();
+      return new Set(commands.filter((c) => c.type === 'REPORT_EXECUTION').map((c) => c.entity_id));
+    },
+    enabled: !!offlineDB,
+    staleTime: 0,
+  });
 }
