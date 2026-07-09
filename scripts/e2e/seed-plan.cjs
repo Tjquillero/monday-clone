@@ -29,14 +29,19 @@ function mondayISO() {
 (async () => {
   if (process.argv.includes('--cleanup')) {
     if (fs.existsSync(seedPath)) {
-      const { planId } = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
-      // Orden: plan primero (items ON DELETE CASCADE), estándares después
-      // (los items los referencian con ON DELETE RESTRICT).
+      const { planId, poaVersionId } = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
+      // Orden: plan primero (items → executions ON DELETE CASCADE; los items
+      // referencian poa_activity_zone_id con ON DELETE RESTRICT, así que el
+      // plan debe borrarse antes que la versión del POA de prueba).
       const { error } = await admin.from('weekly_plans').delete().eq('id', planId);
-      const { error: e2 } = await admin.from('board_activity_standards').delete().eq('source', 'e2e-seed');
-      console.log(error || e2
-        ? 'cleanup error: ' + (error?.message ?? e2?.message)
-        : 'Plan de prueba y estándares e2e-seed eliminados');
+      const { error: e2 } = poaVersionId
+        ? await admin.from('poa_versions').delete().eq('id', poaVersionId) // cascada a poa_activities/poa_activity_zones
+        : { error: null };
+      const { error: e3 } = await admin.from('board_activity_standards').delete().eq('source', 'e2e-seed');
+      const firstError = error || e2 || e3;
+      console.log(firstError
+        ? 'cleanup error: ' + firstError.message
+        : 'Plan de prueba, versión POA e2e y estándares e2e-seed eliminados');
       fs.unlinkSync(seedPath);
     } else console.log('Sin seed que limpiar');
     return;
@@ -53,24 +58,77 @@ function mondayISO() {
 
   // board_activity_standards está vacía en dev (las 220 actividades del Excel
   // aún no se cargan): sembrar 2 estándares de prueba marcados source='e2e-seed'.
+  // Catálogo Técnico reducido (ADR-0002): sin frecuencia — eso vive en el POA.
+  const rawActivities = [
+    {
+      activity_key: 'E2E_PODA_ARBOLES', name: 'PODA DE ARBOLES (PRUEBA E2E)',
+      category: 'ZONA VERDE', unit: 'm2', rendimiento: 500, frecuencia: 1,
+      priority: 'must_execute',
+    },
+    {
+      activity_key: 'E2E_DESMALEZADO', name: 'DESMALEZADO (PRUEBA E2E)',
+      category: 'ZONA VERDE', unit: 'm2', rendimiento: 800, frecuencia: 2,
+      priority: 'preferred',
+    },
+  ];
+
   const { data: standards, error: sErr } = await admin
     .from('board_activity_standards')
-    .insert([
-      {
-        board_id: group.board_id, group_id: null,
-        activity_key: 'E2E_PODA_ARBOLES', name: 'PODA DE ARBOLES (PRUEBA E2E)',
-        category: 'ZONA VERDE', unit: 'm2', rendimiento: 500, frecuencia: 1,
-        priority: 'must_execute', source: 'e2e-seed',
-      },
-      {
-        board_id: group.board_id, group_id: null,
-        activity_key: 'E2E_DESMALEZADO', name: 'DESMALEZADO (PRUEBA E2E)',
-        category: 'ZONA VERDE', unit: 'm2', rendimiento: 800, frecuencia: 2,
-        priority: 'preferred', source: 'e2e-seed',
-      },
-    ])
-    .select('id, activity_key, name, unit, rendimiento, frecuencia, priority');
+    .insert(rawActivities.map(({ frecuencia, ...s }) => ({ ...s, board_id: group.board_id, group_id: null, source: 'e2e-seed' })))
+    .select('id, activity_key, name, unit, rendimiento, priority');
   if (sErr || (standards?.length ?? 0) < 1) { console.error('seed estándares:', sErr?.message); process.exit(1); }
+
+  // Fuente contractual (ADR-0002): poa → poa_versions (active) → poa_activities
+  // (frecuencia, precio_unitario) → poa_activity_zones (cantidad_contratada).
+  const { data: poa, error: poaErr } = await admin
+    .from('poa')
+    .upsert({ board_id: group.board_id, name: 'POA E2E' }, { onConflict: 'board_id' })
+    .select('id')
+    .single();
+  if (poaErr) { console.error('poa:', poaErr.message); process.exit(1); }
+
+  let { data: poaVersion } = await admin
+    .from('poa_versions')
+    .select('id')
+    .eq('poa_id', poa.id)
+    .eq('status', 'active')
+    .maybeSingle();
+  if (!poaVersion) {
+    const { data: newVersion, error: pvErr } = await admin
+      .from('poa_versions')
+      .insert({ poa_id: poa.id, version_number: 1, status: 'active', created_by: e2eUser.id })
+      .select('id')
+      .single();
+    if (pvErr) { console.error('poa_versions:', pvErr.message); process.exit(1); }
+    poaVersion = newVersion;
+  }
+
+  const frecuenciaByKey = Object.fromEntries(rawActivities.map((a) => [a.activity_key, a.frecuencia]));
+  const { data: poaActivities, error: paErr } = await admin
+    .from('poa_activities')
+    .upsert(
+      standards.map((s) => ({
+        poa_version_id: poaVersion.id, activity_key: s.activity_key,
+        frecuencia: frecuenciaByKey[s.activity_key], precio_unitario: 100000,
+      })),
+      { onConflict: 'poa_version_id,activity_key' },
+    )
+    .select('id, activity_key');
+  if (paErr) { console.error('poa_activities:', paErr.message); process.exit(1); }
+
+  const { data: poaZones, error: pzErr } = await admin
+    .from('poa_activity_zones')
+    .upsert(
+      poaActivities.map((pa) => ({ poa_activity_id: pa.id, zone_id: group.id, cantidad_contratada: 10000 })),
+      { onConflict: 'poa_activity_id,zone_id' },
+    )
+    .select('id, poa_activity_id');
+  if (pzErr) { console.error('poa_activity_zones:', pzErr.message); process.exit(1); }
+
+  const zoneIdByActivityId = Object.fromEntries(poaZones.map((z) => [z.poa_activity_id, z.id]));
+  const zoneIdByActivityKey = Object.fromEntries(
+    poaActivities.map((pa) => [pa.activity_key, zoneIdByActivityId[pa.id]]),
+  );
 
   const week = mondayISO();
   // Directo a 'published' vía service role: es un seed de prueba, no el flujo
@@ -94,9 +152,9 @@ function mondayISO() {
     plan_id: plan.id,
     planned_sequence: i + 1,
     activity_key: s.activity_key,
-    activity_standard_id: s.id,
+    poa_activity_zone_id: zoneIdByActivityKey[s.activity_key],
     planned_rendimiento: s.rendimiento,
-    planned_frecuencia: s.frecuencia,
+    planned_frecuencia: frecuenciaByKey[s.activity_key],
     priority: s.priority,
     planned_qty: 100,
     unit: s.unit,
@@ -107,6 +165,7 @@ function mondayISO() {
 
   fs.writeFileSync(seedPath, JSON.stringify({
     planId: plan.id,
+    poaVersionId: poaVersion.id,
     groupTitle: group.title,
     activityNames: standards.map((s) => s.name),
   }));

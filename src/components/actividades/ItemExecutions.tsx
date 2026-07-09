@@ -7,11 +7,13 @@
 // Verificación (Supervisor): aquí NO se muestran esos controles.
 
 import { useState } from 'react';
-import { Plus, Loader2, Pencil, Send, Users, Clock } from 'lucide-react';
+import { Plus, Loader2, Pencil, Send, Users, Clock, Camera } from 'lucide-react';
 import { useWeeklyPlanExecutions } from '@/hooks/useWeeklyPlans';
 import { useWeeklyPlanMutations } from '@/hooks/useWeeklyPlanMutations';
+import { useExecutionAttachments } from '@/hooks/useExecutionAttachments';
 import { ExecutionStatus } from '@/types/scheduler';
 import JornadaForm from './JornadaForm';
+import PhotoVerificationModal from '@/components/modals/PhotoVerificationModal';
 import {
   JornadaFormValues, jornadaTimestamps, clockTime, executionToFormValues,
 } from './jornadaUtils';
@@ -55,6 +57,14 @@ export default function ItemExecutions({ planId, groupId, planItemId, unit }: Pr
   // 'closed' | 'new' | id de la ejecución en edición
   const [formMode, setFormMode] = useState<string>('closed');
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // Evidencia fotográfica — un modal a la vez, para la ejecución seleccionada
+  const [evidenceExecId, setEvidenceExecId] = useState<string | null>(null);
+  const {
+    attachments: evidenceAttachments,
+    uploadAttachment,
+    deleteAttachment,
+  } = useExecutionAttachments(evidenceExecId ?? undefined);
 
   const busy = createExecution.isPending || updateDraftExecution.isPending || reportExecution.isPending;
 
@@ -146,6 +156,13 @@ export default function ItemExecutions({ planId, groupId, planItemId, unit }: Pr
               <span className={`inline-block px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wide ${chip.cls}`}>
                 {chip.text}
               </span>
+              <button
+                onClick={() => setEvidenceExecId(exec.id)}
+                disabled={busy}
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-60"
+              >
+                <Camera className="w-3 h-3" /> Evidencias
+              </button>
               {exec.status === 'draft' && (
                 <>
                   <button
@@ -195,6 +212,25 @@ export default function ItemExecutions({ planId, groupId, planItemId, unit }: Pr
         >
           <Plus className="w-3.5 h-3.5" /> Registrar jornada
         </button>
+      )}
+
+      {evidenceExecId && (
+        <PhotoVerificationModal
+          isOpen={!!evidenceExecId}
+          onClose={() => setEvidenceExecId(null)}
+          // no-op: onUpload ya persiste y refresca la galería vía React Query.
+          // TODO: onSave queda vestigial en este flujo — evaluar retirarla del
+          // modal cuando se migren el resto de consumidores (ExecutionView).
+          onSave={() => {}}
+          onDelete={(url) => {
+            const target = evidenceAttachments?.find((a) => a.file_url === url);
+            if (target) deleteAttachment.mutate(target);
+          }}
+          onUpload={(file) => uploadAttachment.mutateAsync(file).then((a) => a.file_url)}
+          itemName="Evidencia de jornada"
+          itemId={evidenceExecId}
+          initialGallery={evidenceAttachments?.map((a) => a.file_url) ?? []}
+        />
       )}
     </div>
   );

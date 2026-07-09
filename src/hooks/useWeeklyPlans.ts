@@ -111,13 +111,19 @@ export function usePublishedWeekPlans(weekStartISO: string | undefined) {
   return useQuery<PublishedWeekPlan[]>({
     queryKey: weeklyPlanKeys.publishedWeek(weekStartISO!),
     queryFn: async () => {
+      // Nota (ADR-0002): weekly_plan_items ya no tiene FK a board_activity_standards
+      // (activity_standard_id → poa_activity_zone_id), así que PostgREST no puede
+      // embeber `standard:board_activity_standards(...)` como antes. name/category
+      // siguen viviendo en el Catálogo Técnico; se resuelven aparte por activity_key
+      // (el campo que sigue siendo compartido entre catálogo técnico y POA) en vez
+      // de por una relación de FK.
       const { data, error } = await supabase
         .from('weekly_plans')
         .select(`
           *,
           group:groups(title, color),
           board:boards(name),
-          items:weekly_plan_items(*, standard:board_activity_standards(name, category, unit))
+          items:weekly_plan_items(*)
         `)
         .eq('week_start', weekStartISO!)
         .in('status', ['published', 'in_progress']);
@@ -125,8 +131,28 @@ export function usePublishedWeekPlans(weekStartISO: string | undefined) {
       if (error) throw error;
 
       const plans = (data ?? []) as PublishedWeekPlan[];
+
+      const boardIds = [...new Set(plans.map((p) => p.board_id))];
+      const activityKeys = [...new Set(plans.flatMap((p) => p.items.map((i) => i.activity_key)))];
+      let standardsByKey = new Map<string, { name: string; category: string; unit: string }>();
+      if (boardIds.length > 0 && activityKeys.length > 0) {
+        const { data: standards, error: stdError } = await supabase
+          .from('board_activity_standards')
+          .select('activity_key, name, category, unit')
+          .in('board_id', boardIds)
+          .in('activity_key', activityKeys)
+          .is('effective_to', null);
+        if (stdError) throw stdError;
+        standardsByKey = new Map(
+          (standards ?? []).map((s: { activity_key: string; name: string; category: string; unit: string }) => [s.activity_key, s]),
+        );
+      }
+
       for (const plan of plans) {
         plan.items.sort((a, b) => a.planned_sequence - b.planned_sequence);
+        for (const item of plan.items) {
+          item.standard = standardsByKey.get(item.activity_key) ?? null;
+        }
       }
       return plans;
     },

@@ -18,6 +18,11 @@ interface PhotoVerificationModalProps {
   itemName: string;
   itemId: string | number;
   initialGallery?: string[];
+  // Si se provee, sube el archivo de verdad y devuelve la URL persistente
+  // (ej. useExecutionAttachments().uploadAttachment). Si se omite, conserva
+  // el comportamiento original (blob local, no persiste) — no rompe a los
+  // consumidores existentes que todavía no pasan esta prop.
+  onUpload?: (file: File) => Promise<string>;
 }
 
 export default function PhotoVerificationModal({
@@ -27,7 +32,8 @@ export default function PhotoVerificationModal({
   onDelete,
   itemName,
   itemId,
-  initialGallery = []
+  initialGallery = [],
+  onUpload,
 }: PhotoVerificationModalProps) {
   const [uploading, setUploading] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
@@ -69,12 +75,14 @@ export default function PhotoVerificationModal({
     }
     setTimestamp(new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' }));
 
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    const fakeUrl = URL.createObjectURL(file);
-    onSave(fakeUrl);
-    setSelectedPhoto(fakeUrl);
-    setUploading(false);
+    try {
+      const url = onUpload ? await onUpload(file) : URL.createObjectURL(file);
+      onSave(url);
+      setSelectedPhoto(url);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const handleCapture = () => {
