@@ -6,11 +6,12 @@
 // verifyExecution/rejectExecution pertenecen a la futura vista de
 // Verificación (Supervisor): aquí NO se muestran esos controles.
 
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Loader2, Pencil, Send, Users, Clock, Camera, CloudOff } from 'lucide-react';
 import { useWeeklyPlanExecutions } from '@/hooks/useWeeklyPlans';
 import { useWeeklyPlanMutations, useQueuedReportExecutionIds } from '@/hooks/useWeeklyPlanMutations';
-import { useExecutionAttachments } from '@/hooks/useExecutionAttachments';
+import { useExecutionAttachments, usePendingAttachmentCounts } from '@/hooks/useExecutionAttachments';
+import { PendingAttachment } from '@/lib/offlineDB';
 import { ExecutionStatus } from '@/types/scheduler';
 import JornadaForm from './JornadaForm';
 import PhotoVerificationModal from '@/components/modals/PhotoVerificationModal';
@@ -54,6 +55,7 @@ export default function ItemExecutions({ planId, groupId, planItemId, unit }: Pr
   const { data: executions, isLoading } = useWeeklyPlanExecutions(planItemId);
   const { createExecution, updateDraftExecution, reportExecution } = useWeeklyPlanMutations(undefined);
   const { data: queuedReportIds } = useQueuedReportExecutionIds();
+  const { data: pendingAttachmentCounts } = usePendingAttachmentCounts();
 
   // 'closed' | 'new' | id de la ejecución en edición
   const [formMode, setFormMode] = useState<string>('closed');
@@ -64,9 +66,71 @@ export default function ItemExecutions({ planId, groupId, planItemId, unit }: Pr
   const [evidenceExecId, setEvidenceExecId] = useState<string | null>(null);
   const {
     attachments: evidenceAttachments,
+    pendingAttachments: evidencePending,
     uploadAttachment,
     deleteAttachment,
+    deletePendingAttachment,
   } = useExecutionAttachments(evidenceExecId ?? undefined);
+
+  // Object URLs locales para los Blobs pendientes — solo mientras no se
+  // sincronizan (Sección 4 del diseño offline: estado transitorio, no final).
+  // getPendingUrl() es la ÚNICA vía para obtener la URL de un pending: si
+  // onUpload y galleryEntries llamaran cada uno a su propio
+  // URL.createObjectURL(), el mismo Blob tendría dos URLs distintas y
+  // onDelete (que busca por URL) nunca encontraría el registro a borrar.
+  const pendingUrlsRef = useRef(new Map<string, string>());
+  const getPendingUrl = (p: PendingAttachment) => {
+    let url = pendingUrlsRef.current.get(p.id);
+    if (!url) {
+      url = URL.createObjectURL(p.file);
+      pendingUrlsRef.current.set(p.id, url);
+    }
+    return url;
+  };
+
+  // Revoca URLs de pendings que ya no están en evidencePending — cubre TANTO
+  // el borrado como la sincronización exitosa (en ambos casos el pending
+  // desaparece de la lista). Deliberadamente NO revoca de forma síncrona en
+  // el momento del clic de borrar: initialGallery (prop del modal) solo
+  // refleja el cambio cuando React Query termina de refetch — revocar antes
+  // deja un intervalo donde el efecto interno del modal que auto-selecciona
+  // "initialGallery[0]" puede reseleccionar una URL ya revocada (imagen rota
+  // persistente, encontrado verificando este mismo incremento).
+  useEffect(() => {
+    const currentIds = new Set((evidencePending ?? []).map((p) => p.id));
+    const map = pendingUrlsRef.current;
+    for (const [id, url] of map) {
+      if (!currentIds.has(id)) {
+        URL.revokeObjectURL(url);
+        map.delete(id);
+      }
+    }
+  }, [evidencePending]);
+
+  // Al cambiar de ejecución o desmontar, revocar todo lo que quede.
+  useEffect(() => {
+    const map = pendingUrlsRef.current;
+    return () => {
+      map.forEach((url) => URL.revokeObjectURL(url));
+      map.clear();
+    };
+  }, [evidenceExecId]);
+
+  const galleryEntries = useMemo(() => {
+    const synced = (evidenceAttachments ?? []).map((a) => ({ url: a.file_url, kind: 'synced' as const, attachment: a }));
+    const pending = (evidencePending ?? []).map((p) => ({ url: getPendingUrl(p), kind: 'pending' as const, pending: p }));
+    return [...synced, ...pending];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [evidenceAttachments, evidencePending]);
+
+  // Referencia estable: PhotoVerificationModal reselecciona initialGallery[0]
+  // en un efecto que depende de esta prop por identidad. Si se le pasara
+  // `galleryEntries.map(...)` inline, cada re-render de ItemExecutions crea
+  // un array nuevo (aunque el contenido no cambie) y dispara ese efecto de
+  // más — encontrado porque "deshacía" el setSelectedPhoto(null) del botón
+  // de borrar antes de que la mutación terminara, reseleccionando la foto
+  // que se acababa de pedir borrar.
+  const galleryUrls = useMemo(() => galleryEntries.map((e) => e.url), [galleryEntries]);
 
   const busy = createExecution.isPending || updateDraftExecution.isPending || reportExecution.isPending;
 
@@ -172,6 +236,11 @@ export default function ItemExecutions({ planId, groupId, planItemId, unit }: Pr
                 className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-60"
               >
                 <Camera className="w-3 h-3" /> Evidencias
+                {(pendingAttachmentCounts?.get(exec.id) ?? 0) > 0 && (
+                  <span className="flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-bold">
+                    {pendingAttachmentCounts!.get(exec.id)}
+                  </span>
+                )}
               </button>
               {exec.status === 'draft' && queuedReportIds?.has(exec.id) && (
                 <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-lg">
@@ -243,13 +312,19 @@ export default function ItemExecutions({ planId, groupId, planItemId, unit }: Pr
           // modal cuando se migren el resto de consumidores (ExecutionView).
           onSave={() => {}}
           onDelete={(url) => {
-            const target = evidenceAttachments?.find((a) => a.file_url === url);
-            if (target) deleteAttachment.mutate(target);
+            const entry = galleryEntries.find((e) => e.url === url);
+            if (!entry) return;
+            // El ObjectURL se revoca en el efecto que observa evidencePending
+            // (arriba), no aquí — apenas se confirme la baja, no antes.
+            if (entry.kind === 'pending') deletePendingAttachment.mutate(entry.pending.id);
+            else deleteAttachment.mutate(entry.attachment);
           }}
-          onUpload={(file) => uploadAttachment.mutateAsync(file).then((a) => a.file_url)}
+          onUpload={(file) => uploadAttachment.mutateAsync(file).then((result) =>
+            result.queued ? getPendingUrl(result.pending) : result.attachment.file_url
+          )}
           itemName="Evidencia de jornada"
           itemId={evidenceExecId}
-          initialGallery={evidenceAttachments?.map((a) => a.file_url) ?? []}
+          initialGallery={galleryUrls}
         />
       )}
     </div>

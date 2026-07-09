@@ -2,7 +2,7 @@
 import { supabase } from './supabaseClient';
 
 const DB_NAME = 'mantenix_offline_db';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 export function generateUUID(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -55,6 +55,40 @@ export interface DomainCommand {
   created_at: number;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Carril 3: cola de Blobs (docs/architecture/offline-certification-design.md,
+// Sección 4). Una foto no es un objeto de mutación como los demás — el flujo
+// es Blob local → Storage → INSERT en execution_attachments, dos pasos que
+// pueden fallar por separado. `storage_path` se llena apenas el Storage
+// upload tiene éxito (antes de intentar el INSERT) para que un reintento no
+// vuelva a subir el mismo archivo con una ruta nueva si solo el INSERT falló
+// — sin esto, un fallo parcial repetido dejaría Blobs huérfanos acumulándose
+// en Storage cada vez que useOfflineSync reintenta (Invariante 4: un archivo
+// no cuenta como sincronizado hasta existir en Storage Y en la tabla).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type PendingAttachmentStatus = 'queued' | 'error' | 'conflicto';
+
+export interface PendingAttachmentError {
+  code?: string;
+  message: string;
+}
+
+export interface PendingAttachment {
+  id: string;
+  execution_id: string;
+  file: Blob;
+  file_name: string;
+  file_type: string;
+  file_size: number;
+  uploaded_by: string;
+  storage_path: string | null;
+  status: PendingAttachmentStatus;
+  attempts: number;
+  last_error: PendingAttachmentError | null;
+  created_at: number;
+}
+
 export class OfflineDB {
   private db: IDBDatabase | null = null;
 
@@ -99,6 +133,12 @@ export class OfflineDB {
         // autoIncrement) porque ese mismo id es la clave de idempotencia.
         if (!db.objectStoreNames.contains('domain_commands')) {
           db.createObjectStore('domain_commands', { keyPath: 'id' });
+        }
+
+        // Cola de Blobs (carril 3) — Incremento 3. IndexedDB soporta Blob
+        // nativamente (structured clone), no hace falta base64.
+        if (!db.objectStoreNames.contains('pending_attachments')) {
+          db.createObjectStore('pending_attachments', { keyPath: 'id' });
         }
       };
 
@@ -326,6 +366,84 @@ export class OfflineDB {
       try {
         const transaction = db.transaction('domain_commands', 'readwrite');
         const request = transaction.objectStore('domain_commands').delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  // --- Carril 3: cola de Blobs ---
+  async getPendingAttachments(): Promise<PendingAttachment[]> {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      try {
+        const transaction = db.transaction('pending_attachments', 'readonly');
+        const request = transaction.objectStore('pending_attachments').getAll();
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(request.error);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  async addPendingAttachment(att: { execution_id: string; file: Blob; file_name: string; file_type: string; file_size: number; uploaded_by: string }): Promise<PendingAttachment> {
+    const db = await this.init();
+    const pending: PendingAttachment = {
+      id: generateUUID(),
+      execution_id: att.execution_id,
+      file: att.file,
+      file_name: att.file_name,
+      file_type: att.file_type,
+      file_size: att.file_size,
+      uploaded_by: att.uploaded_by,
+      storage_path: null,
+      status: 'queued',
+      attempts: 0,
+      last_error: null,
+      created_at: Date.now(),
+    };
+    return new Promise((resolve, reject) => {
+      try {
+        const transaction = db.transaction('pending_attachments', 'readwrite');
+        const request = transaction.objectStore('pending_attachments').add(pending);
+        request.onsuccess = () => resolve(pending);
+        request.onerror = () => reject(request.error);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  async updatePendingAttachment(id: string, patch: Partial<Omit<PendingAttachment, 'id'>>): Promise<void> {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      try {
+        const transaction = db.transaction('pending_attachments', 'readwrite');
+        const store = transaction.objectStore('pending_attachments');
+        const getRequest = store.get(id);
+        getRequest.onsuccess = () => {
+          const pending = getRequest.result as PendingAttachment;
+          if (!pending) { resolve(); return; }
+          const updateRequest = store.put({ ...pending, ...patch });
+          updateRequest.onsuccess = () => resolve();
+          updateRequest.onerror = () => reject(updateRequest.error);
+        };
+        getRequest.onerror = () => reject(getRequest.error);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  async removePendingAttachment(id: string): Promise<void> {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      try {
+        const transaction = db.transaction('pending_attachments', 'readwrite');
+        const request = transaction.objectStore('pending_attachments').delete(id);
         request.onsuccess = () => resolve();
         request.onerror = () => reject(request.error);
       } catch (e) {

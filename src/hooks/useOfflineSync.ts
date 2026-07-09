@@ -2,8 +2,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
-import { offlineDB, DomainCommand } from '@/lib/offlineDB';
+import { offlineDB, DomainCommand, PendingAttachment } from '@/lib/offlineDB';
 import { isNetworkError } from './useBoardData';
+import { ATTACHMENT_BUCKET, buildAttachmentPath } from '@/lib/storageUtils';
 
 export function useOfflineSync() {
   const queryClient = useQueryClient();
@@ -19,11 +20,12 @@ export function useOfflineSync() {
 
     if (offlineDB) {
       try {
-        const [mutations, commands] = await Promise.all([
+        const [mutations, commands, attachments] = await Promise.all([
           offlineDB.getMutations(),
           offlineDB.getCommands(),
+          offlineDB.getPendingAttachments(),
         ]);
-        setPendingCount(mutations.length + commands.length);
+        setPendingCount(mutations.length + commands.length + attachments.length);
       } catch (e) {
         console.error('[offlineSync] Error reading mutations:', e);
       }
@@ -111,6 +113,75 @@ export function useOfflineSync() {
     return remaining;
   }, [queryClient]);
 
+  // Carril 3 (Blobs de evidencia): mismo principio que el carril 2 — nunca
+  // descarta un adjunto en conflicto, y solo se intenta después de que el
+  // carril CRUD terminó sin errores (la ejecución padre debe existir en el
+  // servidor). `storage_path` se persiste apenas el upload a Storage tiene
+  // éxito, así un reintento (por ejemplo si el INSERT posterior falló por
+  // red) no vuelve a subir el mismo archivo con una ruta nueva.
+  const syncPendingAttachments = useCallback(async (): Promise<number> => {
+    if (!offlineDB || typeof window === 'undefined' || !window.navigator.onLine) return 0;
+    const pendings: PendingAttachment[] = await offlineDB.getPendingAttachments();
+    if (pendings.length === 0) return 0;
+
+    console.log(`[offlineSync] Starting sync for ${pendings.length} pending attachments...`);
+    let remaining = 0;
+
+    for (const p of pendings) {
+      if (p.status === 'conflicto') { remaining += 1; continue; }
+
+      try {
+        let storagePath = p.storage_path;
+        if (!storagePath) {
+          storagePath = buildAttachmentPath('execution', p.execution_id, p.file_name);
+          const { error: uploadError } = await supabase.storage.from(ATTACHMENT_BUCKET).upload(storagePath, p.file);
+          if (uploadError) {
+            if (isNetworkError(uploadError)) {
+              await offlineDB.updatePendingAttachment(p.id, { attempts: p.attempts + 1, last_error: { message: uploadError.message } });
+            } else {
+              await offlineDB.updatePendingAttachment(p.id, { status: 'conflicto', last_error: { message: uploadError.message } });
+              console.warn(`[offlineSync] Adjunto ${p.id} en conflicto (upload):`, uploadError.message);
+            }
+            remaining += 1;
+            continue;
+          }
+          await offlineDB.updatePendingAttachment(p.id, { storage_path: storagePath });
+        }
+
+        const { data: { publicUrl } } = supabase.storage.from(ATTACHMENT_BUCKET).getPublicUrl(storagePath);
+        const { error: dbError } = await supabase.from('execution_attachments').insert({
+          execution_id: p.execution_id,
+          file_name: p.file_name,
+          file_url: publicUrl,
+          file_type: p.file_type,
+          file_size: p.file_size,
+          uploaded_by: p.uploaded_by,
+        });
+
+        if (dbError) {
+          if (isNetworkError(dbError)) {
+            await offlineDB.updatePendingAttachment(p.id, { attempts: p.attempts + 1, last_error: { code: (dbError as any).code, message: dbError.message } });
+          } else {
+            await offlineDB.updatePendingAttachment(p.id, { status: 'conflicto', last_error: { code: (dbError as any).code, message: dbError.message } });
+            console.warn(`[offlineSync] Adjunto ${p.id} en conflicto (insert):`, dbError.message);
+          }
+          remaining += 1;
+          continue;
+        }
+
+        await offlineDB.removePendingAttachment(p.id);
+        console.log(`[offlineSync] Adjunto ${p.id} sincronizado.`);
+      } catch (err: any) {
+        await offlineDB.updatePendingAttachment(p.id, { attempts: p.attempts + 1, last_error: { message: err?.message ?? 'Error desconocido' } });
+        remaining += 1;
+      }
+    }
+
+    queryClient.invalidateQueries({ queryKey: ['execution_attachments'] });
+    queryClient.invalidateQueries({ queryKey: ['pending_attachments'] });
+    return remaining;
+  }, [queryClient]);
+
   const triggerSync = useCallback(async () => {
     if (typeof window === 'undefined' || !window.navigator.onLine || !offlineDB) return;
 
@@ -119,8 +190,10 @@ export function useOfflineSync() {
       const mutations = await offlineDB.getMutations();
       if (mutations.length === 0) {
         const remainingCommands = await replayDomainCommands();
-        setSyncStatus(remainingCommands > 0 ? 'error' : 'synced');
-        setPendingCount(remainingCommands);
+        const remainingAttachments = await syncPendingAttachments();
+        const remaining = remainingCommands + remainingAttachments;
+        setSyncStatus(remaining > 0 ? 'error' : 'synced');
+        setPendingCount(remaining);
         return;
       }
 
@@ -170,17 +243,19 @@ export function useOfflineSync() {
       // Actualizar instantáneas locales
       await refreshLocalCache();
 
-      // Carril 2: solo se intenta después de que el carril CRUD terminó sin
-      // errores (ver nota en replayDomainCommands sobre la dependencia entre
-      // carriles).
+      // Carriles 2 y 3: solo se intentan después de que el carril CRUD
+      // terminó sin errores (ver nota en replayDomainCommands/syncPendingAttachments
+      // sobre la dependencia entre carriles). Son independientes entre sí.
       const remainingCommands = await replayDomainCommands();
-      setSyncStatus(remainingCommands > 0 ? 'error' : 'synced');
-      setPendingCount(remainingCommands);
+      const remainingAttachments = await syncPendingAttachments();
+      const remaining = remainingCommands + remainingAttachments;
+      setSyncStatus(remaining > 0 ? 'error' : 'synced');
+      setPendingCount(remaining);
     } catch (e) {
       console.error('[offlineSync] Sync loop failed:', e);
       setSyncStatus('error');
     }
-  }, [refreshLocalCache, replayDomainCommands]);
+  }, [refreshLocalCache, replayDomainCommands, syncPendingAttachments]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

@@ -51,11 +51,20 @@ export default function PhotoVerificationModal({
     setMounted(true);
   }, []);
 
+  // Deliberadamente sin `selectedPhoto` en las dependencias: este efecto debe
+  // reaccionar a que la galería cambie de verdad (o el modal se abra), no a
+  // que selectedPhoto se limpie por otra razón (ej. justo se borró la foto
+  // seleccionada). Si `selectedPhoto` estuviera en las deps, un
+  // setSelectedPhoto(null) intencional (borrar) dispararía este efecto antes
+  // de que `initialGallery` reflejara la baja, reseleccionando la misma foto
+  // que se acaba de pedir borrar — encontrado verificando el borrado de
+  // evidencia offline (Incremento 3 del soporte offline).
   useEffect(() => {
     if (isOpen && initialGallery.length > 0 && !selectedPhoto) {
       setSelectedPhoto(initialGallery[0]);
     }
-  }, [isOpen, initialGallery, selectedPhoto]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialGallery]);
 
   useEffect(() => {
     if (isOpen) {
