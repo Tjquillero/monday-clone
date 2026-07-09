@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
-import { offlineDB, DomainCommand } from '@/lib/offlineDB';
+import { offlineDB, DomainCommand, generateUUID } from '@/lib/offlineDB';
 import { isNetworkError } from './useBoardData';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -237,22 +237,31 @@ export function useWeeklyPlanMutations(boardId: string | undefined) {
   // useOfflineSync lo reproduzca al reconectar. El servidor sigue siendo el
   // único que ejecuta la transición de estado — este mutationFn nunca marca
   // la ejecución como reportada localmente, solo registra la intención.
+  //
+  // commandId se genera UNA vez, antes de intentar nada, y viaja igual por
+  // las dos rutas (RPC directo u offlineDB.addCommand): si el intento online
+  // falla justo entre la ejecución del RPC y la respuesta (isNetworkError),
+  // el reintento — sea inmediato o vía la cola — usa el MISMO command_id, así
+  // que report_execution() en el servidor lo reconoce como el mismo intento
+  // en vez de repetir la transición (ver migración 20260718, idempotencia).
 
   const reportExecution = useMutation<
     { queued: boolean }, Error, { executionId: string; planItemId: string }
   >({
     mutationFn: async ({ executionId }) => {
+      const commandId = generateUUID();
       const offline = typeof window !== 'undefined' && !window.navigator.onLine;
       if (!offline) {
-        const { error } = await supabase.rpc('report_execution', { p_execution_id: executionId });
+        const { error } = await supabase.rpc('report_execution', { p_execution_id: executionId, p_command_id: commandId });
         if (!error) return { queued: false };
         if (!isNetworkError(error)) throw error; // fallo semántico real: no encolar, mostrar al líder
       }
       if (!offlineDB) throw new Error('Sin conexión y sin caché local disponible.');
       await offlineDB.addCommand({
+        id: commandId,
         type: 'REPORT_EXECUTION',
         entity_id: executionId,
-        payload: { p_execution_id: executionId },
+        payload: { p_execution_id: executionId, p_command_id: commandId },
       });
       return { queued: true };
     },

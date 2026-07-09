@@ -314,10 +314,14 @@ export class OfflineDB {
     });
   }
 
-  async addCommand(cmd: { type: DomainCommandType; entity_id: string; payload: any; depends_on?: string | null }): Promise<DomainCommand> {
+  async addCommand(cmd: { id?: string; type: DomainCommandType; entity_id: string; payload: any; depends_on?: string | null }): Promise<DomainCommand> {
     const db = await this.init();
     const command: DomainCommand = {
-      id: generateUUID(),
+      // Permite reutilizar un id ya generado (ej. el mismo command_id que se
+      // intentó enviar online antes de caer al carril offline) en vez de uno
+      // nuevo — necesario para que la idempotencia del servidor (command_id)
+      // funcione de punta a punta, no solo dentro de la cola.
+      id: cmd.id ?? generateUUID(),
       type: cmd.type,
       entity_id: cmd.entity_id,
       payload: cmd.payload,
