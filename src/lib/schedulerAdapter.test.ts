@@ -1,11 +1,11 @@
 import { buildActivityMappings, ActivityRule } from './schedulerAdapter';
-import { ActivityStandard, ScopeMapping } from '@/types/scheduler';
+import { ActivityStandardWithFrecuencia, ScopeMapping } from '@/types/scheduler';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Factories mínimas — solo los campos que buildActivityMappings consume
 // ─────────────────────────────────────────────────────────────────────────────
 
-function std(overrides: Partial<ActivityStandard> = {}): ActivityStandard {
+function std(overrides: Partial<ActivityStandardWithFrecuencia> = {}): ActivityStandardWithFrecuencia {
   return {
     id: 'test-id',
     board_id: 'board-1',
@@ -22,6 +22,7 @@ function std(overrides: Partial<ActivityStandard> = {}): ActivityStandard {
     effective_to: null,
     source: 'operational_manual',
     created_at: '2026-01-01T00:00:00Z',
+    poa_activity_zone_id: 'test-poa-activity-zone-id',
     ...overrides,
   };
 }

@@ -1,5 +1,5 @@
 import {
-  ActivityStandard,
+  ActivityStandardWithFrecuencia,
   ScopeMapping,
   PlanningActivity,
   WeeklyPlanningContext,
@@ -103,7 +103,7 @@ const PRIORITY_ORDER: Record<ActivityPriority, number> = {
 };
 
 export function buildWeeklyPlanningContext(
-  standards: ActivityStandard[],
+  standards: ActivityStandardWithFrecuencia[],
   scopeMappings: ScopeMapping[],
   scopeQuantities: Record<string, number>,
   zone: ZoneInfo,

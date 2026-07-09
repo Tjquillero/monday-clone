@@ -5,7 +5,7 @@ import { Group } from '@/types/monday';
 import { useWeeklyPlan } from '@/hooks/useWeeklyPlan';
 import { useWeeklyPlans } from '@/hooks/useWeeklyPlans';
 import { useWeeklyPlanMutations, PlanItemInput } from '@/hooks/useWeeklyPlanMutations';
-import { useContractStandards } from '@/hooks/useActivityStandards';
+import { usePoaActiveCatalog } from '@/hooks/usePoaActivities';
 import { WeeklyPlan } from '@/types/scheduler';
 import { getMonday } from '@/lib/weeklyPlanner';
 import WeeklyPlannerView from '@/components/planner/WeeklyPlannerView';
@@ -45,8 +45,8 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
   // Planes persistidos para este grupo — cache hit si el board ya cargó
   const { data: savedPlans } = useWeeklyPlans(boardId, selectedGroupId ?? undefined);
 
-  // Estándares del contrato — cache hit, useWeeklyPlan ya los fetcheó
-  const { data: standards } = useContractStandards(boardId);
+  // Catálogo activo del POA (fuente contractual, ADR-0002) — cache hit, useWeeklyPlan ya lo fetcheó
+  const { data: poaCatalog } = usePoaActiveCatalog(boardId);
 
   const { createPlan, savePlanItems, publishPlan } = useWeeklyPlanMutations(boardId);
 
@@ -60,7 +60,7 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
   const isPublishing = publishPlan.isPending;
 
   const handleSave = useCallback(async () => {
-    if (!boardId || !group || !plan || !standards) return;
+    if (!boardId || !group || !plan || !poaCatalog) return;
     if (plan.activities.length === 0) return;
     // Esperar a que savedPlans cargue para evitar crear un plan duplicado
     if (savedPlans === undefined) return;
@@ -85,22 +85,23 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
         planId = created.id;
       }
 
-      // 2. Resolver activity_standard_id (contrato: group_id IS NULL)
-      //    El motor de cálculo usa los mismos estándares del contrato.
-      const stdMap = new Map(standards.map(s => [s.activity_key, s]));
+      // 2. Resolver poa_activity_zone_id (Actividad del POA vigente + esta zona).
+      //    El motor de cálculo ya filtró por cobertura vigente (useWeeklyPlan),
+      //    así que aquí solo se resuelve el id para persistir.
       const items: PlanItemInput[] = plan.activities.map((a, i) => {
-        const std = stdMap.get(a.activity_key);
-        if (!std) throw new Error(`Sin estándar activo para "${a.activity_key}"`);
+        const poaActivity = poaCatalog.get(a.activity_key);
+        const zoneCoverage = poaActivity?.zones.get(group.id);
+        if (!zoneCoverage) throw new Error(`Sin cobertura del POA para "${a.activity_key}" en esta zona`);
         return {
-          planned_sequence:     i + 1,
-          activity_key:         a.activity_key,
-          activity_standard_id: std.id,
-          planned_rendimiento:  a.rendimiento,
-          planned_frecuencia:   a.frecuencia,
-          priority:             a.priority,
-          planned_qty:          a.qty,
-          unit:                 a.unit,
-          planned_jr:           a.theoretical_journals_week,
+          planned_sequence:      i + 1,
+          activity_key:          a.activity_key,
+          poa_activity_zone_id:  zoneCoverage.poaActivityZoneId,
+          planned_rendimiento:   a.rendimiento,
+          planned_frecuencia:    a.frecuencia,
+          priority:              a.priority,
+          planned_qty:           a.qty,
+          unit:                  a.unit,
+          planned_jr:            a.theoretical_journals_week,
         };
       });
 
@@ -109,7 +110,7 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Error al guardar el plan');
     }
-  }, [boardId, group, plan, standards, savedPlans, savedPlan, weekStartISO, createPlan, savePlanItems]);
+  }, [boardId, group, plan, poaCatalog, savedPlans, savedPlan, weekStartISO, createPlan, savePlanItems]);
 
   const handlePublish = useCallback(async () => {
     if (!savedPlan || savedPlan.status !== 'draft') return;

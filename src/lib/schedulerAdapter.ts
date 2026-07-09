@@ -1,4 +1,4 @@
-import { ActivityStandard, ScopeMapping } from '@/types/scheduler';
+import { ActivityStandardWithFrecuencia, ScopeMapping } from '@/types/scheduler';
 
 // Shape que el algoritmo de cálculo del widget espera.
 // Mantiene los nombres cortos (rend, freq) del STANDARD_MAPPINGS original
@@ -18,7 +18,7 @@ export type ActivityRule = {
 // en v1 — todas las actividades tienen weight=1). El resultado replica
 // exactamente el shape del antiguo STANDARD_MAPPINGS hardcodeado.
 export function buildActivityMappings(
-  standards: ActivityStandard[],
+  standards: ActivityStandardWithFrecuencia[],
   scopeMappings: ScopeMapping[],
 ): Record<string, ActivityRule[]> {
   // O(1) lookup: activity_key → lista de scope_keys

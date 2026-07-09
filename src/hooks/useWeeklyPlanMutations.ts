@@ -21,11 +21,11 @@ export interface CreatePlanInput {
 }
 
 // Snapshot del estándar al momento de planificar.
-// Se genera desde PlanningActivity + activity_standard_id resuelto.
+// Se genera desde PlanningActivity + poa_activity_zone_id resuelto (ADR-0002).
 export interface PlanItemInput {
   planned_sequence:    number;
   activity_key:        string;
-  activity_standard_id: string;
+  poa_activity_zone_id: string;
   planned_rendimiento: number;
   planned_frecuencia:  number;
   priority:            ActivityPriority;

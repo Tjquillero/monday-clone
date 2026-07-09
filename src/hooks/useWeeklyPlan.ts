@@ -3,25 +3,31 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
-import { WeeklyPlanningContext, SchedulerMigrationMissingError } from '@/types/scheduler';
+import { WeeklyPlanningContext, SchedulerMigrationMissingError, ActivityStandardWithFrecuencia } from '@/types/scheduler';
 import { getSiteCapacity } from '@/lib/siteCapacity';
 import { buildWeeklyPlanningContext, calculateContractWeek } from '@/lib/weeklyPlanner';
 import { WORKING_DAYS_WEEK } from '@/lib/schedulerMath';
 import { useContractStandards, useScopeMappings } from './useActivityStandards';
+import { usePoaActiveCatalog } from './usePoaActivities';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // useWeeklyPlan
 //
-// Orquesta tres fuentes de datos + el motor puro para producir un
+// Orquesta cuatro fuentes de datos + el motor puro para producir un
 // WeeklyPlanningContext completamente determinista:
 //
-//   useContractStandards(boardId)    → estándares activos del contrato
+//   useContractStandards(boardId)    → catálogo técnico (rendimiento, priority)
+//   usePoaActiveCatalog(boardId)     → frecuencia/precio de la versión POA activa
 //   useScopeMappings()               → activity_key → scope_key
 //   resource_analysis (scope_data)  → cantidades por scope type del sitio
 //   getSiteCapacity(group.title)     → capacidad diaria del sitio (v1: hardcoded)
 //        │
 //        ▼
-//   buildWeeklyPlanningContext()     → WeeklyPlanningContext
+//   merge (por activity_key + zona) → buildWeeklyPlanningContext() → WeeklyPlanningContext
+//
+// El merge descarta actividades del catálogo técnico que no tengan cobertura
+// vigente en el POA para esta zona (Regla 13, poa-domain.md: origen exclusivo
+// de actividades) — no se planifica algo que no está en el contrato activo.
 //
 // El hook no conoce nada de componentes visuales.
 // El resultado es idempotente: la misma (boardId, group, weekStart) siempre
@@ -49,6 +55,14 @@ export function useWeeklyPlan(
     isError: stdError,
     error: stdErr,
   } = useContractStandards(boardId);
+
+  // Fuente contractual (ADR-0002): frecuencia y precio de la versión activa del POA
+  const {
+    data: poaCatalog,
+    isLoading: poaLoading,
+    isError: poaError,
+    error: poaErr,
+  } = usePoaActiveCatalog(boardId);
 
   const {
     data: scopeMappings,
@@ -86,7 +100,21 @@ export function useWeeklyPlan(
 
   // El plan se deriva de los datos ya cacheados — no necesita su propio useQuery
   const plan = useMemo<WeeklyPlanningContext | null>(() => {
-    if (!standards || !scopeMappings || analysisRow === undefined) return null;
+    if (!standards || !poaCatalog || !scopeMappings || analysisRow === undefined || !group) return null;
+
+    // Merge Catálogo Técnico + Actividad del POA (frecuencia/precio) por
+    // activity_key, filtrando por cobertura vigente en esta zona.
+    const mergedStandards: ActivityStandardWithFrecuencia[] = [];
+    for (const s of standards) {
+      const poaActivity = poaCatalog.get(s.activity_key);
+      const zoneCoverage = poaActivity?.zones.get(group.id);
+      if (!poaActivity || !zoneCoverage) continue; // sin cobertura POA vigente: no se planifica
+      mergedStandards.push({
+        ...s,
+        frecuencia: poaActivity.frecuencia,
+        poa_activity_zone_id: zoneCoverage.poaActivityZoneId,
+      });
+    }
 
     const scopeQuantities: Record<string, number> = analysisRow?.scope_data ?? {};
 
@@ -105,14 +133,14 @@ export function useWeeklyPlan(
       workingDays: WORKING_DAYS_WEEK,
     };
 
-    return buildWeeklyPlanningContext(standards, scopeMappings, scopeQuantities, zone, week);
-  }, [standards, scopeMappings, analysisRow, group, weekStart]);
+    return buildWeeklyPlanningContext(mergedStandards, scopeMappings, scopeQuantities, zone, week);
+  }, [standards, poaCatalog, scopeMappings, analysisRow, group, weekStart]);
 
-  const isLoading = stdLoading || mapLoading || qtyLoading;
+  const isLoading = stdLoading || poaLoading || mapLoading || qtyLoading;
 
   // Errores — preservar la instancia para que el consumidor pueda usar instanceof
-  const error = (stdErr ?? mapErr ?? qtyErr) as Error | null;
-  const isError = stdError || mapError || qtyError;
+  const error = (stdErr ?? poaErr ?? mapErr ?? qtyErr) as Error | null;
+  const isError = stdError || poaError || mapError || qtyError;
 
   return { plan, isLoading, isError, error };
 }

@@ -5,8 +5,9 @@ import { Group, ActivityTemplate, EfficiencyRow, ResourceAnalysisDBRow } from '@
 import { Database, AlertCircle, Table, MapPin, DollarSign } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useContractStandards, useScopeMappings } from '@/hooks/useActivityStandards';
+import { usePoaActiveCatalog } from '@/hooks/usePoaActivities';
 import { WORKING_DAYS_MONTH } from '@/lib/schedulerMath';
-import { SchedulerMigrationMissingError } from '@/types/scheduler';
+import { SchedulerMigrationMissingError, ActivityStandardWithFrecuencia } from '@/types/scheduler';
 import { buildActivityMappings, ActivityRule } from '@/lib/schedulerAdapter';
 
 interface ResourceEfficiencyWidgetProps {
@@ -72,9 +73,30 @@ export default function ResourceEfficiencyWidget({ boardId, groups, activityTemp
     error: mappingsErr,
   } = useScopeMappings();
 
+  // Fuente contractual (ADR-0002): frecuencia vive en la versión activa del POA,
+  // no en board_activity_standards. La frecuencia es única por actividad,
+  // independientemente de la zona (poa-domain.md), así que no requiere merge por sitio.
+  const { data: poaCatalog } = usePoaActiveCatalog(boardId ?? undefined);
+
+  const standardsWithFrecuencia = useMemo<ActivityStandardWithFrecuencia[]>(() => {
+    if (!contractStandards || !poaCatalog) return [];
+    const merged: ActivityStandardWithFrecuencia[] = [];
+    for (const s of contractStandards) {
+      const poaActivity = poaCatalog.get(s.activity_key);
+      if (!poaActivity) continue; // sin actividad vigente en el POA: se excluye del análisis
+      const firstZone = poaActivity.zones.values().next().value;
+      merged.push({
+        ...s,
+        frecuencia: poaActivity.frecuencia,
+        poa_activity_zone_id: firstZone?.poaActivityZoneId ?? '',
+      });
+    }
+    return merged;
+  }, [contractStandards, poaCatalog]);
+
   const activityMappings = useMemo<Record<string, ActivityRule[]>>(
-    () => buildActivityMappings(contractStandards ?? [], scopeMappings ?? []),
-    [contractStandards, scopeMappings],
+    () => buildActivityMappings(standardsWithFrecuencia, scopeMappings ?? []),
+    [standardsWithFrecuencia, scopeMappings],
   );
 
   // Initialize active site

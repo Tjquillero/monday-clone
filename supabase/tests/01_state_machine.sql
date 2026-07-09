@@ -84,6 +84,53 @@ RETURNS VOID LANGUAGE sql AS $$
   SELECT set_config('request.jwt.claims', json_build_object('sub', p_user_id)::TEXT, true);
 $$;
 
+-- Helper: siembra la cadena POA (poa → poa_versions activa → poa_activities →
+-- poa_activity_zones) para un board/zona/actividad y devuelve el
+-- poa_activity_zone_id que weekly_plan_items.poa_activity_zone_id referencia
+-- (ADR-0002). Reutilizable e idempotente (ON CONFLICT) para llamadas
+-- repetidas sobre el mismo board dentro de un mismo test.
+CREATE OR REPLACE FUNCTION _test_seed_poa_activity_zone(
+  p_board_id UUID,
+  p_zone_id  UUID,
+  p_activity_key TEXT,
+  p_frecuencia NUMERIC,
+  p_precio_unitario NUMERIC DEFAULT 100000,
+  p_cantidad_contratada NUMERIC DEFAULT 100000
+) RETURNS UUID LANGUAGE plpgsql AS $$
+DECLARE
+  v_poa_id      UUID;
+  v_version_id  UUID;
+  v_activity_id UUID;
+  v_zone_row_id UUID;
+BEGIN
+  INSERT INTO public.poa (board_id, name)
+  VALUES (p_board_id, 'POA Test')
+  ON CONFLICT (board_id) DO UPDATE SET name = EXCLUDED.name
+  RETURNING id INTO v_poa_id;
+
+  SELECT id INTO v_version_id FROM public.poa_versions
+  WHERE poa_id = v_poa_id AND status = 'active';
+
+  IF v_version_id IS NULL THEN
+    INSERT INTO public.poa_versions (poa_id, version_number, status, created_by)
+    VALUES (v_poa_id, 1, 'active', 'aaaaaaaa-0000-0000-0000-000000000001')
+    RETURNING id INTO v_version_id;
+  END IF;
+
+  INSERT INTO public.poa_activities (poa_version_id, activity_key, frecuencia, precio_unitario)
+  VALUES (v_version_id, p_activity_key, p_frecuencia, p_precio_unitario)
+  ON CONFLICT (poa_version_id, activity_key) DO UPDATE SET frecuencia = EXCLUDED.frecuencia
+  RETURNING id INTO v_activity_id;
+
+  INSERT INTO public.poa_activity_zones (poa_activity_id, zone_id, cantidad_contratada)
+  VALUES (v_activity_id, p_zone_id, p_cantidad_contratada)
+  ON CONFLICT (poa_activity_id, zone_id) DO UPDATE SET cantidad_contratada = EXCLUDED.cantidad_contratada
+  RETURNING id INTO v_zone_row_id;
+
+  RETURN v_zone_row_id;
+END;
+$$;
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Test 1: publish_weekly_plan — happy path (draft → published)
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -181,13 +228,8 @@ DECLARE
   v_item_id UUID;
   v_std_id  UUID;
 BEGIN
-  -- Estándar mínimo (necesita board_activity_standards)
-  INSERT INTO public.board_activity_standards
-    (board_id, group_id, activity_key, name, category, unit, rendimiento, frecuencia, priority, version, effective_from, source)
-  VALUES
-    ('bbbbbbbb-0000-0000-0000-000000000001', NULL, 'TEST_ACT_001', 'Actividad Test', 'ZONA VERDE',
-     'und', 10, 4, 'must_execute', 1, '2026-01-01', 'test')
-  RETURNING id INTO v_std_id;
+  -- Cobertura mínima del POA (poa_activity_zone_id) para esta actividad
+  v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_001', 4);
 
   -- Plan en published
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
@@ -197,7 +239,7 @@ BEGIN
 
   -- Item del plan
   INSERT INTO public.weekly_plan_items
-    (plan_id, planned_sequence, activity_key, activity_standard_id, planned_rendimiento,
+    (plan_id, planned_sequence, activity_key, poa_activity_zone_id, planned_rendimiento,
      planned_frecuencia, priority, planned_qty, unit, planned_jr)
   VALUES (v_plan_id, 1, 'TEST_ACT_001', v_std_id, 10, 4, 'must_execute', 100, 'und', 2.5)
   RETURNING id INTO v_item_id;
@@ -236,12 +278,7 @@ DECLARE
   v_exec2   UUID;
   v_exec3   UUID;
 BEGIN
-  INSERT INTO public.board_activity_standards
-    (board_id, group_id, activity_key, name, category, unit, rendimiento, frecuencia, priority, version, effective_from, source)
-  VALUES
-    ('bbbbbbbb-0000-0000-0000-000000000001', NULL, 'TEST_ACT_002', 'Actividad Test 2',
-     'ZONA VERDE', 'und', 10, 4, 'preferred', 1, '2026-01-01', 'test')
-  RETURNING id INTO v_std_id;
+  v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_002', 4);
 
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
   VALUES ('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001',
@@ -249,7 +286,7 @@ BEGIN
   RETURNING id INTO v_plan_id;
 
   INSERT INTO public.weekly_plan_items
-    (plan_id, planned_sequence, activity_key, activity_standard_id, planned_rendimiento,
+    (plan_id, planned_sequence, activity_key, poa_activity_zone_id, planned_rendimiento,
      planned_frecuencia, priority, planned_qty, unit, planned_jr)
   VALUES (v_plan_id, 1, 'TEST_ACT_002', v_std_id, 10, 4, 'preferred', 200, 'und', 5)
   RETURNING id INTO v_item_id;
@@ -331,12 +368,7 @@ DECLARE
   v_std_id  UUID;
   v_ok      BOOLEAN := FALSE;
 BEGIN
-  INSERT INTO public.board_activity_standards
-    (board_id, group_id, activity_key, name, category, unit, rendimiento, frecuencia, priority, version, effective_from, source)
-  VALUES
-    ('bbbbbbbb-0000-0000-0000-000000000001', NULL, 'TEST_ACT_003', 'Actividad Test 3',
-     'ZONA DURA', 'und', 5, 4, 'must_execute', 1, '2026-01-01', 'test')
-  RETURNING id INTO v_std_id;
+  v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_003', 4);
 
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
   VALUES ('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001',
@@ -344,7 +376,7 @@ BEGIN
   RETURNING id INTO v_plan_id;
 
   INSERT INTO public.weekly_plan_items
-    (plan_id, planned_sequence, activity_key, activity_standard_id, planned_rendimiento,
+    (plan_id, planned_sequence, activity_key, poa_activity_zone_id, planned_rendimiento,
      planned_frecuencia, priority, planned_qty, unit, planned_jr)
   VALUES (v_plan_id, 1, 'TEST_ACT_003', v_std_id, 5, 4, 'must_execute', 100, 'und', 4)
   RETURNING id INTO v_item_id;
@@ -383,12 +415,7 @@ DECLARE
   v_item_id UUID;
   v_std_id  UUID;
 BEGIN
-  INSERT INTO public.board_activity_standards
-    (board_id, group_id, activity_key, name, category, unit, rendimiento, frecuencia, priority, version, effective_from, source)
-  VALUES
-    ('bbbbbbbb-0000-0000-0000-000000000001', NULL, 'TEST_ACT_004', 'Actividad Test 4',
-     'ZONA VERDE', 'und', 8, 4, 'preferred', 1, '2026-01-01', 'test')
-  RETURNING id INTO v_std_id;
+  v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_004', 4);
 
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
   VALUES ('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001',
@@ -396,7 +423,7 @@ BEGIN
   RETURNING id INTO v_plan_id;
 
   INSERT INTO public.weekly_plan_items
-    (plan_id, planned_sequence, activity_key, activity_standard_id, planned_rendimiento,
+    (plan_id, planned_sequence, activity_key, poa_activity_zone_id, planned_rendimiento,
      planned_frecuencia, priority, planned_qty, unit, planned_jr)
   VALUES (v_plan_id, 1, 'TEST_ACT_004', v_std_id, 8, 4, 'preferred', 80, 'und', 2)
   RETURNING id INTO v_item_id;
@@ -436,12 +463,7 @@ DECLARE
   v_plan_id UUID;
   v_ok      BOOLEAN := FALSE;
 BEGIN
-  INSERT INTO public.board_activity_standards
-    (board_id, group_id, activity_key, name, category, unit, rendimiento, frecuencia, priority, version, effective_from, source)
-  VALUES
-    ('bbbbbbbb-0000-0000-0000-000000000001', NULL, 'TEST_ACT_005', 'Actividad Test 5',
-     'ZONA DE PLAYA', 'und', 6, 4, 'flexible', 1, '2026-01-01', 'test')
-  RETURNING id INTO v_std_id;
+  v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_005', 4);
 
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
   VALUES ('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001',
@@ -449,7 +471,7 @@ BEGIN
   RETURNING id INTO v_plan_id;
 
   INSERT INTO public.weekly_plan_items
-    (plan_id, planned_sequence, activity_key, activity_standard_id, planned_rendimiento,
+    (plan_id, planned_sequence, activity_key, poa_activity_zone_id, planned_rendimiento,
      planned_frecuencia, priority, planned_qty, unit, planned_jr)
   VALUES (v_plan_id, 1, 'TEST_ACT_005', v_std_id, 6, 4, 'flexible', 60, 'und', 1.5)
   RETURNING id INTO v_item_id;
@@ -519,12 +541,7 @@ DECLARE
   v_plan_id UUID;
   v_ok      BOOLEAN := FALSE;
 BEGIN
-  INSERT INTO public.board_activity_standards
-    (board_id, group_id, activity_key, name, category, unit, rendimiento, frecuencia, priority, version, effective_from, source)
-  VALUES
-    ('bbbbbbbb-0000-0000-0000-000000000001', NULL, 'TEST_ACT_006', 'Actividad Test 6',
-     'ZONA VERDE', 'und', 12, 4, 'must_execute', 1, '2026-01-01', 'test')
-  RETURNING id INTO v_std_id;
+  v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_006', 4);
 
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
   VALUES ('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001',
@@ -532,7 +549,7 @@ BEGIN
   RETURNING id INTO v_plan_id;
 
   INSERT INTO public.weekly_plan_items
-    (plan_id, planned_sequence, activity_key, activity_standard_id, planned_rendimiento,
+    (plan_id, planned_sequence, activity_key, poa_activity_zone_id, planned_rendimiento,
      planned_frecuencia, priority, planned_qty, unit, planned_jr)
   VALUES (v_plan_id, 1, 'TEST_ACT_006', v_std_id, 12, 4, 'must_execute', 120, 'und', 3)
   RETURNING id INTO v_item_id;
@@ -658,12 +675,7 @@ DECLARE
   v_std_id  UUID;
   v_items   JSONB;
 BEGIN
-  INSERT INTO public.board_activity_standards
-    (board_id, group_id, activity_key, name, category, unit, rendimiento, frecuencia, priority, version, effective_from, source)
-  VALUES
-    ('bbbbbbbb-0000-0000-0000-000000000001', NULL, 'TEST_ACT_007', 'Actividad Test 7',
-     'ZONA VERDE', 'und', 10, 4, 'must_execute', 1, '2026-01-01', 'test')
-  RETURNING id INTO v_std_id;
+  v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_007', 4);
 
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
   VALUES ('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001',
@@ -674,13 +686,13 @@ BEGIN
   v_items := jsonb_build_array(
     jsonb_build_object(
       'planned_sequence', 1, 'activity_key', 'TEST_ACT_007',
-      'activity_standard_id', v_std_id, 'planned_rendimiento', 10,
+      'poa_activity_zone_id', v_std_id, 'planned_rendimiento', 10,
       'planned_frecuencia', 4, 'priority', 'must_execute',
       'planned_qty', 100, 'unit', 'und', 'planned_jr', 2.5
     ),
     jsonb_build_object(
       'planned_sequence', 2, 'activity_key', 'TEST_ACT_007',
-      'activity_standard_id', v_std_id, 'planned_rendimiento', 10,
+      'poa_activity_zone_id', v_std_id, 'planned_rendimiento', 10,
       'planned_frecuencia', 4, 'priority', 'preferred',
       'planned_qty', 50, 'unit', 'und', 'planned_jr', 1.25
     )
@@ -709,14 +721,13 @@ BEGIN
   SELECT id INTO v_plan_id FROM public.weekly_plans
   WHERE week_start = '2026-09-22' AND group_id = 'cccccccc-0000-0000-0000-000000000001';
 
-  SELECT id INTO v_std_id FROM public.board_activity_standards
-  WHERE activity_key = 'TEST_ACT_007' AND board_id = 'bbbbbbbb-0000-0000-0000-000000000001'
-  LIMIT 1;
+  -- Idempotente: devuelve el mismo poa_activity_zone_id sembrado en el bloque anterior
+  v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_007', 4);
 
   v_items := jsonb_build_array(
     jsonb_build_object(
       'planned_sequence', 1, 'activity_key', 'TEST_ACT_007',
-      'activity_standard_id', v_std_id, 'planned_rendimiento', 10,
+      'poa_activity_zone_id', v_std_id, 'planned_rendimiento', 10,
       'planned_frecuencia', 4, 'priority', 'must_execute',
       'planned_qty', 200, 'unit', 'und', 'planned_jr', 5
     )
@@ -757,18 +768,7 @@ DECLARE
   v_std_id  UUID;
   v_ok      BOOLEAN := FALSE;
 BEGIN
-  SELECT id INTO v_std_id FROM public.board_activity_standards
-  WHERE activity_key = 'TEST_ACT_001' AND board_id = 'bbbbbbbb-0000-0000-0000-000000000001'
-  LIMIT 1;
-
-  IF v_std_id IS NULL THEN
-    INSERT INTO public.board_activity_standards
-      (board_id, group_id, activity_key, name, category, unit, rendimiento, frecuencia, priority, version, effective_from, source)
-    VALUES
-      ('bbbbbbbb-0000-0000-0000-000000000001', NULL, 'TEST_ACT_008', 'Actividad Test 8',
-       'ZONA DURA', 'und', 7, 4, 'preferred', 1, '2026-01-01', 'test')
-    RETURNING id INTO v_std_id;
-  END IF;
+  v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_008', 4);
 
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
   VALUES ('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001',
@@ -804,12 +804,7 @@ DECLARE
   v_std_id  UUID;
   v_ok      BOOLEAN := FALSE;
 BEGIN
-  INSERT INTO public.board_activity_standards
-    (board_id, group_id, activity_key, name, category, unit, rendimiento, frecuencia, priority, version, effective_from, source)
-  VALUES
-    ('bbbbbbbb-0000-0000-0000-000000000001', NULL, 'TEST_ACT_009', 'Actividad Test 9',
-     'ZONA VERDE', 'und', 9, 4, 'flexible', 1, '2026-01-01', 'test')
-  RETURNING id INTO v_std_id;
+  v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_009', 4);
 
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
   VALUES ('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001',
@@ -817,7 +812,7 @@ BEGIN
   RETURNING id INTO v_plan_id;
 
   INSERT INTO public.weekly_plan_items
-    (plan_id, planned_sequence, activity_key, activity_standard_id, planned_rendimiento,
+    (plan_id, planned_sequence, activity_key, poa_activity_zone_id, planned_rendimiento,
      planned_frecuencia, priority, planned_qty, unit, planned_jr)
   VALUES (v_plan_id, 1, 'TEST_ACT_009', v_std_id, 9, 4, 'flexible', 90, 'und', 2.5)
   RETURNING id INTO v_item_id;
@@ -858,12 +853,7 @@ DECLARE
   v_item_id UUID;
   v_std_id  UUID;
 BEGIN
-  INSERT INTO public.board_activity_standards
-    (board_id, group_id, activity_key, name, category, unit, rendimiento, frecuencia, priority, version, effective_from, source)
-  VALUES
-    ('bbbbbbbb-0000-0000-0000-000000000001', NULL, 'TEST_ACT_010', 'Actividad Test 10',
-     'ZONA VERDE', 'und', 10, 4, 'must_execute', 1, '2026-01-01', 'test')
-  RETURNING id INTO v_std_id;
+  v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_010', 4);
 
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
   VALUES ('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001',
@@ -871,7 +861,7 @@ BEGIN
   RETURNING id INTO v_plan_id;
 
   INSERT INTO public.weekly_plan_items
-    (plan_id, planned_sequence, activity_key, activity_standard_id, planned_rendimiento,
+    (plan_id, planned_sequence, activity_key, poa_activity_zone_id, planned_rendimiento,
      planned_frecuencia, priority, planned_qty, unit, planned_jr, executed_qty, executed_jr)
   VALUES (v_plan_id, 1, 'TEST_ACT_010', v_std_id, 10, 4, 'must_execute', 100, 'und', 2.5, 80, 2.0)
   RETURNING id INTO v_item_id;
@@ -915,12 +905,7 @@ DECLARE
   v_item_id UUID;
   v_std_id  UUID;
 BEGIN
-  INSERT INTO public.board_activity_standards
-    (board_id, group_id, activity_key, name, category, unit, rendimiento, frecuencia, priority, version, effective_from, source)
-  VALUES
-    ('bbbbbbbb-0000-0000-0000-000000000001', NULL, 'TEST_ACT_011', 'Actividad Test 11',
-     'ZONA DURA', 'und', 10, 4, 'must_execute', 1, '2026-01-01', 'test')
-  RETURNING id INTO v_std_id;
+  v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_011', 4);
 
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
   VALUES ('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001',
@@ -929,7 +914,7 @@ BEGIN
 
   -- Item con executed_jr = 0 (sin jornales reportadas)
   INSERT INTO public.weekly_plan_items
-    (plan_id, planned_sequence, activity_key, activity_standard_id, planned_rendimiento,
+    (plan_id, planned_sequence, activity_key, poa_activity_zone_id, planned_rendimiento,
      planned_frecuencia, priority, planned_qty, unit, planned_jr, executed_qty, executed_jr)
   VALUES (v_plan_id, 1, 'TEST_ACT_011', v_std_id, 10, 4, 'must_execute', 100, 'und', 2.5, 0, 0)
   RETURNING id INTO v_item_id;
@@ -1002,12 +987,7 @@ DECLARE
   v_plan_id UUID;
   v_std_id  UUID;
 BEGIN
-  INSERT INTO public.board_activity_standards
-    (board_id, group_id, activity_key, name, category, unit, rendimiento, frecuencia, priority, version, effective_from, source)
-  VALUES
-    ('bbbbbbbb-0000-0000-0000-000000000001', NULL, 'TEST_ACT_019', 'Actividad Test 19',
-     'ZONA VERDE', 'und', 10, 4, 'must_execute', 1, '2026-01-01', 'test')
-  RETURNING id INTO v_std_id;
+  v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_019', 4);
 
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
   VALUES ('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001',
@@ -1019,7 +999,7 @@ BEGIN
     v_plan_id,
     jsonb_build_array(
       jsonb_build_object('planned_sequence', 1, 'activity_key', 'TEST_ACT_019',
-        'activity_standard_id', v_std_id, 'planned_rendimiento', 10,
+        'poa_activity_zone_id', v_std_id, 'planned_rendimiento', 10,
         'planned_frecuencia', 4, 'priority', 'must_execute', 'planned_qty', 50, 'unit', 'und', 'planned_jr', 1.5)
     )
   );
@@ -1041,7 +1021,7 @@ SELECT is(
 ROLLBACK TO sp19;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Test 20: activity_standard_id inexistente → excepción
+-- Test 20: poa_activity_zone_id inexistente → excepción
 -- ─────────────────────────────────────────────────────────────────────────────
 
 SAVEPOINT sp20;
@@ -1063,7 +1043,7 @@ BEGIN
       jsonb_build_array(
         jsonb_build_object(
           'planned_sequence', 1, 'activity_key', 'GHOST',
-          'activity_standard_id', 'ffffffff-ffff-ffff-ffff-ffffffffffff',  -- no existe
+          'poa_activity_zone_id', 'ffffffff-ffff-ffff-ffff-ffffffffffff',  -- no existe
           'planned_rendimiento', 10, 'planned_frecuencia', 4,
           'priority', 'preferred', 'planned_qty', 50, 'unit', 'und', 'planned_jr', 1.5
         )
@@ -1077,7 +1057,7 @@ BEGIN
 END;
 $$;
 
-SELECT pass('Test 20: activity_standard_id inexistente lanza excepción ✓');
+SELECT pass('Test 20: poa_activity_zone_id inexistente lanza excepción ✓');
 
 ROLLBACK TO sp20;
 
@@ -1093,12 +1073,7 @@ DECLARE
   v_std_id  UUID;
   v_ok      BOOLEAN := FALSE;
 BEGIN
-  INSERT INTO public.board_activity_standards
-    (board_id, group_id, activity_key, name, category, unit, rendimiento, frecuencia, priority, version, effective_from, source)
-  VALUES
-    ('bbbbbbbb-0000-0000-0000-000000000001', NULL, 'TEST_ACT_021', 'Actividad Test 21',
-     'ZONA DURA', 'und', 8, 4, 'preferred', 1, '2026-01-01', 'test')
-  RETURNING id INTO v_std_id;
+  v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_021', 4);
 
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
   VALUES ('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001',
@@ -1111,10 +1086,10 @@ BEGIN
       v_plan_id,
       jsonb_build_array(
         jsonb_build_object('planned_sequence', 1, 'activity_key', 'TEST_ACT_021',
-          'activity_standard_id', v_std_id, 'planned_rendimiento', 8,
+          'poa_activity_zone_id', v_std_id, 'planned_rendimiento', 8,
           'planned_frecuencia', 4, 'priority', 'preferred', 'planned_qty', 80, 'unit', 'und', 'planned_jr', 2.0),
         jsonb_build_object('planned_sequence', 1, 'activity_key', 'TEST_ACT_021',  -- duplicate!
-          'activity_standard_id', v_std_id, 'planned_rendimiento', 8,
+          'poa_activity_zone_id', v_std_id, 'planned_rendimiento', 8,
           'planned_frecuencia', 4, 'priority', 'preferred', 'planned_qty', 40, 'unit', 'und', 'planned_jr', 1.0)
       )
     );
@@ -1162,7 +1137,7 @@ SELECT pass('Test 22: publish_weekly_plan dos veces lanza excepción en la segun
 ROLLBACK TO sp22;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Tests 23–28: planned_qty/jr inválidos + activity_standard_id de otro board
+-- Tests 23–28: planned_qty/jr inválidos + poa_activity_zone_id de otro board
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- Test 23: planned_qty = 0 → rechazado
@@ -1170,12 +1145,7 @@ SAVEPOINT sp23;
 DO $$
 DECLARE v_plan_id UUID; v_std_id UUID; v_ok BOOLEAN := FALSE;
 BEGIN
-  INSERT INTO public.board_activity_standards
-    (board_id, group_id, activity_key, name, category, unit, rendimiento, frecuencia, priority, version, effective_from, source)
-  VALUES
-    ('bbbbbbbb-0000-0000-0000-000000000001', NULL, 'TEST_ACT_023', 'Actividad Test 23',
-     'ZONA VERDE', 'und', 5, 4, 'flexible', 1, '2026-01-01', 'test')
-  RETURNING id INTO v_std_id;
+  v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_023', 4);
 
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
   VALUES ('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001',
@@ -1188,7 +1158,7 @@ BEGIN
       v_plan_id,
       jsonb_build_array(
         jsonb_build_object('planned_sequence', 1, 'activity_key', 'TEST_ACT_023',
-          'activity_standard_id', v_std_id, 'planned_rendimiento', 5,
+          'poa_activity_zone_id', v_std_id, 'planned_rendimiento', 5,
           'planned_frecuencia', 4, 'priority', 'flexible',
           'planned_qty', 0, 'unit', 'und', 'planned_jr', 1.0)  -- qty = 0 → invalid
       )
@@ -1206,15 +1176,7 @@ SAVEPOINT sp24;
 DO $$
 DECLARE v_plan_id UUID; v_std_id UUID; v_ok BOOLEAN := FALSE;
 BEGIN
-  SELECT id INTO v_std_id FROM public.board_activity_standards
-  WHERE activity_key = 'TEST_ACT_023' AND board_id = 'bbbbbbbb-0000-0000-0000-000000000001' LIMIT 1;
-  IF v_std_id IS NULL THEN
-    INSERT INTO public.board_activity_standards
-      (board_id, group_id, activity_key, name, category, unit, rendimiento, frecuencia, priority, version, effective_from, source)
-    VALUES ('bbbbbbbb-0000-0000-0000-000000000001', NULL, 'TEST_ACT_024', 'Actividad Test 24',
-            'ZONA VERDE', 'und', 5, 4, 'flexible', 1, '2026-01-01', 'test')
-    RETURNING id INTO v_std_id;
-  END IF;
+  v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_024', 4);
 
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
   VALUES ('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001',
@@ -1227,7 +1189,7 @@ BEGIN
       v_plan_id,
       jsonb_build_array(
         jsonb_build_object('planned_sequence', 1, 'activity_key', 'TEST_ACT_024',
-          'activity_standard_id', v_std_id, 'planned_rendimiento', 5,
+          'poa_activity_zone_id', v_std_id, 'planned_rendimiento', 5,
           'planned_frecuencia', 4, 'priority', 'flexible',
           'planned_qty', 50, 'unit', 'und', 'planned_jr', -1.0)  -- jr negativo → invalid
       )
@@ -1245,11 +1207,7 @@ SAVEPOINT sp25;
 DO $$
 DECLARE v_plan_id UUID; v_std_id UUID; v_ok BOOLEAN := FALSE;
 BEGIN
-  INSERT INTO public.board_activity_standards
-    (board_id, group_id, activity_key, name, category, unit, rendimiento, frecuencia, priority, version, effective_from, source)
-  VALUES ('bbbbbbbb-0000-0000-0000-000000000001', NULL, 'TEST_ACT_025', 'Actividad Test 25',
-          'ZONA DURA', 'und', 7, 4, 'preferred', 1, '2026-01-01', 'test')
-  RETURNING id INTO v_std_id;
+  v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_025', 4);
 
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
   VALUES ('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001',
@@ -1262,7 +1220,7 @@ BEGIN
       v_plan_id,
       jsonb_build_array(
         jsonb_build_object('planned_sequence', 1, 'activity_key', 'TEST_ACT_025',
-          'activity_standard_id', v_std_id, 'planned_rendimiento', 7,
+          'poa_activity_zone_id', v_std_id, 'planned_rendimiento', 7,
           'planned_frecuencia', 4, 'priority', 'urgent',  -- valor inválido
           'planned_qty', 70, 'unit', 'und', 'planned_jr', 2.0)
       )
@@ -1275,7 +1233,7 @@ $$;
 SELECT pass('Test 25: priority inválida lanza excepción ✓');
 ROLLBACK TO sp25;
 
--- Test 26: activity_standard_id de otro board → rechazado
+-- Test 26: poa_activity_zone_id de otro board → rechazado
 SAVEPOINT sp26;
 DO $$
 DECLARE
@@ -1293,11 +1251,7 @@ BEGIN
   VALUES ('Other Board Test', v_other_usr, NOW())
   RETURNING id INTO v_other_brd;
 
-  INSERT INTO public.board_activity_standards
-    (board_id, group_id, activity_key, name, category, unit, rendimiento, frecuencia, priority, version, effective_from, source)
-  VALUES (v_other_brd, NULL, 'OTHER_ACT_001', 'Actividad de otro board',
-          'ZONA VERDE', 'und', 5, 4, 'flexible', 1, '2026-01-01', 'test')
-  RETURNING id INTO v_other_std;
+  v_other_std := _test_seed_poa_activity_zone(v_other_brd, 'cccccccc-0000-0000-0000-000000000001', 'OTHER_ACT_001', 4);
 
   -- Plan en nuestro board de prueba
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
@@ -1311,7 +1265,7 @@ BEGIN
       v_plan_id,
       jsonb_build_array(
         jsonb_build_object('planned_sequence', 1, 'activity_key', 'OTHER_ACT_001',
-          'activity_standard_id', v_other_std,  -- estándar del OTRO board
+          'poa_activity_zone_id', v_other_std,  -- estándar del OTRO board
           'planned_rendimiento', 5, 'planned_frecuencia', 4, 'priority', 'flexible',
           'planned_qty', 50, 'unit', 'und', 'planned_jr', 1.5)
       )
@@ -1321,7 +1275,7 @@ BEGIN
   IF NOT v_ok THEN RAISE EXCEPTION 'Test 26: estándar de otro board debería fallar'; END IF;
 END;
 $$;
-SELECT pass('Test 26: activity_standard_id de otro board lanza excepción ✓');
+SELECT pass('Test 26: poa_activity_zone_id de otro board lanza excepción ✓');
 ROLLBACK TO sp26;
 
 -- Test 27: replace devuelve filas ordenadas por planned_sequence
@@ -1332,11 +1286,7 @@ DECLARE
   v_std_id  UUID;
   v_result  INT[];
 BEGIN
-  INSERT INTO public.board_activity_standards
-    (board_id, group_id, activity_key, name, category, unit, rendimiento, frecuencia, priority, version, effective_from, source)
-  VALUES ('bbbbbbbb-0000-0000-0000-000000000001', NULL, 'TEST_ACT_027', 'Actividad Test 27',
-          'ZONA VERDE', 'und', 10, 4, 'preferred', 1, '2026-01-01', 'test')
-  RETURNING id INTO v_std_id;
+  v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_027', 4);
 
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
   VALUES ('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001',
@@ -1351,13 +1301,13 @@ BEGIN
       v_plan_id,
       jsonb_build_array(
         jsonb_build_object('planned_sequence', 3, 'activity_key', 'TEST_ACT_027',
-          'activity_standard_id', v_std_id, 'planned_rendimiento', 10,
+          'poa_activity_zone_id', v_std_id, 'planned_rendimiento', 10,
           'planned_frecuencia', 4, 'priority', 'preferred', 'planned_qty', 30, 'unit', 'und', 'planned_jr', 1.0),
         jsonb_build_object('planned_sequence', 1, 'activity_key', 'TEST_ACT_027',
-          'activity_standard_id', v_std_id, 'planned_rendimiento', 10,
+          'poa_activity_zone_id', v_std_id, 'planned_rendimiento', 10,
           'planned_frecuencia', 4, 'priority', 'must_execute', 'planned_qty', 10, 'unit', 'und', 'planned_jr', 0.5),
         jsonb_build_object('planned_sequence', 2, 'activity_key', 'TEST_ACT_027',
-          'activity_standard_id', v_std_id, 'planned_rendimiento', 10,
+          'poa_activity_zone_id', v_std_id, 'planned_rendimiento', 10,
           'planned_frecuencia', 4, 'priority', 'flexible', 'planned_qty', 20, 'unit', 'und', 'planned_jr', 0.75)
       )
     ) r
@@ -1371,7 +1321,7 @@ $$;
 SELECT pass('Test 27: replace_weekly_plan_items devuelve filas ordenadas por planned_sequence ✓');
 ROLLBACK TO sp27;
 
--- Test 28: activity_standard_id archivado (effective_to IS NOT NULL) → rechazado
+-- Test 28: poa_activity_zone_id archivado (effective_to IS NOT NULL) → rechazado
 SAVEPOINT sp28;
 DO $$
 DECLARE
@@ -1379,11 +1329,30 @@ DECLARE
   v_std_id  UUID;
   v_ok      BOOLEAN := FALSE;
 BEGIN
-  INSERT INTO public.board_activity_standards
-    (board_id, group_id, activity_key, name, category, unit, rendimiento, frecuencia, priority, version, effective_from, effective_to, source)
-  VALUES ('bbbbbbbb-0000-0000-0000-000000000001', NULL, 'TEST_ACT_028', 'Actividad Archivada',
-          'ZONA VERDE', 'und', 9, 4, 'preferred', 1, '2026-01-01', '2026-06-01', 'test')
-  RETURNING id INTO v_std_id;
+  -- Versión del POA NO activa (closed) — equivalente a un estándar archivado.
+  -- El RPC exige pv.status = 'active', así que su poa_activity_zone_id debe rechazarse.
+  DECLARE
+    v_poa_id      UUID;
+    v_version_id  UUID;
+    v_activity_id UUID;
+  BEGIN
+    INSERT INTO public.poa (board_id, name)
+    VALUES ('bbbbbbbb-0000-0000-0000-000000000001', 'POA Test')
+    ON CONFLICT (board_id) DO UPDATE SET name = EXCLUDED.name
+    RETURNING id INTO v_poa_id;
+
+    INSERT INTO public.poa_versions (poa_id, version_number, status, created_by, closed_at)
+    VALUES (v_poa_id, 99, 'closed', 'aaaaaaaa-0000-0000-0000-000000000001', NOW())
+    RETURNING id INTO v_version_id;
+
+    INSERT INTO public.poa_activities (poa_version_id, activity_key, frecuencia, precio_unitario)
+    VALUES (v_version_id, 'TEST_ACT_028', 4, 100000)
+    RETURNING id INTO v_activity_id;
+
+    INSERT INTO public.poa_activity_zones (poa_activity_id, zone_id, cantidad_contratada)
+    VALUES (v_activity_id, 'cccccccc-0000-0000-0000-000000000001', 100000)
+    RETURNING id INTO v_std_id;
+  END;
 
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
   VALUES ('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001',
@@ -1396,7 +1365,7 @@ BEGIN
       v_plan_id,
       jsonb_build_array(
         jsonb_build_object('planned_sequence', 1, 'activity_key', 'TEST_ACT_028',
-          'activity_standard_id', v_std_id,  -- archivado: effective_to IS NOT NULL
+          'poa_activity_zone_id', v_std_id,  -- archivado: effective_to IS NOT NULL
           'planned_rendimiento', 9, 'planned_frecuencia', 4, 'priority', 'preferred',
           'planned_qty', 90, 'unit', 'und', 'planned_jr', 2.5)
       )
@@ -1406,7 +1375,7 @@ BEGIN
   IF NOT v_ok THEN RAISE EXCEPTION 'Test 28: estándar archivado debería fallar'; END IF;
 END;
 $$;
-SELECT pass('Test 28: activity_standard_id archivado lanza excepción ✓');
+SELECT pass('Test 28: poa_activity_zone_id archivado lanza excepción ✓');
 ROLLBACK TO sp28;
 
 -- =============================================================================
@@ -1562,13 +1531,7 @@ SET LOCAL ROLE postgres;
 DO $$
 DECLARE v_plan_id UUID; v_std_id UUID; v_ok BOOLEAN := FALSE;
 BEGIN
-  INSERT INTO public.board_activity_standards
-    (board_id, group_id, activity_key, name, category, unit,
-     rendimiento, frecuencia, priority, version, effective_from, source)
-  VALUES ('bbbbbbbb-0000-0000-0000-000000000001', NULL, 'TEST_ACT_037',
-          'Actividad Atomicidad', 'ZONA VERDE', 'und',
-          10, 4, 'preferred', 1, '2026-01-01', 'test')
-  RETURNING id INTO v_std_id;
+  v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_037', 4);
 
   INSERT INTO public.weekly_plans
     (board_id, group_id, week_start, period_number, status, created_by)
@@ -1585,7 +1548,7 @@ BEGIN
     jsonb_build_array(
       jsonb_build_object(
         'planned_sequence', 1, 'activity_key', 'TEST_ACT_037',
-        'activity_standard_id', v_std_id, 'planned_rendimiento', 10,
+        'poa_activity_zone_id', v_std_id, 'planned_rendimiento', 10,
         'planned_frecuencia', 4, 'priority', 'preferred',
         'planned_qty', 100, 'unit', 'und', 'planned_jr', 2.0)
     )
@@ -1598,12 +1561,12 @@ BEGIN
       jsonb_build_array(
         jsonb_build_object(
           'planned_sequence', 1, 'activity_key', 'TEST_ACT_037',
-          'activity_standard_id', v_std_id, 'planned_rendimiento', 10,
+          'poa_activity_zone_id', v_std_id, 'planned_rendimiento', 10,
           'planned_frecuencia', 4, 'priority', 'preferred',
           'planned_qty', 50, 'unit', 'und', 'planned_jr', 1.0),
         jsonb_build_object(
           'planned_sequence', 2, 'activity_key', 'TEST_ACT_037',
-          'activity_standard_id', v_std_id, 'planned_rendimiento', 10,
+          'poa_activity_zone_id', v_std_id, 'planned_rendimiento', 10,
           'planned_frecuencia', 4, 'priority', 'urgent',   -- prioridad inválida
           'planned_qty', 50, 'unit', 'und', 'planned_jr', 1.0)
       )
@@ -1645,13 +1608,7 @@ DECLARE
   v_hash_first  TEXT;
   v_hash_second TEXT;
 BEGIN
-  INSERT INTO public.board_activity_standards
-    (board_id, group_id, activity_key, name, category, unit,
-     rendimiento, frecuencia, priority, version, effective_from, source)
-  VALUES ('bbbbbbbb-0000-0000-0000-000000000001', NULL, 'TEST_ACT_038',
-          'Actividad Idempotencia', 'ZONA DURA', 'und',
-          8, 4, 'must_execute', 1, '2026-01-01', 'test')
-  RETURNING id INTO v_std_id;
+  v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_038', 4);
 
   INSERT INTO public.weekly_plans
     (board_id, group_id, week_start, period_number, status, created_by)
@@ -1665,12 +1622,12 @@ BEGIN
   v_items := jsonb_build_array(
     jsonb_build_object(
       'planned_sequence', 1, 'activity_key', 'TEST_ACT_038',
-      'activity_standard_id', v_std_id, 'planned_rendimiento', 8,
+      'poa_activity_zone_id', v_std_id, 'planned_rendimiento', 8,
       'planned_frecuencia', 4, 'priority', 'must_execute',
       'planned_qty', 80, 'unit', 'und', 'planned_jr', 2.0),
     jsonb_build_object(
       'planned_sequence', 2, 'activity_key', 'TEST_ACT_038',
-      'activity_standard_id', v_std_id, 'planned_rendimiento', 8,
+      'poa_activity_zone_id', v_std_id, 'planned_rendimiento', 8,
       'planned_frecuencia', 4, 'priority', 'preferred',
       'planned_qty', 40, 'unit', 'und', 'planned_jr', 1.0)
   );
@@ -1740,13 +1697,7 @@ DECLARE
   v_rpc_hash TEXT;
   v_tbl_hash TEXT;
 BEGIN
-  INSERT INTO public.board_activity_standards
-    (board_id, group_id, activity_key, name, category, unit,
-     rendimiento, frecuencia, priority, version, effective_from, source)
-  VALUES ('bbbbbbbb-0000-0000-0000-000000000001', NULL, 'TEST_ACT_039',
-          'Actividad Post-Trigger', 'ZONA VERDE', 'und',
-          12, 4, 'must_execute', 1, '2026-01-01', 'test')
-  RETURNING id INTO v_std_id;
+  v_std_id := _test_seed_poa_activity_zone('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 'TEST_ACT_039', 4);
 
   INSERT INTO public.weekly_plans
     (board_id, group_id, week_start, period_number, status, created_by)
@@ -1760,12 +1711,12 @@ BEGIN
   v_items := jsonb_build_array(
     jsonb_build_object(
       'planned_sequence', 1, 'activity_key', 'TEST_ACT_039',
-      'activity_standard_id', v_std_id, 'planned_rendimiento', 12,
+      'poa_activity_zone_id', v_std_id, 'planned_rendimiento', 12,
       'planned_frecuencia', 4, 'priority', 'must_execute',
       'planned_qty', 120, 'unit', 'und', 'planned_jr', 3.0),
     jsonb_build_object(
       'planned_sequence', 2, 'activity_key', 'TEST_ACT_039',
-      'activity_standard_id', v_std_id, 'planned_rendimiento', 12,
+      'poa_activity_zone_id', v_std_id, 'planned_rendimiento', 12,
       'planned_frecuencia', 4, 'priority', 'preferred',
       'planned_qty', 60, 'unit', 'und', 'planned_jr', 1.5)
   );

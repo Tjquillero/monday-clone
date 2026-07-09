@@ -8,6 +8,10 @@ export type ActivityCategory = 'ZONA VERDE' | 'ZONA DURA' | 'ZONA DE PLAYA';
 // Entidades de base de datos
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Catálogo Técnico reducido (ADR-0002): frecuencia se retiró — ahora vive en
+// PoaActivity, que es la fuente contractual. `priority` se conserva aquí como
+// decisión pragmática hasta que schedule-domain.md defina su propia tabla
+// (ver docs/architecture/schedule-mapping.md).
 export interface ActivityStandard {
   id: string;
   board_id: string;
@@ -17,7 +21,6 @@ export interface ActivityStandard {
   category: ActivityCategory;
   unit: string;
   rendimiento: number;
-  frecuencia: number;
   priority: ActivityPriority;
   version: number;
   effective_from: string;    // ISO date string (DATE en PG)
@@ -30,6 +33,59 @@ export interface ScopeMapping {
   activity_key: string;
   scope_key: string;
   weight: number;
+}
+
+// Vista combinada Catálogo Técnico + Actividad del POA, construida en el
+// hook (no en la base de datos) al hacer join por activity_key con la
+// versión activa del POA. `weeklyPlanner.ts` y `schedulerAdapter.ts` operan
+// sobre esta forma — nunca sobre ActivityStandard crudo, que ya no trae
+// frecuencia (ADR-0002).
+export type ActivityStandardWithFrecuencia = ActivityStandard & {
+  frecuencia: number;
+  poa_activity_zone_id: string;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dominio POA (ADR-0002) — fuente contractual del Cronograma
+// Ref: docs/domain/poa-domain.md
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type PoaVersionStatus = 'draft' | 'active' | 'closed';
+
+export interface Poa {
+  id: string;
+  board_id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface PoaVersion {
+  id: string;
+  poa_id: string;
+  version_number: number;
+  status: PoaVersionStatus;
+  published_by: string | null;
+  published_at: string | null;
+  closed_at: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export interface PoaActivity {
+  id: string;
+  poa_version_id: string;
+  activity_key: string;
+  frecuencia: number;
+  precio_unitario: number;
+  created_at: string;
+}
+
+export interface PoaActivityZone {
+  id: string;
+  poa_activity_id: string;
+  zone_id: string;
+  cantidad_contratada: number;
+  created_at: string;
 }
 
 export interface PerformanceObservation {
@@ -135,7 +191,7 @@ export interface WeeklyPlanItem {
   plan_id: string;
   planned_sequence: number;
   activity_key: string;
-  activity_standard_id: string;
+  poa_activity_zone_id: string;
   planned_rendimiento: number;    // snapshot del estándar al planificar
   planned_frecuencia: number;
   priority: ActivityPriority;
