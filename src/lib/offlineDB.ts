@@ -2,7 +2,7 @@
 import { supabase } from './supabaseClient';
 
 const DB_NAME = 'mantenix_offline_db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 export function generateUUID(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -49,7 +49,15 @@ export class OfflineDB {
         if (!db.objectStoreNames.contains('board_columns')) db.createObjectStore('board_columns', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('activity_templates')) db.createObjectStore('activity_templates', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('task_dependencies')) db.createObjectStore('task_dependencies', { keyPath: 'id' });
-        
+
+        // Ejecución Certificada — lectura offline de Mis Actividades (líder) y
+        // Verificación (supervisor). Ver docs/architecture/offline-certification-design.md,
+        // Incremento 1: solo caché de lectura, sin cola de comandos todavía.
+        if (!db.objectStoreNames.contains('weekly_plans')) db.createObjectStore('weekly_plans', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('weekly_plan_items')) db.createObjectStore('weekly_plan_items', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('weekly_plan_item_executions')) db.createObjectStore('weekly_plan_item_executions', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('board_activity_standards')) db.createObjectStore('board_activity_standards', { keyPath: 'id' });
+
         // Cola de mutaciones pendientes
         if (!db.objectStoreNames.contains('mutations')) {
           db.createObjectStore('mutations', { keyPath: 'id', autoIncrement: true });

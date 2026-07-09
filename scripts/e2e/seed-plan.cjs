@@ -52,10 +52,15 @@ function mondayISO() {
     return;
   }
 
-  const { email } = JSON.parse(fs.readFileSync(path.join(os.tmpdir(), 'mantenix-e2e-creds.json'), 'utf8'));
-  const { data: usersList } = await admin.auth.admin.listUsers({ perPage: 1000 });
-  const e2eUser = usersList.users.find((u) => u.email === email);
-  if (!e2eUser) { console.error('Usuario E2E no existe'); process.exit(1); }
+  const { email, password } = JSON.parse(fs.readFileSync(path.join(os.tmpdir(), 'mantenix-e2e-creds.json'), 'utf8'));
+  // Resolver el id vía sign-in normal en vez de admin.listUsers({perPage:1000}):
+  // ese endpoint puede devolver 500 "Database error finding users" en algunos
+  // proyectos/momentos, mientras que el sign-in normal (el mismo camino que
+  // usa el navegador) es el único que este script realmente necesita.
+  const anonForLookup = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+  const { data: signIn, error: signInErr } = await anonForLookup.auth.signInWithPassword({ email, password });
+  if (signInErr || !signIn?.user) { console.error('Usuario E2E no existe o credenciales inválidas:', signInErr?.message); process.exit(1); }
+  const e2eUser = signIn.user;
 
   const { data: groups, error: gErr } = await admin.from('groups').select('id, title, board_id').limit(1);
   if (gErr || !groups?.length) { console.error('sin groups:', gErr?.message); process.exit(1); }

@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { Board, Group, Column, Item } from '@/types/monday';
 import { offlineDB } from '@/lib/offlineDB';
 
-function isNetworkError(error: any): boolean {
+export function isNetworkError(error: any): boolean {
   if (!error) return false;
   if (typeof window !== 'undefined' && !window.navigator.onLine) return true;
   

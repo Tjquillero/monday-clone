@@ -2,6 +2,8 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { offlineDB } from '@/lib/offlineDB';
+import { isNetworkError } from './useBoardData';
 import { WeeklyPlan, WeeklyPlanItem, WeeklyPlanItemExecution } from '@/types/scheduler';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -115,46 +117,113 @@ export function usePublishedWeekPlans(weekStartISO: string | undefined) {
       // (activity_standard_id → poa_activity_zone_id), así que PostgREST no puede
       // embeber `standard:board_activity_standards(...)` como antes. name/category
       // siguen viviendo en el Catálogo Técnico; se resuelven aparte por activity_key
-      // (el campo que sigue siendo compartido entre catálogo técnico y POA) en vez
-      // de por una relación de FK.
-      const { data, error } = await supabase
-        .from('weekly_plans')
-        .select(`
-          *,
-          group:groups(title, color),
-          board:boards(name),
-          items:weekly_plan_items(*)
-        `)
-        .eq('week_start', weekStartISO!)
-        .in('status', ['published', 'in_progress']);
+      // + board_id (dos boards pueden compartir el mismo activity_key) en vez de por
+      // una relación de FK.
+      try {
+        const { data, error } = await supabase
+          .from('weekly_plans')
+          .select(`
+            *,
+            group:groups(*),
+            board:boards(*),
+            items:weekly_plan_items(*)
+          `)
+          .eq('week_start', weekStartISO!)
+          .in('status', ['published', 'in_progress']);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      const plans = (data ?? []) as PublishedWeekPlan[];
+        const plans = (data ?? []) as PublishedWeekPlan[];
 
-      const boardIds = [...new Set(plans.map((p) => p.board_id))];
-      const activityKeys = [...new Set(plans.flatMap((p) => p.items.map((i) => i.activity_key)))];
-      let standardsByKey = new Map<string, { name: string; category: string; unit: string }>();
-      if (boardIds.length > 0 && activityKeys.length > 0) {
-        const { data: standards, error: stdError } = await supabase
-          .from('board_activity_standards')
-          .select('activity_key, name, category, unit')
-          .in('board_id', boardIds)
-          .in('activity_key', activityKeys)
-          .is('effective_to', null);
-        if (stdError) throw stdError;
-        standardsByKey = new Map(
-          (standards ?? []).map((s: { activity_key: string; name: string; category: string; unit: string }) => [s.activity_key, s]),
-        );
-      }
-
-      for (const plan of plans) {
-        plan.items.sort((a, b) => a.planned_sequence - b.planned_sequence);
-        for (const item of plan.items) {
-          item.standard = standardsByKey.get(item.activity_key) ?? null;
+        const boardIds = [...new Set(plans.map((p) => p.board_id))];
+        const activityKeys = [...new Set(plans.flatMap((p) => p.items.map((i) => i.activity_key)))];
+        let standards: any[] = [];
+        let standardsByKey = new Map<string, { name: string; category: string; unit: string }>();
+        if (boardIds.length > 0 && activityKeys.length > 0) {
+          const { data: stdData, error: stdError } = await supabase
+            .from('board_activity_standards')
+            .select('*')
+            .in('board_id', boardIds)
+            .in('activity_key', activityKeys)
+            .is('effective_to', null);
+          if (stdError) throw stdError;
+          standards = stdData ?? [];
+          standardsByKey = new Map(standards.map((s: any) => [`${s.board_id}|${s.activity_key}`, s]));
         }
+
+        for (const plan of plans) {
+          plan.items.sort((a, b) => a.planned_sequence - b.planned_sequence);
+          for (const item of plan.items) {
+            item.standard = standardsByKey.get(`${plan.board_id}|${item.activity_key}`) ?? null;
+          }
+        }
+
+        // Caché de lectura offline (docs/architecture/offline-certification-design.md,
+        // Incremento 1). Grupo/board se guardan con fila completa (select *) para no
+        // pisar con datos parciales lo que ya cacheó useBoard/useBoardGroups en el
+        // mismo object store.
+        if (offlineDB) {
+          const plansOnly = plans.map(({ group, board, items, ...p }) => p);
+          await offlineDB.upsertRecords('weekly_plans', plansOnly);
+          const itemsOnly = plans.flatMap((p) => p.items.map(({ standard, ...i }) => i));
+          if (itemsOnly.length > 0) await offlineDB.upsertRecords('weekly_plan_items', itemsOnly);
+          const groupsOnly = plans.map((p) => p.group).filter(Boolean);
+          if (groupsOnly.length > 0) await offlineDB.upsertRecords('groups', groupsOnly);
+          const boardsOnly = plans.map((p) => p.board).filter(Boolean);
+          if (boardsOnly.length > 0) await offlineDB.upsertRecords('boards', boardsOnly);
+          if (standards.length > 0) await offlineDB.upsertRecords('board_activity_standards', standards);
+        }
+
+        return plans;
+      } catch (err: any) {
+        if (isNetworkError(err) && offlineDB) {
+          console.log('[Offline] Published week plans query failed due to network. Falling back to IndexedDB.');
+
+          const [localPlans, localItems, localGroups, localBoards, localStandards] = await Promise.all([
+            offlineDB.getTable('weekly_plans'),
+            offlineDB.getTable('weekly_plan_items'),
+            offlineDB.getTable('groups'),
+            offlineDB.getTable('boards'),
+            offlineDB.getTable('board_activity_standards'),
+          ]);
+
+          const groupsById = new Map<string, any>(localGroups.map((g: any) => [String(g.id), g]));
+          const boardsById = new Map<string, any>(localBoards.map((b: any) => [String(b.id), b]));
+          const standardsByKey = new Map<string, any>(
+            localStandards
+              .filter((s: any) => s.effective_to === null)
+              .map((s: any) => [`${s.board_id}|${s.activity_key}`, s]),
+          );
+
+          const filteredPlans = localPlans.filter(
+            (p: any) => p.week_start === weekStartISO && ['published', 'in_progress'].includes(p.status),
+          );
+
+          return filteredPlans.map((p: any) => {
+            const items = localItems
+              .filter((i: any) => String(i.plan_id) === String(p.id))
+              .sort((a: any, b: any) => a.planned_sequence - b.planned_sequence)
+              .map((i: any) => {
+                const std = standardsByKey.get(`${p.board_id}|${i.activity_key}`);
+                return {
+                  ...i,
+                  standard: std ? { name: std.name, category: std.category, unit: std.unit } : null,
+                };
+              });
+
+            const g = groupsById.get(String(p.group_id));
+            const b = boardsById.get(String(p.board_id));
+
+            return {
+              ...p,
+              group: g ? { title: g.title, color: g.color } : null,
+              board: b ? { name: b.name } : null,
+              items,
+            };
+          }) as PublishedWeekPlan[];
+        }
+        throw err;
       }
-      return plans;
     },
     enabled: !!weekStartISO,
     staleTime: 30_000,
@@ -173,15 +242,33 @@ export function useWeeklyPlanExecutions(planItemId: string | undefined) {
   return useQuery<WeeklyPlanItemExecution[]>({
     queryKey: weeklyPlanKeys.executions(planItemId!),
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('weekly_plan_item_executions')
-        .select('*')
-        .eq('plan_item_id', planItemId!)
-        .order('execution_date', { ascending: true })
-        .order('created_at', { ascending: true });
+      try {
+        const { data, error } = await supabase
+          .from('weekly_plan_item_executions')
+          .select('*')
+          .eq('plan_item_id', planItemId!)
+          .order('execution_date', { ascending: true })
+          .order('created_at', { ascending: true });
 
-      if (error) throw error;
-      return (data ?? []) as WeeklyPlanItemExecution[];
+        if (error) throw error;
+        const executions = (data ?? []) as WeeklyPlanItemExecution[];
+        if (offlineDB && executions.length > 0) {
+          await offlineDB.upsertRecords('weekly_plan_item_executions', executions);
+        }
+        return executions;
+      } catch (err: any) {
+        if (isNetworkError(err) && offlineDB) {
+          console.log('[Offline] Weekly plan executions query failed due to network. Falling back to IndexedDB.');
+          const local = await offlineDB.getTable('weekly_plan_item_executions');
+          return local
+            .filter((e: any) => String(e.plan_item_id) === String(planItemId))
+            .sort((a: any, b: any) => {
+              if (a.execution_date !== b.execution_date) return a.execution_date < b.execution_date ? -1 : 1;
+              return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+            }) as WeeklyPlanItemExecution[];
+        }
+        throw err;
+      }
     },
     enabled: !!planItemId,
     staleTime: 15_000,

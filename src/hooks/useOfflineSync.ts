@@ -34,7 +34,12 @@ export function useOfflineSync() {
         'site_incidents',
         'board_columns',
         'activity_templates',
-        'task_dependencies'
+        'task_dependencies',
+        // Ejecución Certificada — Incremento 1 de offline-certification-design.md
+        'weekly_plans',
+        'weekly_plan_items',
+        'weekly_plan_item_executions',
+        'board_activity_standards',
       ];
       for (const table of tables) {
         const { data, error } = await supabase.from(table).select('*');

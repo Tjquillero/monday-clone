@@ -18,16 +18,32 @@ for (const line of envText.split(/\r?\n/)) {
   if (m) env[m[1]] = m[2].trim();
 }
 const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+const anon = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, { auth: { persistSession: false } });
 
 const EMAIL = 'claude-e2e-nav@mantenix.dev';
 const credsPath = path.join(os.tmpdir(), 'mantenix-e2e-creds.json');
 
 async function removeUser() {
-  const { data } = await admin.auth.admin.listUsers({ perPage: 1000 });
-  const u = data.users.find((x) => x.email === EMAIL);
-  if (!u) return false;
-  await admin.from('board_members').delete().eq('user_id', u.id);
-  await admin.auth.admin.deleteUser(u.id);
+  // admin.auth.admin.listUsers({perPage:1000}) puede devolver 500 "Database
+  // error finding users" (visto en la práctica, no documentado por Supabase) —
+  // cuando eso pasa, `data.users` llega vacío y este removeUser reportaba
+  // "no existía" sin borrar nada, dejando el usuario E2E huérfano. Se resuelve
+  // el id vía sign-in normal (creds ya guardadas por este mismo script) en vez
+  // de depender de ese endpoint.
+  let userId = null;
+  if (fs.existsSync(credsPath)) {
+    const { password } = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+    const { data: signIn } = await anon.auth.signInWithPassword({ email: EMAIL, password });
+    userId = signIn?.user?.id ?? null;
+  }
+  if (!userId) {
+    const { data } = await admin.auth.admin.listUsers({ perPage: 1000 });
+    const u = data?.users?.find((x) => x.email === EMAIL);
+    userId = u?.id ?? null;
+  }
+  if (!userId) return false;
+  await admin.from('board_members').delete().eq('user_id', userId);
+  await admin.auth.admin.deleteUser(userId);
   return true;
 }
 
