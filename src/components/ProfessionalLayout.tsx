@@ -13,7 +13,8 @@ import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import NotificationBell from './NotificationBell';
 import OfflineIndicator from './OfflineIndicator';
-import { useOfflineSync } from '@/hooks/useOfflineSync';
+import SyncToast from './offline/SyncToast';
+import { useOfflineSyncContext } from '@/contexts/OfflineSyncContext';
 import NewsModal from '@/components/modals/NewsModal';
 import SearchModal from '@/components/modals/SearchModal';
 import NewBoardModal from '@/components/modals/NewBoardModal';
@@ -31,7 +32,7 @@ export default function ProfessionalLayout({ children }: { children: React.React
   const { user, signOut } = useAuth();
   const { can } = usePermissions();
 
-  const { refreshLocalCache, isOnline } = useOfflineSync();
+  const { refreshLocalCache, isOnline } = useOfflineSyncContext();
 
   // Registrar Service Worker para soporte offline
   useEffect(() => {
@@ -317,6 +318,7 @@ export default function ProfessionalLayout({ children }: { children: React.React
       <NewsModal isOpen={isNewsModalOpen} onClose={() => setIsNewsModalOpen(false)} />
       <SearchModal isOpen={isSearchModalOpen} onClose={() => setIsSearchModalOpen(false)} workspace={workspace} />
       <NewBoardModal isOpen={isNewBoardModalOpen} onClose={() => setIsNewBoardBoardModalOpen(false)} onCreate={handleCreateBoard} />
+      <SyncToast />
 
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }

@@ -3,18 +3,18 @@
 
 import React, { useState } from 'react';
 import { Wifi, WifiOff, RefreshCw, AlertTriangle, AlertOctagon } from 'lucide-react';
-import { useOfflineSync } from '@/hooks/useOfflineSync';
+import { useOfflineSyncContext } from '@/contexts/OfflineSyncContext';
 import ConflictTray from '@/components/offline/ConflictTray';
 
 export default function OfflineIndicator() {
-  const { isOnline, syncStatus, pendingCount, conflictCount, triggerSync } = useOfflineSync();
+  const { isOnline, syncStatus, pendingCount, conflictCount, syncProgress, triggerSync } = useOfflineSyncContext();
   const [trayOpen, setTrayOpen] = useState(false);
 
   // ConflictTray se monta siempre (controlado solo por trayOpen), independiente
   // de conflictCount: si dependiera de conflictCount, resolver el último
   // conflicto (retry/discard) haría que el conteo bajara a 0 a mitad de la
   // interacción y el modal entero desaparecería de golpe en vez de mostrar
-  // "Sin conflictos pendientes" — encontrado verificando este mismo incremento.
+  // "Sin conflictos pendientes" — encontrado verificando el Incremento 4b.
   const tray = <ConflictTray isOpen={trayOpen} onClose={() => setTrayOpen(false)} triggerSync={triggerSync} />;
 
   // El botón para abrirla sí depende de conflictCount: un conflicto nunca se
@@ -57,7 +57,9 @@ export default function OfflineIndicator() {
     colorClass = "bg-amber-500/10 text-amber-400 border-amber-500/20";
   } else if (syncStatus === 'syncing') {
     Icon = RefreshCw;
-    text = "Sincronizando...";
+    // Progreso real (Incremento 4c) en vez de un spinner ciego: si ya se
+    // conoce cuántos ítems hay que procesar, mostrar x/N.
+    text = syncProgress ? `Sincronizando ${syncProgress.done}/${syncProgress.total}...` : "Sincronizando...";
     colorClass = "bg-blue-500/10 text-blue-400 border-blue-500/20";
     iconClass = "animate-spin";
   } else if (syncStatus === 'error') {
@@ -78,6 +80,14 @@ export default function OfflineIndicator() {
         <Icon className={`w-3.5 h-3.5 ${iconClass}`} />
         <span>{text}</span>
       </button>
+      {syncProgress && (
+        <div className="hidden sm:block w-16 h-1 bg-slate-200 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-blue-500 transition-all"
+            style={{ width: `${Math.round((syncProgress.done / Math.max(syncProgress.total, 1)) * 100)}%` }}
+          />
+        </div>
+      )}
       {conflictButton}
       {tray}
     </div>

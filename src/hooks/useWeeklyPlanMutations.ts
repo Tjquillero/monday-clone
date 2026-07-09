@@ -1,8 +1,8 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
-import { offlineDB, DomainCommand, generateUUID } from '@/lib/offlineDB';
+import { offlineDB, generateUUID } from '@/lib/offlineDB';
 import { isNetworkError } from './useBoardData';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -326,25 +326,10 @@ export function useWeeklyPlanMutations(boardId: string | undefined) {
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// useQueuedReportExecutionIds
-//
-// IDs de ejecuciones con un comando REPORT_EXECUTION todavía en la cola de
-// dominio (carril 2) — sin sincronizar o en conflicto. La UI lo usa para no
-// dejar que el líder vuelva a tocar "Reportar" sobre algo que ya está en
-// camino (evita encolar un segundo comando redundante) mientras sigue offline
-// o antes de que useOfflineSync termine de reproducirlo al reconectar.
-// ─────────────────────────────────────────────────────────────────────────────
-
-export function useQueuedReportExecutionIds() {
-  return useQuery({
-    queryKey: ['domain_commands', 'REPORT_EXECUTION'],
-    queryFn: async (): Promise<Set<string>> => {
-      if (!offlineDB) return new Set();
-      const commands: DomainCommand[] = await offlineDB.getCommands();
-      return new Set(commands.filter((c) => c.type === 'REPORT_EXECUTION').map((c) => c.entity_id));
-    },
-    enabled: !!offlineDB,
-    staleTime: 0,
-  });
-}
+// Nota: el estado técnico de sincronización por ejecución (¿hay un
+// REPORT_EXECUTION pendiente/sincronizando/en conflicto?) vive en
+// src/hooks/useSyncState.ts (useExecutionSyncStatuses) — único origen de
+// verdad reutilizado por Mis Actividades, Verificación y la bandeja de
+// conflictos (Incremento 4c). Antes había una versión local aquí
+// (useQueuedReportExecutionIds) que solo devolvía un booleano; se consolidó
+// para no mantener dos lecturas separadas de la misma cola.

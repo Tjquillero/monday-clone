@@ -67,7 +67,10 @@ export interface DomainCommand {
 // no cuenta como sincronizado hasta existir en Storage Y en la tabla).
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type PendingAttachmentStatus = 'queued' | 'error' | 'conflicto';
+// Ampliado en el Incremento 4c para incluir 'pendiente' y 'sincronizando' —
+// mismo vocabulario que DomainCommandStatus, para un solo origen de verdad
+// del estado técnico (ver src/hooks/useSyncState.ts).
+export type PendingAttachmentStatus = 'queued' | 'pendiente' | 'sincronizando' | 'sincronizado' | 'error' | 'conflicto';
 
 export interface PendingAttachmentError {
   code?: string;

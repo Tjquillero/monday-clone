@@ -2,6 +2,7 @@
 
 import { AuthProvider } from '@/contexts/AuthContext';
 import { UIProvider } from '@/contexts/UIContext';
+import { OfflineSyncProvider } from '@/contexts/OfflineSyncContext';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -32,13 +33,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <UIProvider>
-          <ProtectedRoute>
-            {children}
-          </ProtectedRoute>
-        </UIProvider>
-      </AuthProvider>
+      <OfflineSyncProvider>
+        <AuthProvider>
+          <UIProvider>
+            <ProtectedRoute>
+              {children}
+            </ProtectedRoute>
+          </UIProvider>
+        </AuthProvider>
+      </OfflineSyncProvider>
     </QueryClientProvider>
   );
 }

@@ -102,7 +102,7 @@ export function useConflicts(triggerSync: () => Promise<void>) {
     if (item.kind === 'command') {
       await offlineDB.updateCommand(item.id, { status: 'pendiente', attempts: 0, last_error: null });
     } else {
-      await offlineDB.updatePendingAttachment(item.id, { status: 'queued', attempts: 0, last_error: null });
+      await offlineDB.updatePendingAttachment(item.id, { status: 'pendiente', attempts: 0, last_error: null });
     }
     invalidateAll();
     await triggerSync();

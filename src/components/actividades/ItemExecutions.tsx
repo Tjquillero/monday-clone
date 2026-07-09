@@ -7,10 +7,11 @@
 // Verificación (Supervisor): aquí NO se muestran esos controles.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Loader2, Pencil, Send, Users, Clock, Camera, CloudOff } from 'lucide-react';
+import { Plus, Loader2, Pencil, Send, Users, Clock, Camera, CloudOff, RefreshCw, AlertOctagon } from 'lucide-react';
 import { useWeeklyPlanExecutions } from '@/hooks/useWeeklyPlans';
-import { useWeeklyPlanMutations, useQueuedReportExecutionIds } from '@/hooks/useWeeklyPlanMutations';
-import { useExecutionAttachments, usePendingAttachmentCounts } from '@/hooks/useExecutionAttachments';
+import { useWeeklyPlanMutations } from '@/hooks/useWeeklyPlanMutations';
+import { useExecutionAttachments } from '@/hooks/useExecutionAttachments';
+import { useExecutionSyncStatuses, useAttachmentSyncSummaries } from '@/hooks/useSyncState';
 import { PendingAttachment } from '@/lib/offlineDB';
 import { ExecutionStatus } from '@/types/scheduler';
 import JornadaForm from './JornadaForm';
@@ -37,6 +38,16 @@ function formatNumber(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
+// Estado TÉCNICO (la cola) — deliberadamente distinto del chip de estado de
+// NEGOCIO (STATUS_CHIP, arriba): un "Reportar" en cola no cambia el estado de
+// negocio de la ejecución (sigue 'draft' hasta que el servidor confirme), así
+// que este badge nunca debe decir "Reportada". Ver useSyncState.ts.
+const SYNC_BADGE: Record<'pendiente' | 'sincronizando' | 'conflicto', { text: string; cls: string; Icon: typeof CloudOff }> = {
+  pendiente: { text: 'Pendiente de sincronizar', cls: 'text-amber-600 bg-amber-50 border-amber-200', Icon: CloudOff },
+  sincronizando: { text: 'Sincronizando…', cls: 'text-blue-600 bg-blue-50 border-blue-200', Icon: RefreshCw },
+  conflicto: { text: 'Conflicto — revisa la bandeja', cls: 'text-rose-600 bg-rose-50 border-rose-200', Icon: AlertOctagon },
+};
+
 function toCreateInput(planItemId: string, planId: string, groupId: string, v: JornadaFormValues) {
   return {
     plan_item_id: planItemId,
@@ -54,8 +65,8 @@ function toCreateInput(planItemId: string, planId: string, groupId: string, v: J
 export default function ItemExecutions({ planId, groupId, planItemId, unit }: Props) {
   const { data: executions, isLoading } = useWeeklyPlanExecutions(planItemId);
   const { createExecution, updateDraftExecution, reportExecution } = useWeeklyPlanMutations(undefined);
-  const { data: queuedReportIds } = useQueuedReportExecutionIds();
-  const { data: pendingAttachmentCounts } = usePendingAttachmentCounts();
+  const { data: executionSyncStatuses } = useExecutionSyncStatuses();
+  const { data: attachmentSyncSummaries } = useAttachmentSyncSummaries();
 
   // 'closed' | 'new' | id de la ejecución en edición
   const [formMode, setFormMode] = useState<string>('closed');
@@ -122,6 +133,23 @@ export default function ItemExecutions({ planId, groupId, planItemId, unit }: Pr
     return [...synced, ...pending];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [evidenceAttachments, evidencePending]);
+
+  // Estado técnico por foto (Incremento 4c) — para el punto de color en cada
+  // miniatura del modal. Solo las 'pending' tienen estado técnico; una
+  // 'synced' ya no está en ninguna cola, no necesita indicador.
+  const galleryStatuses = useMemo(() => {
+    const map: Record<string, 'pending' | 'syncing' | 'conflict'> = {};
+    for (const entry of galleryEntries) {
+      if (entry.kind === 'pending') {
+        map[entry.url] = entry.pending.status === 'conflicto'
+          ? 'conflict'
+          : entry.pending.status === 'sincronizando'
+            ? 'syncing'
+            : 'pending';
+      }
+    }
+    return map;
+  }, [galleryEntries]);
 
   // Referencia estable: PhotoVerificationModal reselecciona initialGallery[0]
   // en un efecto que depende de esta prop por identidad. Si se le pasara
@@ -193,6 +221,14 @@ export default function ItemExecutions({ planId, groupId, planItemId, unit }: Pr
 
       {executions?.map((exec) => {
         const chip = STATUS_CHIP[exec.status];
+        const syncStatus = executionSyncStatuses?.get(exec.id);
+        const attachSummary = attachmentSyncSummaries?.get(exec.id);
+        const attachPendingTotal = (attachSummary?.pending ?? 0) + (attachSummary?.syncing ?? 0) + (attachSummary?.conflict ?? 0);
+        const attachBadgeCls = attachSummary?.conflict
+          ? 'bg-rose-500'
+          : attachSummary?.syncing
+            ? 'bg-blue-500'
+            : 'bg-amber-500';
         if (formMode === exec.id) {
           return (
             <JornadaForm
@@ -236,18 +272,24 @@ export default function ItemExecutions({ planId, groupId, planItemId, unit }: Pr
                 className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-60"
               >
                 <Camera className="w-3 h-3" /> Evidencias
-                {(pendingAttachmentCounts?.get(exec.id) ?? 0) > 0 && (
-                  <span className="flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-bold">
-                    {pendingAttachmentCounts!.get(exec.id)}
+                {attachPendingTotal > 0 && (
+                  <span
+                    title={`${attachSummary?.pending ?? 0} pendiente(s), ${attachSummary?.syncing ?? 0} sincronizando, ${attachSummary?.conflict ?? 0} en conflicto`}
+                    className={`flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-white text-[9px] font-bold ${attachBadgeCls}`}
+                  >
+                    {attachPendingTotal}
                   </span>
                 )}
               </button>
-              {exec.status === 'draft' && queuedReportIds?.has(exec.id) && (
-                <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-lg">
-                  <CloudOff className="w-3 h-3" /> Pendiente de sincronizar
-                </span>
-              )}
-              {exec.status === 'draft' && !queuedReportIds?.has(exec.id) && (
+              {exec.status === 'draft' && syncStatus && (() => {
+                const badge = SYNC_BADGE[syncStatus];
+                return (
+                  <span className={`flex items-center gap-1 px-2.5 py-1 text-xs font-semibold border rounded-lg ${badge.cls}`}>
+                    <badge.Icon className={`w-3 h-3 ${syncStatus === 'sincronizando' ? 'animate-spin' : ''}`} /> {badge.text}
+                  </span>
+                );
+              })()}
+              {exec.status === 'draft' && !syncStatus && (
                 <>
                   <button
                     onClick={() => { setActionError(null); setFormMode(exec.id); }}
@@ -325,6 +367,7 @@ export default function ItemExecutions({ planId, groupId, planItemId, unit }: Pr
           itemName="Evidencia de jornada"
           itemId={evidenceExecId}
           initialGallery={galleryUrls}
+          galleryStatuses={galleryStatuses}
         />
       )}
     </div>

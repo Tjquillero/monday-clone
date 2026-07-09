@@ -27,6 +27,11 @@ interface PhotoVerificationModalProps {
   // evidencia ya subida (ej. Verificación del supervisor) y no deben crear
   // fotos locales sin persistir.
   readOnly?: boolean;
+  // Estado técnico de sincronización por foto (Incremento 4c), keyed por la
+  // misma URL de initialGallery. Opcional — los consumidores que no lo pasan
+  // (ej. VerificationContainer, que solo muestra evidencia ya sincronizada)
+  // simplemente no ven ningún indicador extra.
+  galleryStatuses?: Record<string, 'pending' | 'syncing' | 'conflict'>;
 }
 
 export default function PhotoVerificationModal({
@@ -39,6 +44,7 @@ export default function PhotoVerificationModal({
   initialGallery = [],
   onUpload,
   readOnly = false,
+  galleryStatuses,
 }: PhotoVerificationModalProps) {
   const [uploading, setUploading] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
@@ -215,15 +221,26 @@ export default function PhotoVerificationModal({
                     </div>
 
                     <div className="grid grid-cols-4 lg:grid-cols-2 gap-2 mb-6">
-                        {initialGallery.map((url, i) => (
-                            <button 
+                        {initialGallery.map((url, i) => {
+                            const status = galleryStatuses?.[url];
+                            return (
+                            <button
                                 key={`evidence-slot-${i}`}
                                 onClick={() => setSelectedPhoto(url)}
                                 className={`aspect-square rounded-xl overflow-hidden border-2 transition-all relative ${selectedPhoto === url ? 'border-[#3B7EF8]' : 'border-white/5 hover:border-white/20'}`}
                             >
                                 <Image src={url} alt={`Evidencia ${i}`} fill className="object-cover" unoptimized />
+                                {status && (
+                                    <span
+                                        title={status === 'conflict' ? 'Conflicto' : status === 'syncing' ? 'Sincronizando' : 'Pendiente de sincronizar'}
+                                        className={`absolute top-1 right-1 w-2.5 h-2.5 rounded-full border border-white/80 ${
+                                            status === 'conflict' ? 'bg-rose-500' : status === 'syncing' ? 'bg-blue-400 animate-pulse' : 'bg-amber-400'
+                                        }`}
+                                    />
+                                )}
                             </button>
-                        ))}
+                            );
+                        })}
                         {!readOnly && (
                             <button
                                 key="add-evidence-slot"

@@ -125,8 +125,9 @@ export function useExecutionAttachments(executionId?: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['execution_attachments', executionId] });
-      queryClient.invalidateQueries({ queryKey: ['pending_attachments', executionId] });
-      queryClient.invalidateQueries({ queryKey: ['pending_attachments', 'counts'] });
+      // Invalida todo bajo 'pending_attachments' (por execution y el mapa
+      // resumen de useSyncState.ts) — prefijo común, un solo punto de verdad.
+      queryClient.invalidateQueries({ queryKey: ['pending_attachments'] });
     },
   });
 
@@ -153,8 +154,7 @@ export function useExecutionAttachments(executionId?: string) {
       await offlineDB.removePendingAttachment(pendingId);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pending_attachments', executionId] });
-      queryClient.invalidateQueries({ queryKey: ['pending_attachments', 'counts'] });
+      queryClient.invalidateQueries({ queryKey: ['pending_attachments'] });
     },
   });
 
@@ -164,25 +164,7 @@ export function useExecutionAttachments(executionId?: string) {
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// usePendingAttachmentCounts
-//
-// Cuántos Blobs de evidencia siguen sin sincronizar, por execution_id — para
-// que "Mis actividades" pueda mostrar un aviso en cada Jornada sin tener que
-// abrir el modal de evidencias de cada una.
-// ─────────────────────────────────────────────────────────────────────────────
-
-export function usePendingAttachmentCounts() {
-  return useQuery({
-    queryKey: ['pending_attachments', 'counts'],
-    queryFn: async (): Promise<Map<string, number>> => {
-      if (!offlineDB) return new Map();
-      const all: PendingAttachment[] = await offlineDB.getPendingAttachments();
-      const counts = new Map<string, number>();
-      for (const p of all) counts.set(p.execution_id, (counts.get(p.execution_id) ?? 0) + 1);
-      return counts;
-    },
-    enabled: !!offlineDB,
-    staleTime: 0,
-  });
-}
+// Nota: el resumen de adjuntos pendientes por ejecución (para el badge de
+// "Evidencias" en Mis Actividades) vive en src/hooks/useSyncState.ts
+// (useAttachmentSyncSummaries) — único origen de verdad, ya distingue
+// pendiente/sincronizando/conflicto en vez de un conteo plano (Incremento 4c).
