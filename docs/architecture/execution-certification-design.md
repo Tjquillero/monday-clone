@@ -49,7 +49,9 @@ Ninguno nuevo. Se reutilizan:
 Ninguna.
 
 - **Ejecución certificada** = `weekly_plan_item_executions` en `verified`, cuyo `plan_id` está en `weekly_plans.status = 'closed'`. No requiere una tabla puente: la relación ya existe (`plan_item_id → weekly_plan_items → plan_id → weekly_plans`).
-- **Evidencia** = `entity_attachments` (ya existe, huérfana del módulo `work_orders` eliminado, RLS deny-by-default sin políticas, cero consumidores en `src/`). Se propone reactivarla con `entity_type = 'weekly_plan_item_execution'`, `entity_id = weekly_plan_item_executions.id`, y políticas RLS vía `get_user_board_role` (mismo patrón que el resto de tablas del ciclo semanal). La evidencia se ataría **a la ejecución individual**, no a un concepto de "certificación" separado.
+- **Evidencia** = `execution_attachments` (tabla nueva, `supabase/migrations/20260716_execution_attachments.sql`). Se investigó reutilizar `attachments` (la convención real en uso hoy, vía `useAttachments.ts`/`ItemModal.tsx`) o reactivar `entity_attachments` (huérfana del `work_orders` eliminado); ninguna se ajustaba: `attachments.item_id` tiene FK dura a `items(id)` (no reutilizable sin debilitarla), y `entity_attachments` nunca tuvo una sola política RLS escrita ni siquiera después de que el resto del proyecto endureciera su RLS — evidencia de que el polimorfismo no resuelve el problema difícil (RLS multi-origen de board), solo lo pospone. `execution_attachments` sigue el mismo patrón de `attachments` (FK dura, `ON DELETE CASCADE`, RLS vía `get_user_board_role`) aplicado a `weekly_plan_item_executions` en vez de `items`.
+
+**Patrón propuesto (no regla todavía):** cada agregado raíz que requiera evidencias tendría su propia tabla de adjuntos, con FK fuerte, `CASCADE` y RLS específico — no tablas polimórficas, por la pérdida de integridad referencial y porque el RLS multi-origen de board no se simplifica con polimorfismo. Se valida con esta primera implementación (`execution_attachments`); si funciona sin fricciones inesperadas, se documenta como estándar arquitectónico para las siguientes entidades (actas, informes).
 
 ## 4. Qué información consume del POA / catálogo
 
