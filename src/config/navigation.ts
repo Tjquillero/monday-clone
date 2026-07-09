@@ -16,6 +16,7 @@
 // ├── Inicio           (/dashboard)
 // ├── Planificación    (/projects)
 // ├── Mis actividades  (/my-work)
+// ├── Verificación     (/verification)
 // ├── Objetivos        (/okrs)
 // └── Insumos          (/dashboard)
 //
@@ -26,8 +27,8 @@
 //                ↓
 //           Reportes / Indicadores
 //
-// Verificación aún no existe: su entrada al sidebar se registrará AQUÍ
-// cuando la pantalla esté construida, nunca antes ni inline.
+// Verificación: pantalla del Supervisor (bandeja de jornadas reported,
+// verificar/observar). Registrada 2026-07-09 al construir la pantalla.
 //
 // NO agregar, renombrar ni eliminar entradas sin decisión explícita del
 // propietario del producto. Toda vista nueva se registra aquí, nunca inline.
@@ -36,7 +37,7 @@
 
 import {
   Table2, Activity, MapPin, DollarSign, Calendar,
-  Home, Briefcase, CheckSquare, Target, Layout,
+  Home, Briefcase, CheckSquare, Target, Layout, ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -86,6 +87,7 @@ export const SIDEBAR_ITEMS: readonly SidebarItem[] = [
   { icon: Home, label: 'Inicio', path: '/dashboard' },
   { icon: Briefcase, label: 'Planificación', path: '/projects' },
   { icon: CheckSquare, label: 'Mis actividades', path: '/my-work' },
+  { icon: ShieldCheck, label: 'Verificación', path: '/verification' },
   { icon: Target, label: 'Objetivos', path: '/okrs' },
   // Insumos aún no tiene módulo propio; apunta al dashboard de forma
   // provisional hasta que exista su ruta.

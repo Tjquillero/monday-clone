@@ -29,19 +29,24 @@ function mondayISO() {
 (async () => {
   if (process.argv.includes('--cleanup')) {
     if (fs.existsSync(seedPath)) {
-      const { planId, poaVersionId } = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
+      const { planId, poaId } = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
       // Orden: plan primero (items → executions ON DELETE CASCADE; los items
       // referencian poa_activity_zone_id con ON DELETE RESTRICT, así que el
-      // plan debe borrarse antes que la versión del POA de prueba).
+      // plan debe borrarse antes que el POA de prueba). Borrar `poa` cascada
+      // a poa_versions → poa_activities → poa_activity_zones.
+      // NOTA: `poa` es único por board_id — si este board llega a tener un
+      // POA real de producción, este cleanup lo borraría también. Aceptable
+      // hoy porque el board de prueba no tiene POA real todavía; revisar si
+      // eso cambia.
       const { error } = await admin.from('weekly_plans').delete().eq('id', planId);
-      const { error: e2 } = poaVersionId
-        ? await admin.from('poa_versions').delete().eq('id', poaVersionId) // cascada a poa_activities/poa_activity_zones
+      const { error: e2 } = poaId
+        ? await admin.from('poa').delete().eq('id', poaId)
         : { error: null };
       const { error: e3 } = await admin.from('board_activity_standards').delete().eq('source', 'e2e-seed');
       const firstError = error || e2 || e3;
       console.log(firstError
         ? 'cleanup error: ' + firstError.message
-        : 'Plan de prueba, versión POA e2e y estándares e2e-seed eliminados');
+        : 'Plan de prueba, POA e2e y estándares e2e-seed eliminados');
       fs.unlinkSync(seedPath);
     } else console.log('Sin seed que limpiar');
     return;
@@ -165,7 +170,7 @@ function mondayISO() {
 
   fs.writeFileSync(seedPath, JSON.stringify({
     planId: plan.id,
-    poaVersionId: poaVersion.id,
+    poaId: poa.id,
     groupTitle: group.title,
     activityNames: standards.map((s) => s.name),
   }));

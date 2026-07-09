@@ -23,6 +23,10 @@ interface PhotoVerificationModalProps {
   // el comportamiento original (blob local, no persiste) — no rompe a los
   // consumidores existentes que todavía no pasan esta prop.
   onUpload?: (file: File) => Promise<string>;
+  // Oculta los controles de captura/agregar — para visores que solo revisan
+  // evidencia ya subida (ej. Verificación del supervisor) y no deben crear
+  // fotos locales sin persistir.
+  readOnly?: boolean;
 }
 
 export default function PhotoVerificationModal({
@@ -34,6 +38,7 @@ export default function PhotoVerificationModal({
   itemId,
   initialGallery = [],
   onUpload,
+  readOnly = false,
 }: PhotoVerificationModalProps) {
   const [uploading, setUploading] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
@@ -168,14 +173,18 @@ export default function PhotoVerificationModal({
                                 </div>
                                 <div>
                                     <p className="text-base font-black text-slate-400 uppercase italic">Sin evidencia</p>
-                                    <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest mt-2">Utilice el sensor de imagen para auditar</p>
+                                    {!readOnly && (
+                                        <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest mt-2">Utilice el sensor de imagen para auditar</p>
+                                    )}
                                 </div>
-                                <button 
-                                    onClick={handleCapture}
-                                    className="px-6 py-3 bg-[#3B7EF8] text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-[#2563EB] transition-all flex items-center gap-2"
-                                >
-                                    <Camera className="w-4 h-4" /> Iniciar Captura
-                                </button>
+                                {!readOnly && (
+                                    <button
+                                        onClick={handleCapture}
+                                        className="px-6 py-3 bg-[#3B7EF8] text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-[#2563EB] transition-all flex items-center gap-2"
+                                    >
+                                        <Camera className="w-4 h-4" /> Iniciar Captura
+                                    </button>
+                                )}
                             </div>
                         )}
                         
@@ -206,14 +215,16 @@ export default function PhotoVerificationModal({
                                 <Image src={url} alt={`Evidencia ${i}`} fill className="object-cover" unoptimized />
                             </button>
                         ))}
-                        <button 
-                            key="add-evidence-slot"
-                            onClick={handleCapture}
-                            className="aspect-square rounded-xl bg-white/5 border border-dashed border-white/10 flex flex-col items-center justify-center text-slate-600 hover:text-[#3B7EF8] transition-all"
-                        >
-                            <Plus className="w-5 h-5 mb-1" />
-                            <span className="text-[7px] font-black uppercase truncate px-1 text-center">Añadir</span>
-                        </button>
+                        {!readOnly && (
+                            <button
+                                key="add-evidence-slot"
+                                onClick={handleCapture}
+                                className="aspect-square rounded-xl bg-white/5 border border-dashed border-white/10 flex flex-col items-center justify-center text-slate-600 hover:text-[#3B7EF8] transition-all"
+                            >
+                                <Plus className="w-5 h-5 mb-1" />
+                                <span className="text-[7px] font-black uppercase truncate px-1 text-center">Añadir</span>
+                            </button>
+                        )}
                     </div>
 
                     <div className="mt-auto bg-white/5 p-4 rounded-[1.5rem] border border-white/10 space-y-3">
@@ -241,14 +252,18 @@ export default function PhotoVerificationModal({
                     )}
                 </div>
                 <div className="flex items-center gap-6">
-                    <button onClick={onClose} className="text-[9px] font-black text-slate-700 hover:text-white uppercase transition-colors">Cancelar</button>
-                    <button 
-                        onClick={() => selectedPhoto && onSave(selectedPhoto)}
-                        disabled={!selectedPhoto && initialGallery.length === 0}
-                        className="px-6 py-3 bg-[#10B981] text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-xl shadow-[#10B981]/20 disabled:opacity-20"
-                    >
-                        Confirmar
+                    <button onClick={onClose} className="text-[9px] font-black text-slate-700 hover:text-white uppercase transition-colors">
+                        {readOnly ? 'Cerrar' : 'Cancelar'}
                     </button>
+                    {!readOnly && (
+                        <button
+                            onClick={() => selectedPhoto && onSave(selectedPhoto)}
+                            disabled={!selectedPhoto && initialGallery.length === 0}
+                            className="px-6 py-3 bg-[#10B981] text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-xl shadow-[#10B981]/20 disabled:opacity-20"
+                        >
+                            Confirmar
+                        </button>
+                    )}
                 </div>
             </div>
 
