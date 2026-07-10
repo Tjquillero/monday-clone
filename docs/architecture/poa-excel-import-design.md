@@ -163,3 +163,5 @@ Caso señalado explícitamente por el dueño del proceso: una actividad tenía `
 
 ## Próximo paso
 Si este diseño se aprueba: (1) migración de `poa_zone_mappings`, (2) parser del Excel + validaciones de la Sección 7, (3) UI de resolución de mapeos de zona, (4) creación de la nueva `poa_version` + `poa_activities`/`poa_activity_zones` con la vista de diferencia contratada/certificada de la Sección 9.
+
+El contrato de aceptación ejecutable para el paso (2) es [`poa-excel-import-test-matrix.md`](./poa-excel-import-test-matrix.md) — el importador se considera correcto cuando satisface esa matriz. Esa matriz identificó, verificando contra las 112 actividades reales (no solo la muestra de la Sección 2), que la frecuencia sí varía por zona en un 12.5% de los casos — ver [`docs/discovery/poa-frequency-per-zone.md`](../discovery/poa-frequency-per-zone.md), pendiente de decisión del dueño del proceso antes de cerrar TC-01/TC-08 de esa matriz.
