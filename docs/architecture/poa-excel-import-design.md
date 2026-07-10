@@ -62,16 +62,24 @@ La zona del Excel (texto de la fila 1, sin el sufijo `"(presupuesto mes)"`) se r
 ```sql
 CREATE TABLE poa_zone_mappings (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  poa_id           UUID NOT NULL REFERENCES poa(id),
+  poa_id           UUID NOT NULL REFERENCES poa(id) ON DELETE CASCADE,
   excel_zone_name  TEXT NOT NULL,        -- texto exacto del Excel, ej. "PLAZA DE PTO COLOMBIA"
   group_id         UUID REFERENCES groups(id) ON DELETE SET NULL,
   created_by       UUID NOT NULL REFERENCES auth.users(id),
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (poa_id, excel_zone_name)
 );
+
+-- Búsqueda inversa (¿qué zonas del POA apuntan a este group?) y detección de
+-- mapeos pendientes — ambas consultas frecuentes de la pantalla de resolución.
+CREATE INDEX idx_poa_zone_mappings_group_id ON poa_zone_mappings(group_id);
+CREATE INDEX idx_poa_zone_mappings_pending ON poa_zone_mappings(poa_id) WHERE group_id IS NULL;
 ```
 
-- `group_id` nulo representa "pendiente de asignar" — cubre tanto una zona nueva nunca antes vista como una zona cuyo `group` fue eliminado (Regla 5 de ADR-0004: no se borra el mapeo, se marca pendiente).
+- **Unicidad del par**: `UNIQUE (poa_id, excel_zone_name)` es la restricción real — un mismo nombre de zona del Excel resuelve siempre al mismo `group_id` dentro de un mismo POA (contrato). Deliberadamente **no** se restringe `group_id` a aparecer una sola vez: si el nombre de una zona cambia de una versión del Excel a otra (ej. la finance team lo renombra), es legítimo que dos `excel_zone_name` distintos apunten al mismo `group_id` histórico — no es un error, es el mismo mapeo persistente haciendo su trabajo.
+- **`poa_id` con `ON DELETE CASCADE`**: si el `poa` se elimina (caso raro, principalmente limpieza de datos de prueba), sus mapeos no deben quedar huérfanos.
+- **`group_id` nulo representa "pendiente de asignar"** — cubre tanto una zona nueva nunca antes vista como una zona cuyo `group` fue eliminado (Regla 5 de ADR-0004: no se borra el mapeo, se marca pendiente). El índice parcial `idx_poa_zone_mappings_pending` hace que "¿qué zonas de este POA siguen sin resolver?" sea una consulta directa sobre el índice, no un escaneo completo de la tabla.
+- **"Todo o nada" no lo garantiza esta tabla por sí sola** — lo garantiza que el importador completo (parseo, resolución de zonas, creación de `poa_version`/`poa_activities`/`poa_activity_zones`) corra dentro de una única función `SECURITY DEFINER` (una sola transacción de Postgres), igual que ya hace `replace_weekly_plan_items` con su DELETE+INSERT atómico. Si cualquier validación falla a mitad de camino — incluida una zona sin mapeo — toda la función debe terminar con `RAISE EXCEPTION`, revirtiendo cualquier fila ya insertada en esa misma corrida. La tabla solo provee los índices para detectar el problema rápido; la atomicidad es responsabilidad de la función, no del esquema.
 - RLS admin-only, mismo patrón que el resto de tablas del dominio POA.
 
 ---
