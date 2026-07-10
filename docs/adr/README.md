@@ -16,6 +16,8 @@ Este directorio registra las decisiones de arquitectura del proyecto: **por qué
 |---|---|---|
 | [ADR-0001](./ADR-0001-domain-freeze.md) | Congelamiento del Dominio POA v1 | Aceptado |
 | [ADR-0002](./ADR-0002-schedule-contractual-source.md) | Fuente Contractual del Cronograma | Aceptado |
+| [ADR-0003](./ADR-0003-billing-source.md) | Fuente y Mecanismo de Generación del Acta | Aceptado (con 2 puntos pendientes de confirmación) |
+| [ADR-0004](./ADR-0004-poa-zone-catalog.md) | Catálogo de Zonas del POA y Mapeo Persistente con el Board | Aceptado |
 
 ## Estados
 
