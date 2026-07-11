@@ -1,33 +1,29 @@
 -- =============================================================================
--- Tests: import_poa_version — Commits 1-3/4 (firma + precondiciones + RLS +
--- idempotencia por operación + creación de poa_version + poa_activities)
+-- Tests: import_poa_version — Commits 1-4/4 (función completa)
 --
 -- CONTRATO: supabase/migrations/20260721_import_poa_version.sql,
 -- supabase/migrations/20260722_import_poa_version_idempotency.sql,
 -- supabase/migrations/20260723_import_poa_version_create_version.sql,
--- supabase/migrations/20260724_import_poa_version_activities.sql.
+-- supabase/migrations/20260724_import_poa_version_activities.sql,
+-- supabase/migrations/20260725_import_poa_version_zones_and_activation.sql.
 --
--- Alcance de Commit 2: la función crea exactamente un registro en
--- poa_versions (status='draft', version_number correcto, created_by,
--- import_operation_id) y devuelve su id.
+-- Este archivo reemplaza por completo la versión anterior (Commits 2-3):
+-- aquellos tests dependían de un estado "pendiente de implementar" que ya
+-- no existe — la función ahora se completa o revierte por completo, sin
+-- estados intermedios. Las versiones anteriores de este archivo, con esos
+-- tests, quedan en el historial de git para quien necesite ver la
+-- progresión.
 --
--- Alcance de Commit 3: además, inserta poa_activities preservando el orden
--- de p_activities (import_order). NO inserta poa_activity_zones todavía
--- (Commit 4) ni cambia el status de la versión — por eso, cuando alguna
--- actividad trae al menos una zona, la función sigue lanzando "pendiente de
--- implementar" después de insertar poa_activities, y TODO debe revertirse
--- (poa_version + poa_activities) — Test 15, el punto más importante de esta
--- sección: no asumir que "Postgres hace transacciones", demostrarlo, un
--- nivel más profundo que el Test 11 del Commit 2.
+-- Cambio de contrato en este commit: `zonas: []` en una actividad YA NO es
+-- un caso de éxito aislado — toda actividad debe traer al menos una zona.
+-- Enviar una sin zonas es ahora un error explícito (Test 13).
 --
--- Con p_activities = '[]' (Commit 2) o con actividades cuyo `zonas` sea `[]`
--- en cada elemento (Commit 3) la función SÍ completa exitosamente hoy — es
--- el único caso de éxito de punta a punta posible en el alcance actual de
--- cada commit, y es lo que permite probar cada capa sin inventar una
--- función auxiliar con su propia superficie de autorización paralela. En
--- datos reales, toda actividad validada por las capas 1-3 siempre trae al
--- menos una zona — el caso "zonas: []" es exclusivamente para aislar esta
--- capa del Commit 4, que todavía no existe.
+-- Invariante más importante de todo el importador (Tests 12-15): cualquier
+-- fallo — FK inexistente, actividad sin zonas, o cualquier otro — revierte
+-- las TRES tablas (poa_versions, poa_activities, poa_activity_zones) sin
+-- dejar rastro, y NUNCA dejar una versión en 'active' con datos parciales.
+-- El Test 15 verifica además que un fallo sobre un poa con una versión ya
+-- activa no la toca — ni la cierra ni la corrompe.
 --
 -- Nota sobre autorización: a diferencia de 04_poa_zone_mappings.sql (Test 6,
 -- corregido — SET ROLE postgres bypassa RLS), la verificación de "no-admin
@@ -39,11 +35,8 @@
 --
 -- Usuarios reales reutilizados de otros archivos de esta suite (existen en
 -- auth.users del proyecto): aaaaaaaa-...-000001 (admin), aaaaaaaa-...-000003
--- (leader). Tres pares board/poa con prefijo 55555555, propios de este
--- archivo — el segundo par (Tests 8-11) existe para que la numeración de
--- versiones se pruebe desde cero, sin interferencia de la fila sembrada
--- manualmente en el Test 6; el tercer par (Tests 12-16) aísla las pruebas
--- de poa_activities de ambos.
+-- (leader). Cuatro pares board/poa con prefijo 55555555, propios de este
+-- archivo, cada uno aislando un grupo de escenarios distinto.
 --
 -- Sin SAVEPOINT/ROLLBACK TO por test (ver nota en 01_state_machine.sql):
 -- corrompe el contador interno de pgTAP.
@@ -63,10 +56,11 @@ SELECT set_config(
 
 BEGIN;
 
-SELECT plan(25);
+SELECT plan(23);
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Fixtures — board/poa #1 (Tests 1-7)
+-- Fixtures — board/poa #1 (Tests 1-3, 5-6): solo precondiciones, sin llegar
+-- nunca a insertar nada real.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 INSERT INTO public.boards (id, name, owner_id, created_at)
@@ -84,11 +78,11 @@ RETURNS VOID LANGUAGE sql AS $$
 $$;
 
 INSERT INTO public.poa (id, board_id, name)
-VALUES ('55555555-0000-0000-0000-0000000000aa', '55555555-0000-0000-0000-000000000001', 'POA Test Import Version')
+VALUES ('55555555-0000-0000-0000-0000000000aa', '55555555-0000-0000-0000-000000000001', 'POA Test Preconditions')
 ON CONFLICT (board_id) DO UPDATE SET name = EXCLUDED.name
 RETURNING id;
 
--- Fixtures — board/poa #2 (Tests 8-11, numeración desde cero)
+-- Fixtures — board/poa #2 (Tests 7-11): importación real, con zonas reales.
 
 INSERT INTO public.boards (id, name, owner_id, created_at)
 VALUES ('55555555-0000-0000-0000-000000000002', 'Test Board Import POA 2', 'aaaaaaaa-0000-0000-0000-000000000001', NOW())
@@ -98,12 +92,17 @@ INSERT INTO public.board_members (board_id, user_id, role) VALUES
   ('55555555-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', 'admin')
 ON CONFLICT (board_id, user_id) DO NOTHING;
 
+INSERT INTO public.groups (id, board_id, title, color, position) VALUES
+  ('88888888-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000002', 'Zona Test 1', '#00FF00', 0),
+  ('88888888-0000-0000-0000-000000000002', '55555555-0000-0000-0000-000000000002', 'Zona Test 2', '#00FF00', 1)
+ON CONFLICT (id) DO NOTHING;
+
 INSERT INTO public.poa (id, board_id, name)
-VALUES ('55555555-0000-0000-0000-0000000000ff', '55555555-0000-0000-0000-000000000002', 'POA Test Version Numbering')
+VALUES ('55555555-0000-0000-0000-0000000000ff', '55555555-0000-0000-0000-000000000002', 'POA Test Full Import')
 ON CONFLICT (board_id) DO UPDATE SET name = EXCLUDED.name
 RETURNING id;
 
--- Fixtures — board/poa #3 (Tests 12-16, poa_activities)
+-- Fixtures — board/poa #3 (Tests 12-14): atomicidad ante fallos.
 
 INSERT INTO public.boards (id, name, owner_id, created_at)
 VALUES ('55555555-0000-0000-0000-000000000003', 'Test Board Import POA 3', 'aaaaaaaa-0000-0000-0000-000000000001', NOW())
@@ -114,9 +113,34 @@ INSERT INTO public.board_members (board_id, user_id, role) VALUES
 ON CONFLICT (board_id, user_id) DO NOTHING;
 
 INSERT INTO public.poa (id, board_id, name)
-VALUES ('55555555-0000-0000-0000-0000000000ee', '55555555-0000-0000-0000-000000000003', 'POA Test Activities')
+VALUES ('55555555-0000-0000-0000-0000000000ee', '55555555-0000-0000-0000-000000000003', 'POA Test Atomicity')
 ON CONFLICT (board_id) DO UPDATE SET name = EXCLUDED.name
 RETURNING id;
+
+-- Fixtures — board/poa #4 (Test 15): un poa con una versión YA activa,
+-- para verificar que un fallo posterior no la toca.
+
+INSERT INTO public.boards (id, name, owner_id, created_at)
+VALUES ('55555555-0000-0000-0000-000000000004', 'Test Board Import POA 4', 'aaaaaaaa-0000-0000-0000-000000000001', NOW())
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.board_members (board_id, user_id, role) VALUES
+  ('55555555-0000-0000-0000-000000000004', 'aaaaaaaa-0000-0000-0000-000000000001', 'admin')
+ON CONFLICT (board_id, user_id) DO NOTHING;
+
+INSERT INTO public.poa (id, board_id, name)
+VALUES ('55555555-0000-0000-0000-0000000000dd', '55555555-0000-0000-0000-000000000004', 'POA Test Preexisting Active')
+ON CONFLICT (board_id) DO UPDATE SET name = EXCLUDED.name
+RETURNING id;
+
+INSERT INTO public.poa_versions (
+  id, poa_id, version_number, status, created_by, published_at
+) VALUES (
+  '55555555-0000-0000-0000-000000000dd1',
+  '55555555-0000-0000-0000-0000000000dd',
+  1, 'active', 'aaaaaaaa-0000-0000-0000-000000000001', NOW()
+)
+ON CONFLICT (id) DO NOTHING;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Test 1: poa inexistente
@@ -161,26 +185,7 @@ SELECT throws_like(
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Test 4: con una actividad que trae zonas, la inserción de zonas todavía no
--- está implementada (Commit 4) — desde Commit 3, poa_activities SÍ se
--- inserta, así que el punto de fallo se movió: ya no es "hay actividades",
--- es "alguna actividad trae zonas". El payload debe ser una actividad
--- completa y válida (activity_key, precio_unitario, frecuencia) para que el
--- fallo ocurra en el paso de zonas, no antes por un NOT NULL de columna.
--- ─────────────────────────────────────────────────────────────────────────────
-
-SELECT throws_like(
-  $$ SELECT public.import_poa_version(
-       '55555555-0000-0000-0000-0000000000aa',
-       '[{"activity_key":"1.01","precio_unitario":100,"frecuencia":1,
-          "zonas":[{"group_id":"66666666-0000-0000-0000-000000000001","cantidad_contratada":10}]}]'::JSONB
-     ) $$,
-  '%pendiente de implementar%',
-  'Test 4: una actividad con zonas confirma que la inserción de zonas no existe todavía (Commit 4) ✓'
-);
-
--- ─────────────────────────────────────────────────────────────────────────────
--- Test 5: poa_versions/poa_activities/poa_activity_zones ya no tienen
+-- Test 4: poa_versions/poa_activities/poa_activity_zones ya no tienen
 -- ninguna política de escritura — el único camino es import_poa_version().
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -190,14 +195,14 @@ SELECT is(
      AND tablename IN ('poa_versions', 'poa_activities', 'poa_activity_zones')
      AND cmd IN ('INSERT', 'UPDATE', 'DELETE', 'ALL')),
   0,
-  'Test 5: ninguna de las tres tablas tiene una política RLS de escritura directa ✓'
+  'Test 4: ninguna de las tres tablas tiene una política RLS de escritura directa ✓'
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Test 6: idempotencia — reintentar con el mismo p_import_operation_id
+-- Test 5: idempotencia — reintentar con el mismo p_import_operation_id
 -- devuelve la versión ya creada, no lanza error. Fila sembrada manualmente
--- para aislar la ruta de lectura de idempotencia de la lógica de creación
--- real (probada por separado en Tests 8-11).
+-- para aislar la ruta de lectura de idempotencia de la inserción real
+-- (probada por separado en Tests 7-11).
 -- ─────────────────────────────────────────────────────────────────────────────
 
 INSERT INTO public.poa_versions (
@@ -217,30 +222,13 @@ SELECT is(
     '55555555-0000-0000-0000-0000000000cc'
   )::TEXT,
   '55555555-0000-0000-0000-0000000000bb',
-  'Test 6: reintentar con el mismo import_operation_id devuelve la poa_version existente, sin error ✓'
+  'Test 5: reintentar con el mismo import_operation_id devuelve la poa_version existente, sin error ✓'
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Test 7: un import_operation_id nuevo (no visto antes), con una actividad
--- que trae zonas, SÍ atraviesa hasta el cuerpo pendiente de implementar
--- (Commit 4) — la idempotencia no enmascara otros errores ni bloquea
--- operaciones nuevas.
--- ─────────────────────────────────────────────────────────────────────────────
-
-SELECT throws_like(
-  $$ SELECT public.import_poa_version(
-       '55555555-0000-0000-0000-0000000000aa',
-       '[{"activity_key":"1.01","precio_unitario":100,"frecuencia":1,
-          "zonas":[{"group_id":"66666666-0000-0000-0000-000000000001","cantidad_contratada":10}]}]'::JSONB,
-       '55555555-0000-0000-0000-0000000000dd'
-     ) $$,
-  '%pendiente de implementar%',
-  'Test 7: un import_operation_id distinto no es idempotente contra uno ajeno — sigue el flujo normal ✓'
-);
-
--- ─────────────────────────────────────────────────────────────────────────────
--- Test 8: creación exitosa — sin actividades, la función completa de punta
--- a punta y deja exactamente una fila en poa_versions.
+-- Test 6: importación exitosa de punta a punta — 2 actividades, 3 zonas en
+-- total (una de ellas con las zonas en orden invertido respecto a los
+-- grupos, para poder verificar zone_import_order en el Test 8).
 -- ─────────────────────────────────────────────────────────────────────────────
 
 DO $$
@@ -248,237 +236,235 @@ DECLARE
   v_version_id UUID;
 BEGIN
   v_version_id := public.import_poa_version(
-    '55555555-0000-0000-0000-0000000000ff', '[]'::JSONB,
-    '55555555-0000-0000-0000-000000001001'
+    '55555555-0000-0000-0000-0000000000ff',
+    $json$[
+      {"activity_key":"1.01","precio_unitario":100.50,"frecuencia":1,
+       "zonas":[
+         {"group_id":"88888888-0000-0000-0000-000000000002","cantidad_contratada":20},
+         {"group_id":"88888888-0000-0000-0000-000000000001","cantidad_contratada":10}
+       ]},
+      {"activity_key":"1.02","precio_unitario":200.75,"frecuencia":2,
+       "zonas":[{"group_id":"88888888-0000-0000-0000-000000000001","cantidad_contratada":5}]}
+    ]$json$::JSONB,
+    '55555555-0000-0000-0000-000000003001'
   );
   IF v_version_id IS NULL THEN
-    RAISE EXCEPTION 'Test 8: import_poa_version no devolvió un id';
+    RAISE EXCEPTION 'Test 6: import_poa_version no devolvió un id';
   END IF;
 END;
 $$;
 
-SELECT is(
-  (SELECT COUNT(*)::INT FROM public.poa_versions WHERE poa_id = '55555555-0000-0000-0000-0000000000ff'),
-  1,
-  'Test 8: creación exitosa deja exactamente una fila en poa_versions ✓'
-);
-
 SELECT results_eq(
-  $$ SELECT version_number, status, created_by
+  $$ SELECT version_number, status, created_by, published_by IS NOT NULL, published_at IS NOT NULL
      FROM public.poa_versions
      WHERE poa_id = '55555555-0000-0000-0000-0000000000ff' $$,
-  $$ VALUES (1, 'draft'::TEXT, 'aaaaaaaa-0000-0000-0000-000000000001'::UUID) $$,
-  'Test 9: primera versión creada con version_number=1, status=draft, created_by correcto ✓'
+  $$ VALUES (1, 'active'::TEXT, 'aaaaaaaa-0000-0000-0000-000000000001'::UUID, TRUE, TRUE) $$,
+  'Test 6: la versión queda version_number=1, status=active, published_by/published_at poblados ✓'
+);
+
+SELECT is(
+  (SELECT COUNT(*)::INT FROM public.poa_activities pa
+   JOIN public.poa_versions pv ON pv.id = pa.poa_version_id
+   WHERE pv.poa_id = '55555555-0000-0000-0000-0000000000ff'),
+  2,
+  'Test 6b: se insertaron las 2 poa_activities ✓'
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Test 10: numeración correcta — una segunda creación para el mismo poa_id
--- obtiene version_number=2, no reutiliza ni colisiona con la primera.
+-- Test 7: propagación correcta de los campos de zona (group_id →
+-- poa_activity_zones.zone_id, cantidad_contratada) para las 3 zonas en total.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT is(
+  (SELECT COUNT(*)::INT FROM public.poa_activity_zones paz
+   JOIN public.poa_activities pa ON pa.id = paz.poa_activity_id
+   JOIN public.poa_versions pv ON pv.id = pa.poa_version_id
+   WHERE pv.poa_id = '55555555-0000-0000-0000-0000000000ff'),
+  3,
+  'Test 7: se insertaron las 3 poa_activity_zones esperadas (2 + 1) ✓'
+);
+
+SELECT results_eq(
+  $$ SELECT paz.zone_id, paz.cantidad_contratada
+     FROM public.poa_activity_zones paz
+     JOIN public.poa_activities pa ON pa.id = paz.poa_activity_id
+     JOIN public.poa_versions pv ON pv.id = pa.poa_version_id
+     WHERE pv.poa_id = '55555555-0000-0000-0000-0000000000ff'
+       AND pa.activity_key = '1.02' $$,
+  $$ VALUES ('88888888-0000-0000-0000-000000000001'::UUID, 5::NUMERIC) $$,
+  'Test 7b: zone_id y cantidad_contratada de la actividad 1.02 se propagan exactamente ✓'
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Test 8: zone_import_order preserva el orden de llegada DENTRO de cada
+-- actividad, independiente de import_order de la actividad — la actividad
+-- 1.01 envió sus zonas como [Zona 2, Zona 1] (invertido respecto al id).
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT results_eq(
+  $$ SELECT paz.zone_id, paz.zone_import_order
+     FROM public.poa_activity_zones paz
+     JOIN public.poa_activities pa ON pa.id = paz.poa_activity_id
+     JOIN public.poa_versions pv ON pv.id = pa.poa_version_id
+     WHERE pv.poa_id = '55555555-0000-0000-0000-0000000000ff'
+       AND pa.activity_key = '1.01'
+     ORDER BY paz.zone_import_order $$,
+  $$ VALUES
+       ('88888888-0000-0000-0000-000000000002'::UUID, 0),
+       ('88888888-0000-0000-0000-000000000001'::UUID, 1) $$,
+  'Test 8: zone_import_order = 0 para Zona 2 (enviada primero), 1 para Zona 1 — no ordena por group_id ✓'
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Test 9: una segunda importación exitosa sobre el mismo poa_id cierra la
+-- primera (Regla 12: una sola versión activa) y activa la nueva.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 DO $$
 BEGIN
   PERFORM public.import_poa_version(
-    '55555555-0000-0000-0000-0000000000ff', '[]'::JSONB,
-    '55555555-0000-0000-0000-000000001002'
+    '55555555-0000-0000-0000-0000000000ff',
+    $json$[{"activity_key":"2.01","precio_unitario":50,"frecuencia":1,
+            "zonas":[{"group_id":"88888888-0000-0000-0000-000000000001","cantidad_contratada":1}]}]$json$::JSONB,
+    '55555555-0000-0000-0000-000000003002'
   );
 END;
 $$;
 
-SELECT is(
-  (SELECT version_number FROM public.poa_versions
-   WHERE poa_id = '55555555-0000-0000-0000-0000000000ff'
-     AND import_operation_id = '55555555-0000-0000-0000-000000001002'),
-  2,
-  'Test 10: la segunda versión del mismo poa_id obtiene version_number=2 ✓'
+SELECT results_eq(
+  $$ SELECT version_number, status, closed_at IS NOT NULL
+     FROM public.poa_versions
+     WHERE poa_id = '55555555-0000-0000-0000-0000000000ff'
+     ORDER BY version_number $$,
+  $$ VALUES (1, 'closed'::TEXT, TRUE), (2, 'active'::TEXT, FALSE) $$,
+  'Test 9: v1 pasa a closed (con closed_at) y v2 queda active — nunca dos activas a la vez ✓'
 );
 
--- Reintentar la primera operación (idempotencia real, no fila sembrada)
--- debe seguir devolviendo la misma versión — no crea una tercera fila.
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Test 10: la idempotencia se conserva tras la activación real — reintentar
+-- la primera operación devuelve v1, aunque ya esté 'closed'.
+-- ─────────────────────────────────────────────────────────────────────────────
 
 SELECT is(
   (SELECT public.import_poa_version(
-     '55555555-0000-0000-0000-0000000000ff', '[]'::JSONB,
-     '55555555-0000-0000-0000-000000001001'
+     '55555555-0000-0000-0000-0000000000ff',
+     $json$[{"activity_key":"1.01","precio_unitario":100.50,"frecuencia":1,
+             "zonas":[
+               {"group_id":"88888888-0000-0000-0000-000000000002","cantidad_contratada":20},
+               {"group_id":"88888888-0000-0000-0000-000000000001","cantidad_contratada":10}
+             ]},
+            {"activity_key":"1.02","precio_unitario":200.75,"frecuencia":2,
+             "zonas":[{"group_id":"88888888-0000-0000-0000-000000000001","cantidad_contratada":5}]}]$json$::JSONB,
+     '55555555-0000-0000-0000-000000003001'
    ))::TEXT,
   (SELECT id::TEXT FROM public.poa_versions
-   WHERE poa_id = '55555555-0000-0000-0000-0000000000ff'
-     AND import_operation_id = '55555555-0000-0000-0000-000000001001'),
-  'Test 10b: reintentar la primera operación real sigue devolviendo la misma versión ✓'
+   WHERE poa_id = '55555555-0000-0000-0000-0000000000ff' AND version_number = 1),
+  'Test 10: reintentar la primera operación devuelve v1 aunque ya esté closed — la idempotencia no depende del status ✓'
 );
 
 SELECT is(
   (SELECT COUNT(*)::INT FROM public.poa_versions WHERE poa_id = '55555555-0000-0000-0000-0000000000ff'),
   2,
-  'Test 10c: tras el reintento, siguen existiendo exactamente 2 versiones (no 3) ✓'
+  'Test 10b: tras el reintento, siguen existiendo exactamente 2 versiones (no 3) ✓'
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Test 11: una operación nueva con una actividad que trae zonas falla
--- (Commit 4 pendiente) — se verifica explícitamente que la poa_version
--- creada DENTRO de la misma llamada también se revirtió. No basta con que
--- Postgres "haga transacciones": se demuestra que ningún registro huérfano
--- sobrevive al fallo. (Ampliado a poa_activities en el Test 15, una vez que
--- Commit 3 empieza a insertarlas.)
--- ─────────────────────────────────────────────────────────────────────────────
-
-SELECT throws_like(
-  $$ SELECT public.import_poa_version(
-       '55555555-0000-0000-0000-0000000000ff',
-       '[{"activity_key":"1.01","precio_unitario":100,"frecuencia":1,
-          "zonas":[{"group_id":"66666666-0000-0000-0000-000000000001","cantidad_contratada":10}]}]'::JSONB,
-       '55555555-0000-0000-0000-000000001099'
-     ) $$,
-  '%pendiente de implementar%',
-  'Test 11a: una operación con una actividad con zonas falla como se espera (Commit 4 pendiente) ✓'
-);
-
-SELECT is(
-  (SELECT COUNT(*)::INT FROM public.poa_versions
-   WHERE import_operation_id = '55555555-0000-0000-0000-000000001099'),
-  0,
-  'Test 11b: no queda ninguna poa_version huérfana de la operación que falló ✓'
-);
-
-SELECT is(
-  (SELECT COUNT(*)::INT FROM public.poa_versions WHERE poa_id = '55555555-0000-0000-0000-0000000000ff'),
-  2,
-  'Test 11c: el total de versiones de este poa_id sigue siendo 2 — el fallo no dejó rastro ✓'
-);
-
--- ─────────────────────────────────────────────────────────────────────────────
--- Test 12: creación exitosa de poa_activities — 3 actividades, sin zonas
--- (aísla esta capa del Commit 4, que todavía no existe).
--- ─────────────────────────────────────────────────────────────────────────────
-
-DO $$
-DECLARE
-  v_version_id UUID;
-BEGIN
-  v_version_id := public.import_poa_version(
-    '55555555-0000-0000-0000-0000000000ee',
-    $json$[
-      {"activity_key":"1.01","precio_unitario":100.50,"frecuencia":1,"zonas":[]},
-      {"activity_key":"1.02","precio_unitario":200.75,"frecuencia":2,"zonas":[]},
-      {"activity_key":"1.03","precio_unitario":300.00,"frecuencia":0.5,"zonas":[]}
-    ]$json$::JSONB,
-    '55555555-0000-0000-0000-000000002001'
-  );
-  IF v_version_id IS NULL THEN
-    RAISE EXCEPTION 'Test 12: import_poa_version no devolvió un id';
-  END IF;
-END;
-$$;
-
-SELECT is(
-  (SELECT COUNT(*)::INT FROM public.poa_activities pa
-   JOIN public.poa_versions pv ON pv.id = pa.poa_version_id
-   WHERE pv.poa_id = '55555555-0000-0000-0000-0000000000ee'),
-  3,
-  'Test 12: las 3 actividades se insertaron en poa_activities ✓'
-);
-
--- ─────────────────────────────────────────────────────────────────────────────
--- Test 13: propagación correcta de los campos contractuales (activity_key,
--- precio_unitario, frecuencia) — sin transformación ni pérdida de precisión.
--- ─────────────────────────────────────────────────────────────────────────────
-
-SELECT results_eq(
-  $$ SELECT activity_key, precio_unitario, frecuencia
-     FROM public.poa_activities pa
-     JOIN public.poa_versions pv ON pv.id = pa.poa_version_id
-     WHERE pv.poa_id = '55555555-0000-0000-0000-0000000000ee'
-     ORDER BY pa.import_order $$,
-  $$ VALUES
-       ('1.01'::TEXT, 100.50::NUMERIC, 1::NUMERIC),
-       ('1.02'::TEXT, 200.75::NUMERIC, 2::NUMERIC),
-       ('1.03'::TEXT, 300.00::NUMERIC, 0.5::NUMERIC) $$,
-  'Test 13: activity_key/precio_unitario/frecuencia se propagan exactamente desde el JSON ✓'
-);
-
--- ─────────────────────────────────────────────────────────────────────────────
--- Test 14: import_order preserva el orden de llegada del array (0-indexado),
--- no el orden alfabético de activity_key ni el de inserción física.
--- ─────────────────────────────────────────────────────────────────────────────
-
-SELECT results_eq(
-  $$ SELECT activity_key, import_order
-     FROM public.poa_activities pa
-     JOIN public.poa_versions pv ON pv.id = pa.poa_version_id
-     WHERE pv.poa_id = '55555555-0000-0000-0000-0000000000ee'
-     ORDER BY import_order $$,
-  $$ VALUES ('1.01'::TEXT, 0), ('1.02'::TEXT, 1), ('1.03'::TEXT, 2) $$,
-  'Test 14: import_order coincide con la posición en el array enviado ✓'
-);
-
--- ─────────────────────────────────────────────────────────────────────────────
--- Test 15: EL TEST MÁS IMPORTANTE DE ESTA SECCIÓN. Una operación con una
--- actividad que trae zonas falla en el paso de zonas (Commit 4 pendiente) —
--- se verifica que NI la poa_version NI las poa_activities recién insertadas
--- sobreviven. Un nivel más profundo que el Test 11: aquí ya hay dos tablas
--- involucradas, no una.
+-- Test 11: un group_id inexistente viola la FK de poa_activity_zones — la
+-- importación completa se revierte: NI poa_version, NI poa_activities, NI
+-- poa_activity_zones sobreviven.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 SELECT throws_like(
   $$ SELECT public.import_poa_version(
        '55555555-0000-0000-0000-0000000000ee',
-       $j$[{"activity_key":"9.99","precio_unitario":50,"frecuencia":1,
-            "zonas":[{"group_id":"66666666-0000-0000-0000-000000000001","cantidad_contratada":5}]}]$j$::JSONB,
-       '55555555-0000-0000-0000-000000002099'
+       $j$[{"activity_key":"1.01","precio_unitario":100,"frecuencia":1,
+            "zonas":[{"group_id":"99999999-0000-0000-0000-000000000001","cantidad_contratada":1}]}]$j$::JSONB,
+       '55555555-0000-0000-0000-000000004001'
      ) $$,
-  '%pendiente de implementar%',
-  'Test 15a: una actividad con zonas falla como se espera (Commit 4 pendiente) ✓'
+  '%violates foreign key constraint%',
+  'Test 11: un group_id inexistente falla por violación de FK (foreign_key_violation) ✓'
 );
 
 SELECT is(
   (SELECT COUNT(*)::INT FROM public.poa_versions
-   WHERE import_operation_id = '55555555-0000-0000-0000-000000002099'),
+   WHERE import_operation_id = '55555555-0000-0000-0000-000000004001'),
   0,
-  'Test 15b: no queda ninguna poa_version huérfana de la operación que falló ✓'
-);
-
-SELECT is(
-  (SELECT COUNT(*)::INT FROM public.poa_activities WHERE activity_key = '9.99'),
-  0,
-  'Test 15c: no queda ninguna poa_activities huérfana de la operación que falló (activity_key único de este test) ✓'
+  'Test 11b: no queda ninguna poa_version huérfana ✓'
 );
 
 SELECT is(
   (SELECT COUNT(*)::INT FROM public.poa_activities pa
    JOIN public.poa_versions pv ON pv.id = pa.poa_version_id
    WHERE pv.poa_id = '55555555-0000-0000-0000-0000000000ee'),
-  3,
-  'Test 15d: siguen existiendo exactamente las 3 actividades del Test 12 — nada se duplicó ni se perdió ✓'
+  0,
+  'Test 11c: no queda ninguna poa_activities huérfana ✓'
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Test 16: la idempotencia se conserva tras una inserción real de
--- actividades — reintentar la operación del Test 12 devuelve la misma
--- versión sin duplicar poa_activities.
+-- Test 12: una actividad sin ninguna zona es rechazada explícitamente — ya
+-- no es un caso de éxito (cambio de contrato de este commit).
 -- ─────────────────────────────────────────────────────────────────────────────
 
-SELECT is(
-  (SELECT public.import_poa_version(
-     '55555555-0000-0000-0000-0000000000ee',
-     $json$[
-       {"activity_key":"1.01","precio_unitario":100.50,"frecuencia":1,"zonas":[]},
-       {"activity_key":"1.02","precio_unitario":200.75,"frecuencia":2,"zonas":[]},
-       {"activity_key":"1.03","precio_unitario":300.00,"frecuencia":0.5,"zonas":[]}
-     ]$json$::JSONB,
-     '55555555-0000-0000-0000-000000002001'
-   ))::TEXT,
-  (SELECT id::TEXT FROM public.poa_versions
-   WHERE poa_id = '55555555-0000-0000-0000-0000000000ee'
-     AND import_operation_id = '55555555-0000-0000-0000-000000002001'),
-  'Test 16a: reintentar la operación del Test 12 devuelve la misma poa_version ✓'
+SELECT throws_like(
+  $$ SELECT public.import_poa_version(
+       '55555555-0000-0000-0000-0000000000ee',
+       '[{"activity_key":"1.01","precio_unitario":100,"frecuencia":1,"zonas":[]}]'::JSONB,
+       '55555555-0000-0000-0000-000000004002'
+     ) $$,
+  '%sin ninguna zona asociada%',
+  'Test 12: una actividad con zonas:[] es rechazada explícitamente ✓'
 );
 
 SELECT is(
-  (SELECT COUNT(*)::INT FROM public.poa_activities pa
-   JOIN public.poa_versions pv ON pv.id = pa.poa_version_id
-   WHERE pv.poa_id = '55555555-0000-0000-0000-0000000000ee'),
-  3,
-  'Test 16b: el reintento no duplicó poa_activities — siguen siendo exactamente 3 ✓'
+  (SELECT COUNT(*)::INT FROM public.poa_versions
+   WHERE import_operation_id = '55555555-0000-0000-0000-000000004002'),
+  0,
+  'Test 12b: tampoco deja ninguna poa_version huérfana ✓'
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Test 13: tras los dos fallos anteriores (Tests 11-12), este poa sigue sin
+-- ninguna versión — no quedó en un estado corrupto que afecte la
+-- numeración de una importación exitosa posterior.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT is(
+  (SELECT COUNT(*)::INT FROM public.poa_versions WHERE poa_id = '55555555-0000-0000-0000-0000000000ee'),
+  0,
+  'Test 13: ningún intento fallido dejó rastro — el poa sigue sin versiones ✓'
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Test 14: EL TEST MÁS IMPORTANTE DE ESTE ARCHIVO. Un poa con una versión
+-- YA activa sufre un intento de importación fallido — la versión activa
+-- preexistente NO debe tocarse (ni cerrarse, ni corromperse). Nunca debe
+-- existir un momento observable donde el sistema quede sin ninguna versión
+-- activa, ni con una versión activa a medio construir.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT throws_like(
+  $$ SELECT public.import_poa_version(
+       '55555555-0000-0000-0000-0000000000dd',
+       $j$[{"activity_key":"1.01","precio_unitario":100,"frecuencia":1,
+            "zonas":[{"group_id":"99999999-0000-0000-0000-000000000001","cantidad_contratada":1}]}]$j$::JSONB,
+       '55555555-0000-0000-0000-000000004003'
+     ) $$,
+  '%violates foreign key constraint%',
+  'Test 14a: la importación fallida sobre un poa con versión activa preexistente falla como se espera ✓'
+);
+
+SELECT results_eq(
+  $$ SELECT status, closed_at IS NULL
+     FROM public.poa_versions
+     WHERE id = '55555555-0000-0000-0000-000000000dd1' $$,
+  $$ VALUES ('active'::TEXT, TRUE) $$,
+  'Test 14b: la versión activa preexistente sigue active, sin closed_at — el fallo no la tocó ✓'
+);
+
+SELECT is(
+  (SELECT COUNT(*)::INT FROM public.poa_versions WHERE poa_id = '55555555-0000-0000-0000-0000000000dd'),
+  1,
+  'Test 14c: sigue existiendo exactamente 1 versión para este poa — el intento fallido no dejó una segunda fila ✓'
 );
 
 SELECT * FROM finish();
