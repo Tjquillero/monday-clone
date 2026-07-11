@@ -33,6 +33,8 @@ Por script:
 | `verify-zone-mapping-ui.cjs` | Usuario E2E creado **y** seed de `seed-zone-mapping.cjs` |
 | `seed-poa-import.cjs` | Usuario E2E creado |
 | `verify-poa-import-ui.cjs` | Usuario E2E creado, seed de `seed-poa-import.cjs` **y** `POA 2026 V.02 Ene.26-2026.xlsx` en la raíz del repo |
+| `seed-poa-import-integration.cjs` | Usuario E2E creado |
+| `verify-poa-import-integration.cjs` | Usuario E2E creado, seed de `seed-poa-import-integration.cjs` **y** el Excel real del POA |
 
 Ejecutar `drive-jornada.cjs` sin sembrar el plan falla con timeout esperando
 un plan que no existe — sembrar primero.
@@ -73,8 +75,19 @@ node .claude/skills/verify-nav/scripts/e2e-user.cjs --cleanup  # 5. limpieza del
   `success` — ese seed llega en un commit posterior).
 - **`verify-poa-import-ui.cjs`** — sube el Excel real del POA (raíz del
   repo) a `/poa/[poaId]/import`, pulsa Importar, y confirma que se
-  renderiza un `ImportPoaResult` tipado (`status` visible) sin errores de
-  consola. Screenshots `poa-import-*.png` en `<tmp>/mantenix-e2e/`.
+  renderiza la presentación por variante de `ImportPoaResult` (secciones de
+  zonas sin mapear / errores del Excel) sin errores de consola. Screenshots
+  `poa-import-*.png` en `<tmp>/mantenix-e2e/`.
+- **`seed-poa-import-integration.cjs`** — siembra un board con las 9 zonas
+  reales del Excel del POA representadas como groups reales (mismos
+  nombres), sin ningún mapeo resuelto todavía.
+- **`verify-poa-import-integration.cjs`** — Commit 3: prueba con DOS
+  pestañas simuladas que resolver una zona en `/poa/[poaId]/zone-mappings`
+  (abierta en pestaña nueva desde el enlace de `blocked`) y volver a
+  importar el MISMO archivo en la pestaña de importación original (que
+  nunca navegó, el archivo sigue seleccionado) refleja el cambio: esa zona
+  ya no aparece en `unresolvedZones`. Screenshots
+  `poa-import-integration-*.png` en `<tmp>/mantenix-e2e/`.
 
 ## Qué limpia realmente `--cleanup`
 

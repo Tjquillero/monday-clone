@@ -7,18 +7,21 @@ import { useAuth } from '@/contexts/AuthContext';
 // ─────────────────────────────────────────────────────────────────────────────
 // usePoaZoneMappings / useResolveZoneMapping
 //
-// UI de resolución de mapeos de zona (ADR-0004). Alcance de esta primera
-// versión: reasignar mapeos YA EXISTENTES cuyo group_id quedó en NULL (Regla
-// 5 de ADR-0004 — el group asociado se eliminó). Usa exactamente el índice
-// parcial idx_poa_zone_mappings_pending de la migración
-// 20260720_poa_zone_mappings.sql, pensado para esta consulta.
+// UI de resolución de mapeos de zona (ADR-0004). Cubre ambos orígenes de
+// "zona pendiente":
+//   - Regla 5 de ADR-0004: un mapeo YA EXISTENTE cuyo group_id quedó en
+//     NULL (el group se eliminó).
+//   - Regla 2 de ADR-0004: una zona NUEVA, vista por primera vez en un
+//     Excel — registerUnresolvedZones() (abajo) es quien crea la fila
+//     pendiente cuando la pantalla de importación detecta unresolvedZones
+//     en un ImportPoaResult 'blocked'. import_poa_version()/
+//     resolveValidationContext NUNCA escriben esto — solo LEEN
+//     poa_zone_mappings; registrar la fila pendiente es responsabilidad de
+//     quien consume el resultado 'blocked' (la UI de importación), no del
+//     motor de validación.
 //
-// Fuera de alcance todavía: zonas nunca antes vistas en un Excel nuevo
-// (Regla 2 de ADR-0004) — hoy import_poa_version()/resolveValidationContext
-// solo REPORTAN esas zonas como unresolvedZones, sin crear ninguna fila en
-// poa_zone_mappings. Cuando exista la UI de importación, el paso natural es
-// que, al detectar una zona nueva, se inserte una fila con group_id=NULL —
-// y entonces aparecerá aquí automáticamente, sin cambiar este hook.
+// Ambos casos usan el mismo índice parcial idx_poa_zone_mappings_pending
+// de la migración 20260720_poa_zone_mappings.sql.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface PendingZoneMapping {
@@ -91,6 +94,36 @@ export function usePoaZoneMappings(poaId: string | undefined) {
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
+}
+
+/**
+ * Registra como pendientes (group_id = NULL) las zonas que un
+ * ImportPoaResult 'blocked' reportó en unresolvedZones, para que aparezcan
+ * en usePoaZoneMappings(). Idempotente: si la fila ya existe (pendiente o
+ * ya resuelta), no la toca — un excel_zone_name con mapeo YA resuelto
+ * nunca llega aquí, porque en ese caso resolveValidationContext ya lo
+ * habría encontrado y no aparecería en unresolvedZones.
+ */
+export async function registerUnresolvedZones(
+  poaId: string,
+  excelZoneNames: string[],
+  createdBy: string,
+): Promise<void> {
+  if (excelZoneNames.length === 0) return;
+
+  const { error } = await supabase
+    .from('poa_zone_mappings')
+    .upsert(
+      excelZoneNames.map((excelZoneName) => ({
+        poa_id: poaId,
+        excel_zone_name: excelZoneName,
+        group_id: null,
+        created_by: createdBy,
+      })),
+      { onConflict: 'poa_id,excel_zone_name', ignoreDuplicates: true },
+    );
+
+  if (error) throw error;
 }
 
 export interface ResolveZoneMappingInput {

@@ -55,7 +55,8 @@ function UnresolvedZonesSection({ poaId, zones }: { poaId: string; zones: { exce
         <p className="font-bold">{zones.length} zona{zones.length !== 1 ? 's' : ''} sin mapear</p>
       </div>
       <p className="text-sm text-slate-600">
-        Estas zonas del Excel todavía no tienen un group asignado en este board. Resuélvelas y vuelve a importar.
+        Estas zonas del Excel todavía no tienen un group asignado en este board. Resuélvelas y vuelve a importar
+        el mismo archivo — no hace falta seleccionarlo de nuevo.
       </p>
       <ul className="text-sm text-slate-700 space-y-1 list-disc list-inside">
         {zones.map((z) => (
@@ -64,9 +65,11 @@ function UnresolvedZonesSection({ poaId, zones }: { poaId: string; zones: { exce
       </ul>
       <Link
         href={`/poa/${poaId}/zone-mappings`}
+        target="_blank"
+        rel="noopener noreferrer"
         className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-700 hover:text-amber-800 underline underline-offset-2"
       >
-        Ir a resolver mapeos de zona →
+        Ir a resolver mapeos de zona (pestaña nueva) →
       </Link>
     </div>
   );

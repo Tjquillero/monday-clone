@@ -15,8 +15,10 @@
 import { useState } from 'react';
 import { UploadCloud, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/contexts/AuthContext';
 import { importPoaVersion } from '@/lib/poaImport/service/importPoaService';
 import type { ImportPoaResult } from '@/lib/poaImport/service/types';
+import { registerUnresolvedZones } from '@/hooks/usePoaZoneMappings';
 import ImportResultView from './ImportResultView';
 
 interface PoaImportContainerProps {
@@ -24,6 +26,7 @@ interface PoaImportContainerProps {
 }
 
 export default function PoaImportContainer({ poaId }: PoaImportContainerProps) {
+  const { user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [importOperationId, setImportOperationId] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -52,6 +55,24 @@ export default function PoaImportContainer({ poaId }: PoaImportContainerProps) {
       });
 
       setResult(importResult);
+
+      // Registrar como pendientes las zonas nunca antes vistas — así
+      // aparecen en /poa/[poaId]/zone-mappings para resolverse. No es una
+      // regla nueva: solo persiste lo que import_poa_version() ya decidió
+      // que falta (Regla 2 de ADR-0004). No bloquea la pantalla si falla —
+      // es un paso complementario, no la importación en sí.
+      if (importResult.status === 'blocked' && importResult.unresolvedZones.length > 0 && user?.id) {
+        try {
+          await registerUnresolvedZones(
+            poaId,
+            importResult.unresolvedZones.map((z) => z.excelZoneName),
+            user.id,
+          );
+        } catch {
+          // silencioso: el usuario ya ve unresolvedZones en el resultado;
+          // si el registro falla, la próxima importación lo reintenta.
+        }
+      }
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Error desconocido al importar el archivo.');
     } finally {
