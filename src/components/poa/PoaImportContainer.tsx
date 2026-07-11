@@ -4,6 +4,12 @@
 // variante de ImportPoaResult (ImportResultView) + reintento que preserva
 // el importOperationId del intento original — nunca genera uno nuevo al
 // reintentar, solo al seleccionar un archivo distinto (nuevo intento).
+// Commit 4: pulido de UX — tras un success, "Importar" se reemplaza por
+// "Importar otro archivo" (reintentar ahí generaría una SEGUNDA versión
+// real del POA con el mismo archivo — cada importOperationId nuevo es un
+// intento nuevo, ver Regla 1 de poa-domain.md); el selector de archivo se
+// bloquea mientras hay una importación en curso; y hay un texto de estado
+// explícito además del spinner del botón.
 //
 // Decisión de UX (confirmada antes de escribir esto): un solo paso. El
 // usuario selecciona el Excel y se intenta importar de inmediato;
@@ -13,7 +19,7 @@
 // pantalla, sin una vista previa intermedia.
 
 import { useState } from 'react';
-import { UploadCloud, Loader2 } from 'lucide-react';
+import { UploadCloud, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { importPoaVersion } from '@/lib/poaImport/service/importPoaService';
@@ -32,6 +38,10 @@ export default function PoaImportContainer({ poaId }: PoaImportContainerProps) {
   const [isImporting, setIsImporting] = useState(false);
   const [result, setResult] = useState<ImportPoaResult | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Fuerza el remount del <input type="file"> al reiniciar, así el navegador
+  // permite volver a seleccionar el mismo archivo (si no cambia el "value"
+  // del input, el evento change no se dispara la segunda vez).
+  const [fileInputKey, setFileInputKey] = useState(0);
 
   const runImport = async (operationId: string) => {
     if (!file) return;
@@ -98,37 +108,89 @@ export default function PoaImportContainer({ poaId }: PoaImportContainerProps) {
   };
 
   const handleFileChange = (newFile: File | null) => {
+    if (isImporting) return;
     setFile(newFile);
     setResult(null);
     setLoadError(null);
     setImportOperationId(null); // archivo nuevo = intento nuevo
   };
 
+  const handleReset = () => {
+    if (isImporting) return;
+    setFile(null);
+    setResult(null);
+    setLoadError(null);
+    setImportOperationId(null);
+    setFileInputKey((k) => k + 1);
+  };
+
+  // Tras un success, "Importar" se oculta: reintentar con el mismo archivo
+  // crearía otra versión real (import_poa_version() trata cada
+  // importOperationId como un intento nuevo). La única acción disponible
+  // es empezar de cero con "Importar otro archivo".
+  const isSuccess = result?.status === 'success';
+
   return (
     <div className="space-y-4">
       <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-        <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-lg py-10 cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-colors">
+        <label
+          className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-lg py-10 transition-colors ${
+            isImporting
+              ? 'border-slate-100 bg-slate-50 cursor-not-allowed opacity-60'
+              : 'border-slate-200 cursor-pointer hover:border-blue-300 hover:bg-blue-50/30'
+          }`}
+        >
           <UploadCloud className="w-8 h-8 text-slate-400" />
           <span className="text-sm text-slate-500 font-medium">
             {file ? file.name : 'Selecciona el Excel del POA (.xlsx)'}
           </span>
           <input
+            key={fileInputKey}
             type="file"
             accept=".xlsx"
             className="hidden"
+            disabled={isImporting}
             onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
           />
         </label>
 
-        <button
-          type="button"
-          onClick={handleImport}
-          disabled={!file || isImporting}
-          className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-          {isImporting ? 'Importando…' : 'Importar'}
-        </button>
+        {isSuccess ? (
+          <button
+            type="button"
+            onClick={handleReset}
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Importar otro archivo
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handleImport}
+            disabled={!file || isImporting}
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+            {isImporting ? 'Importando…' : 'Importar'}
+          </button>
+        )}
+
+        {isImporting && (
+          <p className="text-xs text-center text-slate-400">
+            Leyendo el archivo, validando actividades y zonas contra el contrato, y guardando la versión — puede
+            tardar unos segundos.
+          </p>
+        )}
+
+        {!isImporting && file && !result && (
+          <button
+            type="button"
+            onClick={handleReset}
+            className="w-full text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2"
+          >
+            Seleccionar otro archivo
+          </button>
+        )}
       </div>
 
       {loadError && (

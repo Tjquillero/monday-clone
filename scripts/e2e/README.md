@@ -35,6 +35,7 @@ Por script:
 | `verify-poa-import-ui.cjs` | Usuario E2E creado, seed de `seed-poa-import.cjs` **y** `POA 2026 V.02 Ene.26-2026.xlsx` en la raíz del repo |
 | `seed-poa-import-integration.cjs` | Usuario E2E creado |
 | `verify-poa-import-integration.cjs` | Usuario E2E creado, seed de `seed-poa-import-integration.cjs` **y** el Excel real del POA |
+| `verify-poa-import-commit4.cjs` | Usuario E2E creado, seed de `seed-poa-import.cjs` **y** el Excel real del POA |
 
 Ejecutar `drive-jornada.cjs` sin sembrar el plan falla con timeout esperando
 un plan que no existe — sembrar primero.
@@ -88,6 +89,18 @@ node .claude/skills/verify-nav/scripts/e2e-user.cjs --cleanup  # 5. limpieza del
   nunca navegó, el archivo sigue seleccionado) refleja el cambio: esa zona
   ya no aparece en `unresolvedZones`. Screenshots
   `poa-import-integration-*.png` en `<tmp>/mantenix-e2e/`.
+- **`verify-poa-import-commit4.cjs`** — Commit 4 (pulido de UX): reutiliza
+  el seed de `seed-poa-import.cjs` (resultado `blocked`, sin zonas/catálogo
+  resueltos). Verifica el enlace "Seleccionar otro archivo" antes de
+  importar, que el input de archivo queda `disabled` y el texto de progreso
+  es visible mientras la importación está en curso, y que "Importar" sigue
+  presente y habilitado tras un `blocked` (reintentar ahí es válido — a
+  diferencia de `success`, donde el propio componente lo reemplaza por
+  "Importar otro archivo"; ese caso se cubre con
+  `src/components/poa/PoaImportContainer.test.tsx`, mockeando
+  `importPoaService`, porque llegar a `success` real requeriría un catálogo
+  y zonas resueltas que este seed deliberadamente no siembra). Screenshots
+  `poa-import-c4-*.png` en `<tmp>/mantenix-e2e/`.
 
 ## Qué limpia realmente `--cleanup`
 
