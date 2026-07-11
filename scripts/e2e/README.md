@@ -29,6 +29,8 @@ Por script:
 | `smoke-mywork.cjs` | Usuario E2E creado |
 | `seed-plan.cjs` | `SUPABASE_SERVICE_ROLE_KEY` en `.env.local` |
 | `drive-jornada.cjs` | Usuario E2E creado **y** plan sembrado por `seed-plan.cjs` |
+| `seed-zone-mapping.cjs` | Usuario E2E creado |
+| `verify-zone-mapping-ui.cjs` | Usuario E2E creado **y** seed de `seed-zone-mapping.cjs` |
 
 Ejecutar `drive-jornada.cjs` sin sembrar el plan falla con timeout esperando
 un plan que no existe — sembrar primero.
@@ -54,6 +56,15 @@ node .claude/skills/verify-nav/scripts/e2e-user.cjs --cleanup  # 5. limpieza del
   actividades del contrato).
 - **`drive-jornada.cjs`** — escenario completo del líder en `/my-work`.
   Screenshots en `<tmp>/mantenix-e2e/`.
+- **`seed-zone-mapping.cjs`** — siembra un board/poa/group de prueba propios
+  (no reutiliza el board de `seed-plan.cjs`) con UN mapeo de zona pendiente
+  (`poa_zone_mappings.group_id = NULL`, simulando la Regla 5 de ADR-0004:
+  el group original se eliminó). `--cleanup` borra el board completo
+  (poa/groups/mapeo caen por cascade).
+- **`verify-zone-mapping-ui.cjs`** — verifica `/poa/[poaId]/zone-mappings`:
+  la zona pendiente es visible, seleccionar el group real y pulsar
+  "Asignar" resuelve el mapeo (fila desaparece, estado vacío visible).
+  Screenshots `zone-mapping-*.png` en `<tmp>/mantenix-e2e/`.
 
 ## Qué limpia realmente `--cleanup`
 
