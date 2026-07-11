@@ -1,8 +1,9 @@
 'use client';
 
-// Commit 1: esqueleto de la pantalla de importación. Selección de archivo,
-// estado de carga, invocación de importPoaService — sin resolver todavía
-// la presentación completa de cada variante de ImportPoaResult (Commit 2).
+// Commit 1: esqueleto (selección, invocación). Commit 2: presentación por
+// variante de ImportPoaResult (ImportResultView) + reintento que preserva
+// el importOperationId del intento original — nunca genera uno nuevo al
+// reintentar, solo al seleccionar un archivo distinto (nuevo intento).
 //
 // Decisión de UX (confirmada antes de escribir esto): un solo paso. El
 // usuario selecciona el Excel y se intenta importar de inmediato;
@@ -16,6 +17,7 @@ import { UploadCloud, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { importPoaVersion } from '@/lib/poaImport/service/importPoaService';
 import type { ImportPoaResult } from '@/lib/poaImport/service/types';
+import ImportResultView from './ImportResultView';
 
 interface PoaImportContainerProps {
   poaId: string;
@@ -23,16 +25,15 @@ interface PoaImportContainerProps {
 
 export default function PoaImportContainer({ poaId }: PoaImportContainerProps) {
   const [file, setFile] = useState<File | null>(null);
+  const [importOperationId, setImportOperationId] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [result, setResult] = useState<ImportPoaResult | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const handleImport = async () => {
-    if (!file || isImporting) return;
-
+  const runImport = async (operationId: string) => {
+    if (!file) return;
     setIsImporting(true);
     setLoadError(null);
-    setResult(null);
 
     try {
       const { data: poaRow, error: poaError } = await supabase
@@ -43,13 +44,11 @@ export default function PoaImportContainer({ poaId }: PoaImportContainerProps) {
       if (poaError) throw poaError;
 
       const buffer = await file.arrayBuffer();
-      const importOperationId = crypto.randomUUID(); // una vez por intento, nunca dentro del servicio
-
       const importResult = await importPoaVersion({
         poaId,
         boardId: poaRow.board_id as string,
         file: buffer,
-        importOperationId,
+        importOperationId: operationId,
       });
 
       setResult(importResult);
@@ -58,6 +57,30 @@ export default function PoaImportContainer({ poaId }: PoaImportContainerProps) {
     } finally {
       setIsImporting(false);
     }
+  };
+
+  const handleImport = () => {
+    if (!file || isImporting) return;
+    setResult(null);
+    // Primer intento con este archivo: genera un importOperationId nuevo.
+    // Reintentos del MISMO intento (ver handleRetry) reutilizan este mismo id.
+    const operationId = crypto.randomUUID();
+    setImportOperationId(operationId);
+    void runImport(operationId);
+  };
+
+  const handleRetry = () => {
+    if (!importOperationId || isImporting) return;
+    // Mismo importOperationId del intento original — nunca se regenera al
+    // reintentar, o se rompería la idempotencia de import_poa_version().
+    void runImport(importOperationId);
+  };
+
+  const handleFileChange = (newFile: File | null) => {
+    setFile(newFile);
+    setResult(null);
+    setLoadError(null);
+    setImportOperationId(null); // archivo nuevo = intento nuevo
   };
 
   return (
@@ -72,11 +95,7 @@ export default function PoaImportContainer({ poaId }: PoaImportContainerProps) {
             type="file"
             accept=".xlsx"
             className="hidden"
-            onChange={(e) => {
-              setFile(e.target.files?.[0] ?? null);
-              setResult(null);
-              setLoadError(null);
-            }}
+            onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
           />
         </label>
 
@@ -98,14 +117,12 @@ export default function PoaImportContainer({ poaId }: PoaImportContainerProps) {
       )}
 
       {result && (
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <p className="text-xs font-semibold text-slate-400 uppercase mb-2">
-            status: {result.status}
-          </p>
-          <pre className="text-xs text-slate-600 whitespace-pre-wrap break-words">
-            {JSON.stringify(result, null, 2)}
-          </pre>
-        </div>
+        <ImportResultView
+          poaId={poaId}
+          result={result}
+          onRetry={result.status === 'persistence_failed' ? handleRetry : undefined}
+          retrying={isImporting}
+        />
       )}
     </div>
   );

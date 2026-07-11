@@ -65,11 +65,16 @@ const consoleErrors = [];
     // 3. Importar
     await page.locator('button:has-text("Importar")').click();
 
-    // 4. Aparece un resultado tipado (status visible) — con este seed sin
-    //    zonas/catálogo resueltos, el resultado esperado es 'blocked'.
-    await page.waitForSelector('text=status:', { timeout: 60000 });
-    const statusText = await page.locator('text=status:').first().innerText();
-    console.log('RESULTADO RENDERIZADO:', statusText);
+    // 4. Aparece la presentación por variante de ImportPoaResult — con este
+    //    seed sin zonas/catálogo resueltos, el resultado esperado es
+    //    'blocked': sección de zonas sin mapear + sección de errores del
+    //    Excel (catálogo vacío -> todas las actividades son "desconocidas").
+    await page.waitForSelector('text=/zonas? sin mapear/', { timeout: 60000 });
+    console.log('RESULTADO RENDERIZADO: sección "zonas sin mapear" visible');
+    const hasZoneLink = await page.locator('a:has-text("Ir a resolver mapeos de zona")').count();
+    console.log('Enlace a /zone-mappings presente:', hasZoneLink > 0);
+    const hasErrorsSection = await page.locator('text=/error(es)? en el Excel/').count();
+    console.log('Sección de errores del Excel presente:', hasErrorsSection > 0);
     await page.screenshot({ path: path.join(OUT, 'poa-import-3-resultado.png') });
 
     const newErrors = consoleErrors.slice(errsBefore);
