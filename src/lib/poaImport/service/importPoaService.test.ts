@@ -305,3 +305,157 @@ describe('importPoaVersion — Commit 4: persistencia real', () => {
     ]);
   });
 });
+
+describe('importPoaVersion — Commit 5: robustez del orquestador', () => {
+  it('blocked puede tener las tres categorías pobladas a la vez (zonas sin mapear + Grupo B + catálogo desconocido)', async () => {
+    const service = createImportPoaService({
+      resolveValidationContext: async (parseResult) => {
+        // Deja 2 de las 9 zonas reales sin mapear, y el catálogo sin
+        // reconocer un código real — el archivo real ya trae el Grupo B
+        // por sí solo, así que las tres categorías quedan pobladas juntas.
+        const zoneMappings = new Map<string, string>();
+        REAL_ZONE_NAMES.slice(0, 7).forEach((name, i) => zoneMappings.set(name, `group-${i}`));
+        const knownActivityKeys = new Set(
+          parseResult.actividades.map((a) => a.activityKey).filter((k) => k !== '1.01'),
+        );
+        return { zoneMappings, knownActivityKeys };
+      },
+      persistImportPoaVersion: NEVER_PERSIST,
+    });
+
+    const result = await service.importPoaVersion({ ...VALID_INPUT, file: realWorkbookArrayBuffer() });
+
+    expect(result.status).toBe('blocked');
+    if (result.status !== 'blocked') throw new Error('esperaba blocked');
+    expect(result.unresolvedZones.length).toBeGreaterThan(0);
+    expect(result.ambiguousFrequencyActivities.length).toBeGreaterThan(0);
+    expect(result.validationErrors.some((e) => e.code === 'activity_key_inexistente')).toBe(true);
+  });
+
+  it('un error de infraestructura sin forma de PostgrestError (Error genérico, ej. timeout de red) se traduce igual a persistence_failed, sin crashear', async () => {
+    const service = createImportPoaService({
+      resolveValidationContext: async () => ({
+        zoneMappings: new Map([['Zona Test', 'group-0']]),
+        knownActivityKeys: new Set(['1.01']),
+      }),
+      persistImportPoaVersion: async () => {
+        throw new Error('network timeout');
+      },
+    });
+
+    const result = await service.importPoaVersion({ ...VALID_INPUT, file: minimalCleanWorkbookArrayBuffer() });
+
+    expect(result.status).toBe('persistence_failed');
+    if (result.status !== 'persistence_failed') throw new Error('esperaba persistence_failed');
+    expect(result.sqlState).toBe('unknown');
+    expect(result.message).toBe('network timeout');
+  });
+
+  it('si parsePoaExcel() falla, no se invoca ni resolveValidationContext ni persistImportPoaVersion', async () => {
+    const resolveSpy = jest.fn();
+    const persistSpy = jest.fn();
+    const service = createImportPoaService({
+      resolveValidationContext: resolveSpy,
+      persistImportPoaVersion: persistSpy,
+    });
+
+    await expect(
+      service.importPoaVersion({ ...VALID_INPUT, file: new ArrayBuffer(8) }), // no es un Excel real
+    ).rejects.toThrow();
+
+    expect(resolveSpy).not.toHaveBeenCalled();
+    expect(persistSpy).not.toHaveBeenCalled();
+  });
+
+  it('si resolveValidationContext() falla, no se invoca persistImportPoaVersion y el error se propaga sin convertirse en blocked/persistence_failed', async () => {
+    const persistSpy = jest.fn();
+    const service = createImportPoaService({
+      resolveValidationContext: async () => {
+        throw new Error('conexión perdida con la base de datos');
+      },
+      persistImportPoaVersion: persistSpy,
+    });
+
+    await expect(
+      service.importPoaVersion({ ...VALID_INPUT, file: minimalCleanWorkbookArrayBuffer() }),
+    ).rejects.toThrow('conexión perdida con la base de datos');
+
+    expect(persistSpy).not.toHaveBeenCalled();
+  });
+
+  it('el payload enviado a persistImportPoaVersion coincide exactamente con el contrato documentado (múltiples actividades, múltiples zonas por actividad)', async () => {
+    const XLSX = require('xlsx');
+
+    // Construcción por índice explícito, no por conteo manual de nulls:
+    // Zona 1 arranca en la columna 8 (CANT./FREC./PRECIO TOTAL en 8/9/10),
+    // Zona 2 arranca en la columna 11 (11/12/13) — ambas dentro del span de
+    // búsqueda de 6 columnas que usa parseExcel.ts, sin necesitar las 12
+    // columnas de Acta mensual que sí tiene el archivo real.
+    function buildRow(entries: Record<number, unknown>, length: number): unknown[] {
+      const row = new Array(length).fill(null);
+      for (const [idx, value] of Object.entries(entries)) row[Number(idx)] = value;
+      return row;
+    }
+
+    const rows = [
+      ['nota'],
+      buildRow({ 8: 'Zona 1 (presupuesto mes)', 11: 'Zona 2 (presupuesto mes)' }, 14),
+      buildRow(
+        { 0: 'CAT', 1: 'ÍTEM', 2: 'DESCRIPCIÓN', 3: 'UNID', 4: 'CANT.', 5: 'VU25', 6: 'VU26',
+          8: 'CANT.', 9: 'FREC.', 10: 'PRECIO TOTAL', 11: 'CANT.', 12: 'FREC.', 13: 'PRECIO TOTAL' },
+        14,
+      ),
+      buildRow(
+        { 0: 'MANTENIMIENTO', 1: '1.01', 2: 'Actividad uno', 3: 'M2', 4: 1, 5: 100, 6: 1412.8795648795647,
+          8: 7887, 9: 1, 10: 1, 11: 15000, 12: 1, 13: 1 },
+        14,
+      ),
+      buildRow(
+        { 0: 'MANTENIMIENTO', 1: '1.02', 2: 'Actividad dos', 3: 'M2', 4: 1, 5: 100, 6: 890.15,
+          8: 500, 9: 2, 10: 1 }, // sin zona 2 — columnas 11-13 quedan null
+        14,
+      ),
+    ];
+    const sheet = XLSX.utils.aoa_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, sheet, 'POA INICIAL 2026');
+    const buf: Buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const file = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+
+    let receivedPayload: ImportPayloadActivity[] | null = null;
+    const service = createImportPoaService({
+      resolveValidationContext: async () => ({
+        zoneMappings: new Map([
+          ['Zona 1', 'b2c3d4e5-0000-0000-0000-000000000010'],
+          ['Zona 2', 'b2c3d4e5-0000-0000-0000-000000000011'],
+        ]),
+        knownActivityKeys: new Set(['1.01', '1.02']),
+      }),
+      persistImportPoaVersion: async (_poaId, activities) => {
+        receivedPayload = activities;
+        return 'version-xyz';
+      },
+    });
+
+    const result = await service.importPoaVersion({ ...VALID_INPUT, file });
+
+    expect(result.status).toBe('success');
+    expect(receivedPayload).toEqual([
+      {
+        activity_key: '1.01',
+        precio_unitario: 1412.8795648795647,
+        frecuencia: 1,
+        zonas: [
+          { group_id: 'b2c3d4e5-0000-0000-0000-000000000010', cantidad_contratada: 7887 },
+          { group_id: 'b2c3d4e5-0000-0000-0000-000000000011', cantidad_contratada: 15000 },
+        ],
+      },
+      {
+        activity_key: '1.02',
+        precio_unitario: 890.15,
+        frecuencia: 2,
+        zonas: [{ group_id: 'b2c3d4e5-0000-0000-0000-000000000010', cantidad_contratada: 500 }],
+      },
+    ]);
+  });
+});
