@@ -19,9 +19,19 @@ export interface ImportPoaInput {
   file: ArrayBuffer;
   /**
    * Generado UNA VEZ por intento de importación por quien invoca al
-   * servicio (no por el usuario, no por el contenido del archivo) — ver
-   * docs/architecture/import-poa-version-contract.md#idempotencia. Reintentar
-   * la misma llamada con el mismo importOperationId es seguro.
+   * servicio (no por el usuario final, no por el contenido del archivo) —
+   * ver docs/architecture/import-poa-version-contract.md#idempotencia.
+   * Reintentar la misma llamada con el mismo importOperationId es seguro.
+   *
+   * `importPoaService` NUNCA genera ni regenera este valor — lo recibe y
+   * lo reenvía tal cual hasta import_poa_version(). Si el llamador
+   * reintenta tras un fallo transitorio, debe reutilizar el mismo
+   * importOperationId de su primer intento, no generar uno nuevo; un
+   * intento genuinamente nuevo (el usuario vuelve a pulsar "Importar")
+   * sí amerita un importOperationId nuevo, decidido por el llamador. Mover
+   * esta generación al servicio rompería la idempotencia de
+   * import_poa_version() — un reintento con un id distinto se interpreta
+   * como una operación nueva, no como el mismo intento.
    */
   importOperationId: string;
 }
