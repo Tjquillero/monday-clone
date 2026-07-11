@@ -1,3 +1,11 @@
+// importPoaService.ts importa (transitivamente, vía resolveValidationContext.ts)
+// el cliente real de Supabase. Estos tests nunca ejercitan esa ruta —
+// createImportPoaService() siempre recibe un resolveValidationContext
+// inyectado — pero el módulo real igual se instancia al cargar el archivo
+// si no se mockea, y createBrowserClient() falla en jsdom sin las env vars
+// de Supabase.
+jest.mock('@/lib/supabaseClient', () => ({ supabase: {} }));
+
 import { importPoaVersion, defaultImportPoaService, createImportPoaService } from './importPoaService';
 import { parsePoaExcel } from '../parseExcel';
 import { realWorkbookArrayBuffer } from '../testFixtures';
@@ -74,8 +82,8 @@ describe('importPoaVersion — Commit 1: validación de forma del input', () => 
   });
 });
 
-describe('importPoaVersion — Commit 2: integración parser -> validator (sin Supabase)', () => {
-  it('con un archivo limpio y contexto completamente resuelto, llega hasta "pendiente de implementar" (Commits 3-4) — no se bloquea', async () => {
+describe('importPoaVersion — Commits 2-3: integración parser -> validator, resolución de contexto inyectable', () => {
+  it('con un archivo limpio y contexto completamente resuelto, llega hasta "pendiente de implementar" (Commit 4) — no se bloquea', async () => {
     const service = createImportPoaService({
       resolveValidationContext: async () => ({
         zoneMappings: new Map([['Zona Test', 'group-0']]),
@@ -85,7 +93,7 @@ describe('importPoaVersion — Commit 2: integración parser -> validator (sin S
 
     await expect(
       service.importPoaVersion({ ...VALID_INPUT, file: minimalCleanWorkbookArrayBuffer() }),
-    ).rejects.toThrow('pendiente de implementar (Commits 3-4');
+    ).rejects.toThrow('pendiente de implementar (Commit 4');
   });
 
   it('el archivo real COMPLETO, incluso con zonas y catálogo perfectamente resueltos, siempre queda blocked hoy (Grupo B + 3.1/3.14 con FREC. vacío) — documenta el estado actual, no un bug', async () => {
