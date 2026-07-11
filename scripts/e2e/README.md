@@ -31,6 +31,8 @@ Por script:
 | `drive-jornada.cjs` | Usuario E2E creado **y** plan sembrado por `seed-plan.cjs` |
 | `seed-zone-mapping.cjs` | Usuario E2E creado |
 | `verify-zone-mapping-ui.cjs` | Usuario E2E creado **y** seed de `seed-zone-mapping.cjs` |
+| `seed-poa-import.cjs` | Usuario E2E creado |
+| `verify-poa-import-ui.cjs` | Usuario E2E creado, seed de `seed-poa-import.cjs` **y** `POA 2026 V.02 Ene.26-2026.xlsx` en la raíz del repo |
 
 Ejecutar `drive-jornada.cjs` sin sembrar el plan falla con timeout esperando
 un plan que no existe — sembrar primero.
@@ -65,6 +67,14 @@ node .claude/skills/verify-nav/scripts/e2e-user.cjs --cleanup  # 5. limpieza del
   la zona pendiente es visible, seleccionar el group real y pulsar
   "Asignar" resuelve el mapeo (fila desaparece, estado vacío visible).
   Screenshots `zone-mapping-*.png` en `<tmp>/mantenix-e2e/`.
+- **`seed-poa-import.cjs`** — siembra un board/poa mínimo, deliberadamente
+  SIN zonas mapeadas ni catálogo técnico, para probar el esqueleto de
+  `/poa/[poaId]/import` (Commit 1: el resultado esperado es `blocked`, no
+  `success` — ese seed llega en un commit posterior).
+- **`verify-poa-import-ui.cjs`** — sube el Excel real del POA (raíz del
+  repo) a `/poa/[poaId]/import`, pulsa Importar, y confirma que se
+  renderiza un `ImportPoaResult` tipado (`status` visible) sin errores de
+  consola. Screenshots `poa-import-*.png` en `<tmp>/mantenix-e2e/`.
 
 ## Qué limpia realmente `--cleanup`
 
