@@ -5,12 +5,23 @@
 //      TC-08, TC-09).
 //
 // Principio de esta capa (instrucción explícita del dueño del proceso): no
-// decide la regla de negocio de la frecuencia por zona. Cuando FREC. no es
-// constante entre las zonas de una actividad, se reporta como
-// 'frecuencia_pendiente_regla_negocio' — un estado explícito distinto de un
-// error de datos — y esa actividad no se persiste hasta que se resuelva
+// decide la regla de negocio de la frecuencia por zona. Cuando la actividad
+// tiene FREC. real en algunas zonas pero no en todas, o cuando los valores
+// reales no concuerdan entre zonas, se reporta como
+// 'frecuencia_pendiente_regla_negocio' (con `motivo` distinguiendo cuál de
+// los dos casos es) — un estado explícito distinto de un error de datos — y
+// esa actividad no se persiste hasta que se resuelva
 // docs/discovery/poa-frequency-per-zone.md. El resto del archivo sigue
 // validándose con normalidad.
+//
+// Regla de negocio ya resuelta (ADR-0005): una celda FREC. vacía NO es un
+// error de captura por sí sola. Cuando NINGUNA zona contratada de la
+// actividad reporta frecuencia, se persiste `frecuencia = null` — el
+// dominio admite actividades contratadas sin programación periódica en una
+// versión determinada del POA. Esto es distinto de "algunas zonas tienen
+// valor y otras no" (motivo 'mixed_null_and_value' de arriba), que sigue
+// pendiente porque consolidar un único valor de actividad a partir de un
+// subconjunto de zonas no es una regla de negocio definida.
 //
 // Regla de negocio ya resuelta (consistente con docs/domain/poa-domain.md,
 // distinción "Catálogo Técnico" vs. "Catálogo Contractual"): una actividad
@@ -34,6 +45,7 @@ import type {
   ValidationResult,
   ZoneFrecuenciaRaw,
   NoContratadaActivity,
+  FrecuenciaPendienteMotivo,
 } from './types';
 
 export interface ValidatePoaImportContext {
@@ -46,29 +58,48 @@ export interface ValidatePoaImportContext {
 const FREC_EPSILON = 1e-6;
 
 type FrecuenciaResolution =
-  | { estado: 'resuelta'; valor: number }
-  | { estado: 'pending_business_rule'; valoresPorZona: ZoneFrecuenciaRaw[] }
-  | { estado: 'valor_faltante'; faltantes: ZoneFrecuenciaRaw[] };
+  | { estado: 'resuelta'; valor: number | null }
+  | { estado: 'pending_business_rule'; valoresPorZona: ZoneFrecuenciaRaw[]; motivo: FrecuenciaPendienteMotivo };
 
 /**
- * Decide, para una actividad, si su frecuencia es constante entre zonas
- * (resuelta), si falta algún valor (error de dato), o si difiere entre zonas
- * (pendiente de la decisión de negocio documentada en el discovery).
+ * Decide, para una actividad, cuál es su frecuencia — o si queda pendiente de
+ * una decisión de negocio que este validador no toma (ADR-0005).
+ *
+ * Una celda FREC. vacía NO es un error: el dominio admite actividades
+ * contratadas sin programación periódica en esta versión del POA (se
+ * preserva `null`, tal cual viene el Excel — no se corrige ni se infiere).
+ *
+ * Lo único que sigue bloqueando la importación (sin cambios respecto a
+ * antes de ADR-0005) es la ausencia de una única frecuencia resoluble:
+ *   - si TODAS las zonas están vacías → resuelta como `null` (inequívoco,
+ *     no hay ningún valor entre el cual elegir).
+ *   - si TODAS las zonas tienen valor y concuerdan → resuelta a ese valor.
+ *   - si TODAS las zonas tienen valor pero no concuerdan → pendiente
+ *     (motivo 'different_values' — la ambigüedad ya conocida del discovery).
+ *   - si ALGUNAS zonas tienen valor y otras no → pendiente (motivo
+ *     'mixed_null_and_value'). Consolidar un único valor de actividad a
+ *     partir de un subconjunto de zonas sería una política de negocio no
+ *     definida — este validador no la asume, la deja pendiente.
  */
 function resolveFrecuencia(frecuenciasPorZona: ZoneFrecuenciaRaw[]): FrecuenciaResolution {
-  const faltantes = frecuenciasPorZona.filter((f) => f.frecuencia === null);
-  if (faltantes.length > 0) {
-    return { estado: 'valor_faltante', faltantes };
+  const conValor = frecuenciasPorZona.filter((f) => f.frecuencia !== null);
+
+  if (conValor.length === 0) {
+    return { estado: 'resuelta', valor: null };
   }
 
-  const valores = frecuenciasPorZona.map((f) => f.frecuencia as number);
+  if (conValor.length < frecuenciasPorZona.length) {
+    return { estado: 'pending_business_rule', valoresPorZona: frecuenciasPorZona, motivo: 'mixed_null_and_value' };
+  }
+
+  const valores = conValor.map((f) => f.frecuencia as number);
   const primero = valores[0];
   const constante = valores.every((v) => Math.abs(v - primero) < FREC_EPSILON);
 
   if (constante) {
     return { estado: 'resuelta', valor: primero };
   }
-  return { estado: 'pending_business_rule', valoresPorZona: frecuenciasPorZona };
+  return { estado: 'pending_business_rule', valoresPorZona: frecuenciasPorZona, motivo: 'different_values' };
 }
 
 function validateZoneMappings(
@@ -163,26 +194,17 @@ function validateActivity(
 
   const frecResult = resolveFrecuencia(act.frecuenciasPorZona);
 
-  if (frecResult.estado === 'valor_faltante') {
-    for (const f of frecResult.faltantes) {
-      errors.push({
-        code: 'campo_requerido_vacio',
-        message: `La actividad "${act.activityKey}" no tiene FREC. en la zona "${f.excelZoneName}" (celda ${f.excelFrecCell}), pese a tener cantidad contratada.`,
-        activityKey: act.activityKey,
-        excelRow: act.excelRow,
-        excelCell: f.excelFrecCell,
-        zona: f.excelZoneName,
-      });
-    }
-    return { validated: null, noContratada: null };
-  }
-
   if (frecResult.estado === 'pending_business_rule') {
+    const mensajePorMotivo: Record<FrecuenciaPendienteMotivo, string> = {
+      different_values: `La actividad "${act.activityKey}" tiene FREC. distinta entre zonas. Pendiente de decisión de negocio — ver docs/discovery/poa-frequency-per-zone.md. No se persiste hasta resolverse.`,
+      mixed_null_and_value: `La actividad "${act.activityKey}" tiene FREC. presente en algunas zonas y vacía en otras. Consolidar un único valor requiere una decisión de negocio no definida — ver docs/discovery/poa-frequency-per-zone.md. No se persiste hasta resolverse.`,
+    };
     errors.push({
       code: 'frecuencia_pendiente_regla_negocio',
-      message: `La actividad "${act.activityKey}" tiene FREC. distinta entre zonas. Pendiente de decisión de negocio — ver docs/discovery/poa-frequency-per-zone.md. No se persiste hasta resolverse.`,
+      message: mensajePorMotivo[frecResult.motivo],
       activityKey: act.activityKey,
       excelRow: act.excelRow,
+      motivo: frecResult.motivo,
     });
     return { validated: null, noContratada: null };
   }

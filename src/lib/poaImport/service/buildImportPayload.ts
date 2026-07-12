@@ -17,7 +17,8 @@ export interface ImportPayloadZone {
 export interface ImportPayloadActivity {
   activity_key: string;
   precio_unitario: number;
-  frecuencia: number;
+  /** null = actividad contratada sin programación periódica en esta versión (ADR-0005), no un dato faltante. */
+  frecuencia: number | null;
   zonas: ImportPayloadZone[];
 }
 

@@ -11,7 +11,7 @@
 // limita a traducir sus resultados a esta interfaz.
 // =============================================================================
 
-import type { ImportValidationError } from '../types';
+import type { ImportValidationError, FrecuenciaPendienteMotivo } from '../types';
 
 export interface ImportPoaInput {
   poaId: string;
@@ -59,6 +59,16 @@ export interface AmbiguousFrequencyActivity {
   descripcion: string;
   /** Enlace al discovery correspondiente, para que la UI lo muestre directamente. */
   discoveryDoc: string;
+  /**
+   * Por qué esta actividad no tiene una única frecuencia resoluble (ADR-0005)
+   * — ambos motivos bloquean igual hoy (la UI los trata igual), pero son
+   * preguntas de negocio distintas: 'different_values' = valores reales que
+   * no concuerdan entre zonas; 'mixed_null_and_value' = algunas zonas tienen
+   * frecuencia y otras no, y consolidar un único valor requeriría una
+   * política no definida. Se conserva para no perder esta distinción cuando
+   * el dueño del proceso resuelva la pregunta pendiente.
+   */
+  motivo: FrecuenciaPendienteMotivo;
 }
 
 export type ImportPoaResult =

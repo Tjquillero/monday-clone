@@ -17,8 +17,10 @@ import type { ImportPayloadActivity } from './buildImportPayload';
 /**
  * Un Excel sintético mínimo con un único bloque de zona y una única
  * actividad limpia (sin ambigüedad de frecuencia, sin campos vacíos) — el
- * archivo real completo SIEMPRE queda `blocked` (Grupo B + 3.1/3.14 con
- * FREC. vacío), así que no sirve para probar el camino de éxito de forma
+ * archivo real completo SIEMPRE queda `blocked` (14 actividades pendientes
+ * de decisión de negocio, ver docs/discovery/poa-frequency-per-zone.md; 3.14
+ * ya NO es una de ellas desde ADR-0005 — resuelve frecuencia = null sin
+ * bloquear), así que no sirve para probar el camino de éxito de forma
  * aislada.
  */
 function minimalCleanWorkbookArrayBuffer(): ArrayBuffer {
@@ -89,7 +91,7 @@ describe('importPoaVersion — Commit 1: validación de forma del input', () => 
 });
 
 describe('importPoaVersion — Commits 2-3: integración parser -> validator, resolución de contexto inyectable', () => {
-  it('el archivo real COMPLETO, incluso con zonas y catálogo perfectamente resueltos, siempre queda blocked hoy (Grupo B + 3.1/3.14 con FREC. vacío) — documenta el estado actual, no un bug', async () => {
+  it('el archivo real COMPLETO, incluso con zonas y catálogo perfectamente resueltos, siempre queda blocked hoy (14 actividades pendientes de decisión de negocio) — documenta el estado actual, no un bug', async () => {
     const service = createImportPoaService({
       resolveValidationContext: async (parseResult) => fullyMappedContext(parseResult),
       persistImportPoaVersion: NEVER_PERSIST,
@@ -135,7 +137,7 @@ describe('importPoaVersion — Commits 2-3: integración parser -> validator, re
     expect(result.validationErrors.every((e) => e.code === 'activity_key_inexistente')).toBe(true);
   });
 
-  it('con el archivo real completo (zonas y catálogo resueltos), reporta las 13 actividades del Grupo B en ambiguousFrequencyActivities, cada una con el enlace al discovery', async () => {
+  it('con el archivo real completo (zonas y catálogo resueltos), reporta las 14 actividades pendientes en ambiguousFrequencyActivities, cada una con el enlace al discovery y el motivo correcto', async () => {
     const service = createImportPoaService({
       resolveValidationContext: async (parseResult) => fullyMappedContext(parseResult),
       persistImportPoaVersion: NEVER_PERSIST,
@@ -145,12 +147,23 @@ describe('importPoaVersion — Commits 2-3: integración parser -> validator, re
 
     expect(result.status).toBe('blocked');
     if (result.status !== 'blocked') throw new Error('esperaba blocked');
-    expect(result.ambiguousFrequencyActivities).toHaveLength(13);
+    expect(result.ambiguousFrequencyActivities).toHaveLength(14);
     expect(result.ambiguousFrequencyActivities.map((a) => a.activityKey)).toContain('1.12');
     for (const activity of result.ambiguousFrequencyActivities) {
       expect(activity.discoveryDoc).toBe('docs/discovery/poa-frequency-per-zone.md');
       expect(activity.descripcion.length).toBeGreaterThan(0);
     }
+
+    // 3.1 es el único caso "mixto" (algunas zonas con frecuencia, otras sin
+    // ella) — ADR-0005 distingue este motivo del resto (valores reales que
+    // no concuerdan entre sí), aunque ambos bloqueen igual hoy.
+    const mixed = result.ambiguousFrequencyActivities.find((a) => a.activityKey === '3.1');
+    expect(mixed?.motivo).toBe('mixed_null_and_value');
+    const differentValues = result.ambiguousFrequencyActivities.find((a) => a.activityKey === '1.12');
+    expect(differentValues?.motivo).toBe('different_values');
+
+    // 3.14 ya no bloquea desde ADR-0005 — resuelve frecuencia = null.
+    expect(result.ambiguousFrequencyActivities.some((a) => a.activityKey === '3.14')).toBe(false);
   });
 
   it('un archivo con estructura irreconocible (no un Excel real) sigue fallando al parsear, no llega a validar', async () => {

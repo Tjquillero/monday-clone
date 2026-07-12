@@ -44,7 +44,7 @@ export function buildBlockedResult(
       continue;
     }
 
-    if (error.code === 'frecuencia_pendiente_regla_negocio' && error.activityKey) {
+    if (error.code === 'frecuencia_pendiente_regla_negocio' && error.activityKey && error.motivo) {
       if (!seenActivities.has(error.activityKey)) {
         seenActivities.add(error.activityKey);
         const actividad = parseResult.actividades.find((a) => a.activityKey === error.activityKey);
@@ -52,6 +52,7 @@ export function buildBlockedResult(
           activityKey: error.activityKey,
           descripcion: actividad?.descripcion ?? '',
           discoveryDoc: FREQUENCY_DISCOVERY_DOC,
+          motivo: error.motivo,
         });
       }
       continue;

@@ -15,16 +15,24 @@ const REAL_ZONE_NAMES = [
   'PLAYA PUNTA ASTILLEROS',
 ];
 
-// Las 14 actividades con FREC. no constante entre zonas — 13 realmente
-// inconsistentes (pendientes de regla de negocio) + 3.1 con un valor
-// faltante (error de dato, no ambigüedad de negocio). Ver
-// docs/discovery/poa-frequency-per-zone.md.
-const PENDING_BUSINESS_RULE_CODES = [
+// Las 14 actividades que siguen pendientes de una decisión de negocio tras
+// ADR-0005 — todas bloquean la importación por 'frecuencia_pendiente_regla_negocio',
+// pero por dos motivos distintos (ver docs/discovery/poa-frequency-per-zone.md):
+//   - 13 con FREC. real en todas sus zonas, pero sin concordar entre sí
+//     (motivo 'different_values').
+//   - 3.1, con FREC. real en 4 de 5 zonas (que además tampoco concuerdan) y
+//     vacía en la restante — consolidar un único valor de actividad
+//     requeriría una política no definida (motivo 'mixed_null_and_value').
+// 3.14 NO está en esta lista: tiene FREC. vacío en el 100% de sus zonas, un
+// caso inequívoco que ADR-0005 resuelve como frecuencia = null, sin bloquear
+// — ver el describe dedicado más abajo.
+const DIFFERENT_VALUES_CODES = [
   '1.12', '1.13', '1.15',
   '2.04', '2.05', '2.06', '2.07', '2.08', '2.09', '2.10', '2.11', '2.14',
   '3.04',
 ];
-const MISSING_VALUE_CODE = '3.1';
+const MIXED_NULL_AND_VALUE_CODES = ['3.1'];
+const PENDING_BUSINESS_RULE_CODES = [...DIFFERENT_VALUES_CODES, ...MIXED_NULL_AND_VALUE_CODES];
 
 function fullyMappedZones(): ValidatePoaImportContext['zoneMappings'] {
   const map: ValidatePoaImportContext['zoneMappings'] = new Map();
@@ -37,7 +45,7 @@ function realParseResult(): ParseResult {
 }
 
 describe('validateParsedPoa — archivo real completo', () => {
-  it('reporta exactamente 13 actividades pendientes de regla de negocio y 1 con valor faltante (3.1)', () => {
+  it('reporta exactamente 14 actividades pendientes de regla de negocio, con el motivo correcto cada una', () => {
     const parseResult = realParseResult();
     const knownActivityKeys = new Set(parseResult.actividades.map((a) => a.activityKey));
     const context: ValidatePoaImportContext = { zoneMappings: fullyMappedZones(), knownActivityKeys };
@@ -50,11 +58,16 @@ describe('validateParsedPoa — archivo real completo', () => {
     const pendingErrors = result.errors.filter((e) => e.code === 'frecuencia_pendiente_regla_negocio');
     expect(pendingErrors.map((e) => e.activityKey).sort()).toEqual([...PENDING_BUSINESS_RULE_CODES].sort());
 
-    const missingValueErrors = result.errors.filter(
-      (e) => e.code === 'campo_requerido_vacio' && e.activityKey === MISSING_VALUE_CODE,
-    );
-    expect(missingValueErrors).toHaveLength(1);
-    expect(missingValueErrors[0].zona).toBe('MERCADO LA SAZÓN');
+    const differentValues = pendingErrors.filter((e) => DIFFERENT_VALUES_CODES.includes(e.activityKey as string));
+    expect(differentValues).toHaveLength(DIFFERENT_VALUES_CODES.length);
+    expect(differentValues.every((e) => e.motivo === 'different_values')).toBe(true);
+
+    const mixed = pendingErrors.filter((e) => MIXED_NULL_AND_VALUE_CODES.includes(e.activityKey as string));
+    expect(mixed).toHaveLength(MIXED_NULL_AND_VALUE_CODES.length);
+    expect(mixed.every((e) => e.motivo === 'mixed_null_and_value')).toBe(true);
+
+    // 3.14 no aparece aquí — se resuelve como frecuencia = null, no queda pendiente.
+    expect(result.errors.some((e) => e.activityKey === '3.14')).toBe(false);
   });
 
   it('no reporta ningún error de zona sin mapeo ni de catálogo cuando el contexto está completo', () => {
@@ -70,23 +83,21 @@ describe('validateParsedPoa — archivo real completo', () => {
   });
 });
 
-describe('validateParsedPoa — subconjunto limpio (sin las actividades con FREC. ambigua o faltante)', () => {
+describe('validateParsedPoa — subconjunto limpio (sin las actividades pendientes de regla de negocio)', () => {
   it('valida correctamente las 35 actividades restantes con al menos una zona con cantidad contratada', () => {
     const full = realParseResult();
-    // 3.14 es un hallazgo adicional descubierto por esta suite, distinto de
-    // los 14 documentados en docs/discovery/poa-frequency-per-zone.md: tiene
-    // FREC. vacío en el 100% de sus zonas con cantidad contratada (Centro
-    // Gastronómico y Mercado La Sazón), no solo en una — ver nota al final
-    // de este archivo.
+    // 3.14 se excluye de ESTE subconjunto no porque bloquee (no bloquea,
+    // desde ADR-0005) sino porque resuelve a frecuencia = null, distinto del
+    // resto de este grupo (frecuencia > 0) — se prueba por separado abajo.
     //
-    // De las 92 actividades restantes (107 - 13 - 1 - 1), 57 tienen CANT. = 0
-    // en las 9 zonas (toda la categoría "4.xx" de arborización más "1.02") —
+    // De las 92 actividades restantes (107 - 14 - 1), 57 tienen CANT. = 0 en
+    // las 9 zonas (toda la categoría "4.xx" de arborización más "1.02") —
     // existen en el catálogo contractual pero no están asignadas a ningún
     // sitio en esta versión del POA. validateActivity() las excluye del
     // resultado sin error (no es un dato inválido, es una actividad sin
     // cobertura actual). Ver la nota grande al final de este archivo: esto
     // es un hallazgo de diseño pendiente, no solo un detalle de test.
-    const excluded = new Set([...PENDING_BUSINESS_RULE_CODES, MISSING_VALUE_CODE, '3.14']);
+    const excluded = new Set([...PENDING_BUSINESS_RULE_CODES, '3.14']);
     const cleanParseResult: ParseResult = {
       ...full,
       actividades: full.actividades.filter((a) => !excluded.has(a.activityKey)),
@@ -109,28 +120,32 @@ describe('validateParsedPoa — subconjunto limpio (sin las actividades con FREC
   });
 });
 
-// Hallazgo adicional durante la construcción de esta suite (no estaba en
-// docs/discovery/poa-frequency-per-zone.md): la actividad 3.14 (mantenimiento
-// preventivo de planta eléctrica) tiene CANT. > 0 solo en dos zonas (Centro
-// Gastronómico, Mercado La Sazón) y en AMBAS el campo FREC. está vacío. El
-// script exploratorio original de la sesión anterior no lo detectó porque
-// comparaba `String(frec)` entre zonas: cuando el valor es "null" en TODAS
-// las zonas con cantidad contratada, no hay ningún valor distinto con el que
-// contrastar, así que no se marcaba como inconsistente — un punto ciego
-// distinto del caso de 3.1 (que sí tenía un valor real en la mayoría de sus
-// zonas). Este validador lo detecta correctamente como campo_requerido_vacio
-// porque no depende de comparar contra otras zonas, sino de exigir el valor
-// en cada zona con cantidad contratada.
-describe('validateParsedPoa — 3.14: FREC. vacío en el 100% de sus zonas contratadas', () => {
-  it('reporta campo_requerido_vacio en ambas zonas, no frecuencia_pendiente_regla_negocio', () => {
+// ADR-0005: una celda FREC. vacía no es un error de captura. La actividad
+// 3.14 (mantenimiento preventivo de planta eléctrica) tiene CANT. > 0 solo
+// en dos zonas (Centro Gastronómico, Mercado La Sazón) y en AMBAS el campo
+// FREC. está vacío — el caso inequívoco que ADR-0005 resuelve: ninguna zona
+// contratada reporta frecuencia, así que no hay ningún valor entre el cual
+// elegir. Se persiste frecuencia = null, sin bloquear la importación.
+describe('validateParsedPoa — 3.14: FREC. vacío en el 100% de sus zonas contratadas (ADR-0005)', () => {
+  it('no genera ningún error y resuelve frecuencia = null', () => {
     const full = realParseResult();
-    const knownActivityKeys = new Set(full.actividades.map((a) => a.activityKey));
-    const result = validateParsedPoa(full, { zoneMappings: fullyMappedZones(), knownActivityKeys });
+    // Se aísla del resto de actividades pendientes (todo o nada haría que
+    // result.activities fuera [] con el archivo completo).
+    const excluded = new Set(PENDING_BUSINESS_RULE_CODES);
+    const partial: ParseResult = {
+      ...full,
+      actividades: full.actividades.filter((a) => !excluded.has(a.activityKey)),
+    };
+    const knownActivityKeys = new Set(partial.actividades.map((a) => a.activityKey));
+    const result = validateParsedPoa(partial, { zoneMappings: fullyMappedZones(), knownActivityKeys });
 
-    const errors314 = result.errors.filter((e) => e.activityKey === '3.14');
-    expect(errors314).toHaveLength(2);
-    expect(errors314.every((e) => e.code === 'campo_requerido_vacio')).toBe(true);
-    expect(errors314.map((e) => e.zona).sort()).toEqual(['CENTRO GASTRONOMICO', 'MERCADO LA SAZÓN']);
+    expect(result.errors.some((e) => e.activityKey === '3.14')).toBe(false);
+    expect(result.valid).toBe(true);
+
+    const act314 = result.activities.find((a) => a.activityKey === '3.14');
+    expect(act314).toBeDefined();
+    expect(act314?.frecuencia).toBeNull();
+    expect(act314?.zonas.length).toBe(2); // Centro Gastronómico + Mercado La Sazón, ambas preservadas
   });
 });
 
@@ -262,7 +277,7 @@ describe('validateParsedPoa — actividades sin ninguna zona con cantidad contra
     // completo) para que el resultado muestre además actividades sí
     // contratadas, no solo la ausencia de error.
     const full = realParseResult();
-    const excluded = new Set([...PENDING_BUSINESS_RULE_CODES, MISSING_VALUE_CODE, '3.14']);
+    const excluded = new Set([...PENDING_BUSINESS_RULE_CODES, '3.14']);
     const partial: ParseResult = {
       ...full,
       actividades: full.actividades.filter((a) => !excluded.has(a.activityKey)),
