@@ -56,7 +56,7 @@ SELECT set_config(
 
 BEGIN;
 
-SELECT plan(23);
+SELECT plan(25);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Fixtures — board/poa #1 (Tests 1-3, 5-6): solo precondiciones, sin llegar
@@ -465,6 +465,32 @@ SELECT is(
   (SELECT COUNT(*)::INT FROM public.poa_versions WHERE poa_id = '55555555-0000-0000-0000-0000000000dd'),
   1,
   'Test 14c: sigue existiendo exactamente 1 versión para este poa — el intento fallido no dejó una segunda fila ✓'
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Test 15: frecuencia = NULL es un valor de negocio válido, no un error de
+-- dato. Decisión registrada en ADR-0005 — una actividad puede permanecer
+-- contratada (cantidad_contratada > 0) sin programación periódica en esta
+-- versión del POA. Reutiliza board/poa #2 (Tests 7-11), zonas reales.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT lives_ok(
+  $$ SELECT public.import_poa_version(
+       '55555555-0000-0000-0000-0000000000ff',
+       $j$[{"activity_key":"9.99","precio_unitario":100,"frecuencia":null,
+            "zonas":[{"group_id":"88888888-0000-0000-0000-000000000001","cantidad_contratada":1}]}]$j$::JSONB,
+       '55555555-0000-0000-0000-000000004004'
+     ) $$,
+  'Test 15a: frecuencia = null se acepta y no aborta la importación ✓'
+);
+
+SELECT is(
+  (SELECT frecuencia FROM public.poa_activities pa
+   JOIN public.poa_versions pv ON pv.id = pa.poa_version_id
+   WHERE pv.import_operation_id = '55555555-0000-0000-0000-000000004004'
+     AND pa.activity_key = '9.99'),
+  NULL::NUMERIC,
+  'Test 15b: la fila persistida tiene frecuencia IS NULL, no un valor inventado ✓'
 );
 
 SELECT * FROM finish();

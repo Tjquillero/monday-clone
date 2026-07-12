@@ -32,7 +32,7 @@ Array JSON. Puede ser `[]` (una versión sin ninguna actividad contratada es vá
 |---|---|---|---|
 | `activity_key` | string | Sí | Cualquier valor no nulo — la función NO valida contra el catálogo técnico; esa validación ya ocurrió en `src/lib/poaImport/validate.ts` antes de llegar aquí |
 | `precio_unitario` | number | Sí | `NOT NULL`, `CHECK (precio_unitario >= 0)` a nivel de tabla — un valor negativo o ausente aborta toda la importación |
-| `frecuencia` | number | Sí | `NOT NULL`, `CHECK (frecuencia > 0)` a nivel de tabla |
+| `frecuencia` | number \| null | No | `CHECK (frecuencia IS NULL OR frecuencia > 0)` a nivel de tabla. `null` es un valor de negocio válido — representa una actividad contratada (cantidad_contratada > 0 en alguna zona) sin programación periódica en esta versión del POA (ver `docs/adr/ADR-0005-poa-frecuencia-ausente.md`) — no una omisión que deba corregirse aquí |
 | `zonas` | array | Sí | **No puede ser `[]`** — toda actividad debe traer al menos una zona, o la función la rechaza explícitamente (ver Errores esperables) |
 
 Cada elemento de `zonas`:
@@ -84,7 +84,8 @@ Ninguno de estos errores dispara lógica de negocio adicional (retry automático
 | Una actividad tiene `zonas: []` | `RAISE EXCEPTION` explícito, tras el INSERT de actividades/zonas | `Actividad sin ninguna zona asociada — la importación se revierte por completo` |
 | El conteo de zonas insertadas no coincide con el JSON | `RAISE EXCEPTION` explícito | `Inconsistencia: % zonas esperadas, % insertadas` |
 | `group_id` no existe en `groups` | Violación de FK de Postgres (`23503`, `foreign_key_violation`) | `insert or update on table "poa_activity_zones" violates foreign key constraint ...` |
-| `precio_unitario`/`frecuencia`/`cantidad_contratada` fuera de rango o ausentes | Violación de `CHECK`/`NOT NULL` de Postgres | mensaje estándar de Postgres, no personalizado |
+| `precio_unitario`/`cantidad_contratada` fuera de rango o ausentes | Violación de `CHECK`/`NOT NULL` de Postgres | mensaje estándar de Postgres, no personalizado |
+| `frecuencia` negativa o cero (pero no ausente — `null` es válido) | Violación de `CHECK` de Postgres | mensaje estándar de Postgres, no personalizado |
 | Dos zonas con el mismo `group_id` en la misma actividad | Violación de `UNIQUE` de Postgres (`23505`) | mensaje estándar de Postgres, no personalizado |
 
 El llamador (orquestador TypeScript, todavía por construir) es responsable de traducir estos errores a mensajes de dominio para el usuario final — la función no lo hace por él.
