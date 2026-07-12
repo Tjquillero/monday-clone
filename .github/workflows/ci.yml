@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  typecheck-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Jest
+        run: npm test
+
+  # pgTAP (supabase/tests/) se agrega en un incremento separado, una vez
+  # configurados los secrets del proyecto Supabase enlazado (SUPABASE_ACCESS_TOKEN
+  # y el resto de credenciales) en GitHub → Settings → Secrets and variables →
+  # Actions. Sin esos secrets, ese paso fallaría por un motivo administrativo,
+  # no por un defecto del código — se prefiere no incluirlo hasta que el
+  # entorno esté correctamente configurado.
