@@ -25,9 +25,22 @@ jobs:
       - name: Jest
         run: npm test
 
-  # pgTAP (supabase/tests/) se agrega en un incremento separado, una vez
-  # configurados los secrets del proyecto Supabase enlazado (SUPABASE_ACCESS_TOKEN
-  # y el resto de credenciales) en GitHub → Settings → Secrets and variables →
-  # Actions. Sin esos secrets, ese paso fallaría por un motivo administrativo,
-  # no por un defecto del código — se prefiere no incluirlo hasta que el
-  # entorno esté correctamente configurado.
+  pgtap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.107.0
+
+      # supabase/.temp/project-ref ya está comiteado (proyecto enlazado),
+      # así que --linked resuelve el proyecto sin `supabase link` explícito.
+      - name: pgTAP (proyecto Supabase enlazado)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node scripts/test-db-ci.mjs
