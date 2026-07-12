@@ -130,26 +130,40 @@ SELECT throws_like(
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Test 4: UNIQUE(board_id, numero) — pero múltiples borradores con numero
--- NULL no chocan entre sí (comportamiento estándar de UNIQUE en Postgres).
+-- Test 4: UNIQUE(board_id, numero) permite múltiples numero=NULL en
+-- boards DISTINTOS (comportamiento estándar de UNIQUE en Postgres).
+--
+-- Nota (post Commit 2, supabase/migrations/20260728_generate_acta_draft.sql):
+-- ya NO se prueba aquí "dos borradores en el MISMO board" — el índice único
+-- parcial idx_actas_one_open_draft_per_board de ese commit lo impide
+-- deliberadamente (como máximo un draft abierto por board). Ese es ahora un
+-- invariante distinto, probado en 07_generate_acta_draft.sql (Test 9), no
+-- una consecuencia de UNIQUE(board_id, numero) en sí.
 -- ─────────────────────────────────────────────────────────────────────────────
+
+INSERT INTO public.boards (id, name, owner_id, created_at)
+VALUES ('deadbeef-0000-0000-0000-000000000002', 'Test Board Acta Billing 2', 'aaaaaaaa-0000-0000-0000-000000000001', NOW())
+ON CONFLICT (id) DO NOTHING;
 
 SELECT lives_ok(
   $$ INSERT INTO public.actas (board_id, generated_by)
-     VALUES ('deadbeef-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001') $$,
-  'Test 4: un segundo borrador (numero NULL también) no viola UNIQUE(board_id, numero) ✓'
+     VALUES ('deadbeef-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001') $$,
+  'Test 4: un borrador (numero NULL) en un board DISTINTO no viola UNIQUE(board_id, numero) ✓'
 );
 
 DO $$
 DECLARE v_acta_a UUID; v_acta_b UUID;
 BEGIN
-  INSERT INTO public.actas (board_id, generated_by, numero)
-  VALUES ('deadbeef-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 501)
+  -- estado='issued' en ambas: no compiten por el único slot 'draft' del
+  -- board (índice de Commit 2) — lo único bajo prueba aquí es
+  -- UNIQUE(board_id, numero) en sí.
+  INSERT INTO public.actas (board_id, generated_by, numero, estado, issued_by, issued_at)
+  VALUES ('deadbeef-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 501, 'issued', 'aaaaaaaa-0000-0000-0000-000000000001', NOW())
   RETURNING id INTO v_acta_a;
 
   BEGIN
-    INSERT INTO public.actas (board_id, generated_by, numero)
-    VALUES ('deadbeef-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 501);
+    INSERT INTO public.actas (board_id, generated_by, numero, estado, issued_by, issued_at)
+    VALUES ('deadbeef-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 501, 'issued', 'aaaaaaaa-0000-0000-0000-000000000001', NOW());
     RAISE EXCEPTION 'no debería haber permitido un numero duplicado';
   EXCEPTION WHEN unique_violation THEN
     NULL; -- esperado
@@ -191,8 +205,11 @@ SELECT throws_like(
 DO $$
 DECLARE v_acta_id UUID; v_activity_id UUID;
 BEGIN
-  INSERT INTO public.actas (board_id, generated_by)
-  VALUES ('deadbeef-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001')
+  -- estado='issued' (no 'draft'): este fixture no depende de estar en
+  -- borrador y el board ya tiene su único slot 'draft' ocupado por el de
+  -- Test 1 (índice de Commit 2, idx_actas_one_open_draft_per_board).
+  INSERT INTO public.actas (board_id, generated_by, estado, numero, issued_by, issued_at)
+  VALUES ('deadbeef-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'issued', 503, 'aaaaaaaa-0000-0000-0000-000000000001', NOW())
   RETURNING id INTO v_acta_id;
 
   v_activity_id := _test_seed_poa_activity_zone_06('ACTA_ITEM_TEST', 1500);
