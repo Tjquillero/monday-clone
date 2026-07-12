@@ -104,7 +104,23 @@ Lo comparten hoy `generate_acta_draft()` e `issue_acta()`:
 
 ## RLS
 
-Mismo patrón que el resto del dominio POA: `get_user_board_role(board_id, auth.uid())`. Lectura para cualquier miembro del board; escritura (crear/editar borrador, emitir) restringida a `admin` — consistente con que `close_weekly_plan` (certificar el período) y la facturación son ambas operaciones admin-only. `ActaItem`/`ActaItemSource` heredan el `board_id` a través de `Acta`, sin columna `board_id` propia.
+### Inventario de operaciones por tabla (borrador, previo a las políticas)
+
+Antes de escribir una sola política, el inventario de quién lee y quién escribe cada tabla — para que las políticas refuercen un modelo ya decidido, no lo inventen sobre la marcha:
+
+| Tabla | `SELECT` | `INSERT`/`UPDATE`/`DELETE` directo (rol `authenticated`) | Escritura real | Notas |
+|---|---|---|---|---|
+| `actas` | Cualquier miembro del board (`get_user_board_role(board_id, auth.uid()) IS NOT NULL`) | **Denegado siempre** — ningún rol, ni `admin`, escribe la tabla directamente | `generate_acta_draft()` / `issue_acta()` (`SECURITY DEFINER`) | Emitida (`issued`) es inmutable por trigger (Commit 3), no por RLS — RLS y el trigger son capas independientes, ambas deniegan. |
+| `acta_items` | Cualquier miembro del board (vía `acta_id → actas.board_id`) | **Denegado siempre** | `generate_acta_draft()` (crea las líneas); ajuste de `cantidad_facturada` en un borrador (Commit 4, UI) también deberá ser una función `SECURITY DEFINER` nueva, no un `UPDATE` directo desde la UI | Ni siquiera `admin` actualiza esta tabla por SQL directo — el Commit 4 no introduce una excepción a esta regla, introduce una función más. |
+| `acta_item_sources` | Cualquier miembro del board (vía `acta_item_id → acta_items.acta_id → actas.board_id`) | **Denegado siempre** | `generate_acta_draft()` únicamente | Entidad técnica — ningún flujo previsto (ni el editor del Commit 4) expone edición directa de `acta_item_sources`; si un ajuste de cantidad mueve saldo entre fuentes, esa función también recalcula `acta_item_sources`, la UI no. |
+
+**Implicación que este inventario deja explícita para el próximo commit**: como las 3 tablas no aceptan escritura directa de ningún rol, las políticas de escritura no son un "quién puede" graduado por rol — son un cierre total (`WITH CHECK (false)` o ausencia de política de escritura, según cuál sea más legible). Toda la graduación por rol (`admin` vs. resto) ya vive dentro de las funciones `SECURITY DEFINER` (`get_user_board_role(...) != 'admin' THEN RAISE EXCEPTION`), no en RLS — RLS aquí solo necesita resolver lectura.
+
+**Nota técnica a verificar al implementar**: `generate_acta_draft()` e `issue_acta()` son `SECURITY DEFINER`, por lo que corren con los privilegios del owner de la función (no del `authenticated` que las invoca) y por defecto son inmunes a RLS salvo que las tablas se marquen `FORCE ROW LEVEL SECURITY` — confirmar ese comportamiento contra Supabase antes de asumir que "denegado siempre" en la tabla no bloquea también a las propias funciones de dominio.
+
+### Políticas (mismo patrón ya usado en el resto del dominio POA)
+
+`get_user_board_role(board_id, auth.uid())`. `ActaItem`/`ActaItemSource` heredan el `board_id` a través de `Acta` (sin columna `board_id` propia), mismo precedente verificado que `poa_activity_zones` (ver más abajo).
 
 **Verificado contra el precedente real, no solo por analogía**: `poa_activity_zones` (`20260714_poa_domain_schema.sql`) tampoco tiene `board_id` propio, y su política de RLS ya resuelve una cadena de **tres** JOINs (`poa_activity_zones → poa_activities → poa_versions → poa.board_id`), con índice de soporte en la FK (`idx_poa_activity_zones_activity`) — patrón en producción, cubierto por 88/88 pgTAP. La cadena propuesta aquí es más corta (`Acta` ya trae `board_id` directo, sin depender de subir hasta una tabla raíz): `ActaItem → Acta.board_id` es un solo salto, `ActaItemSource → ActaItem → Acta.board_id` son dos. Al migrar, indexar `ActaItem.acta_id` y `ActaItemSource.acta_item_id` (mismo criterio que el índice ya existente en `poa_activity_zones.poa_activity_id`).
 
