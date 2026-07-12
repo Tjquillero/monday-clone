@@ -6,6 +6,8 @@ Aceptado (mecanismo de generación, y relación con el histórico) — con dos s
 ## Fecha
 2026-07-09
 
+**Actualización (2026-07-12):** se agregó la sección "Mecanismo de emisión del Acta" — corrige la suposición inicial de relación 1:1 entre Acta y período/mes calendario (ver Regla 7 corregida en `poa-domain.md`) y especifica el mecanismo, antes implícito, de cuándo el Acta pasa de proyección viva a documento emitido e inmutable. No modifica ninguna decisión ya aceptada arriba (fuente de verdad por campo, precio unitario, relación con el histórico).
+
 ## Contexto
 `docs/discovery/billing-source-analysis.md` documentó un choque de gobernanza sin resolver: la implementación real de Facturación (`financial_actas`/`financial_acta_details`, cálculo desde `item.values.*`) no tiene relación alguna con `poa-domain.md` (Regla 14, Origen Único del Cobro) ni con `execution-domain.md`. Ese documento dejó 5 preguntas abiertas, todas de negocio, no técnicas.
 
@@ -69,7 +71,19 @@ En consecuencia:
 - **Las actas ya emitidas no se modifican.** Lo único que cambia al cargar una nueva versión es la línea base para las actas *futuras* — la nueva versión activa.
 - El sistema simplemente confía en que la versión `active` del POA en cualquier momento dado ya refleja correctamente el estado del contrato. No calcula ni valida un "saldo disponible" por su cuenta — ese cálculo (cantidades originales + adiciones aprobadas + actividades no previstas − acumulado ya ejecutado/facturado) es responsabilidad de quien prepara el Excel del POA, no del código del Acta.
 
-Esto convierte el ciclo en continuo: se carga una versión del POA → el líder ejecuta y sube evidencias → el supervisor verifica → el sistema construye automáticamente el Acta del período → esa Acta alimenta el acumulado contractual → cuando se emite la siguiente versión del POA, esa versión ya incorpora ese acumulado y se convierte en la nueva línea base. El sistema participa en los primeros cuatro pasos; el quinto (incorporar el acumulado a la versión siguiente) ocurre fuera del sistema, en la preparación del Excel.
+Esto convierte el ciclo en continuo: se carga una versión del POA → el líder ejecuta y sube evidencias → el supervisor verifica → el sistema propone automáticamente el Acta del período (ver "Mecanismo de emisión del Acta" abajo) → esa Acta alimenta el acumulado contractual → cuando se emite la siguiente versión del POA, esa versión ya incorpora ese acumulado y se convierte en la nueva línea base. El sistema participa en los primeros cuatro pasos; el quinto (incorporar el acumulado a la versión siguiente) ocurre fuera del sistema, en la preparación del Excel.
+
+### Mecanismo de emisión del Acta (extiende, no reemplaza, las reglas de cálculo de esta sección)
+
+El cierre de un período (`close_weekly_plan`, `confirmed → closed`) certifica ese período — no genera ningún acta. Las certificaciones de un período cerrado quedan disponibles para facturación hasta ser incorporadas a una o más actas.
+
+El sistema genera automáticamente un borrador construido con las certificaciones pendientes de facturación. Antes de emitir el acta, el administrador podrá modificar dicho borrador agregando, retirando o ajustando las cantidades a facturar de cada certificación, siempre respetando que la suma facturada de una certificación nunca supere la cantidad certificada. El acta se emite con su consecutivo oficial una vez el administrador confirma el contenido del borrador.
+
+Un acta podrá agrupar una o varias certificaciones pendientes; normalmente equivalen a un período completo. Excepcionalmente, por necesidades de cierre contable, una misma certificación podrá facturarse de forma parcial en más de un acta, siempre que la suma de las cantidades facturadas no supere la cantidad certificada.
+
+**Mientras el acta está en estado borrador**, sigue aplicando sin cambios la Regla de negocio central ya aceptada arriba: se calcula contra la versión `active` del POA en el momento del cálculo. **Al emitirse**, el acta queda congelada y no vuelve a recalcularse.
+
+Esta extensión no modifica la fuente de verdad por campo, la regla de precio unitario, ni la relación con el histórico ya definidas arriba — solo especifica el mecanismo, antes implícito, de cuándo y cómo el acta pasa de proyección viva a documento emitido.
 
 ### Principio de diseño
 El Acta no almacena la realidad contractual — la realidad contractual vive siempre en la versión activa del POA. El Acta es únicamente una proyección automática de (versión activa del POA) × (ejecuciones verificadas).
@@ -94,7 +108,7 @@ Mientras estos dos puntos no se confirmen explícitamente, cualquier implementac
 ## Consecuencias
 - El Acta y el Informe pasan a ser vistas/proyecciones calculadas (o materializadas y recalculadas en cada `verified` y en cada cambio de versión activa del POA), no documentos que se generan una sola vez al cerrar el período.
 - Cualquier cálculo de cantidad/precio debe leer siempre `poa_activities`/`poa_activity_zones` de la versión `active` — nunca un valor cacheado o copiado al momento de la ejecución.
-- El mecanismo de `confirm_weekly_plan` (Gate 1: 0 `reported`, Gate 2: evidencia en todo `verified`) sigue siendo el punto de cierre administrativo del período; este ADR no lo modifica, solo define qué pasa con las ejecuciones `verified` mientras el período sigue abierto.
+- El mecanismo de `confirm_weekly_plan` (Gate 1: 0 `reported`, Gate 2: evidencia en todo `verified`) y `close_weekly_plan` (cierre definitivo, solo admin) sigue siendo el punto de cierre administrativo del período; este ADR no lo modifica — `close_weekly_plan` certifica el período (ver "Mecanismo de emisión del Acta"), no emite ningún acta por sí mismo.
 - Bloquea, a propósito, cualquier implementación que trate una actividad adicional o un aumento de cantidad como un caso especial en el código del Acta.
 - Bloquea, a propósito, cualquier implementación que intente reconciliar, recalcular o migrar las ~32 actas históricas existentes — quedan fuera de alcance permanentemente, no solo temporalmente.
 

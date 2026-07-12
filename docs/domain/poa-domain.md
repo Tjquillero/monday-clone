@@ -100,10 +100,12 @@ Si la cantidad ejecutada supera la cantidad contratada:
 Los NP únicamente podrán ser registrados por el administrador. La aprobación del NP ocurrirá fuera del sistema; la aplicación registrará su incorporación al acta correspondiente y conservará su trazabilidad histórica.
 
 ### Regla 7: Flujo del Acta de Cobro
-Las actas de avance se generarán de forma automática a partir de las ejecuciones físicas reportadas por los líderes en campo. Los NP autorizados deberán anexarse de forma manual por el administrador antes de realizar el cierre definitivo del acta mensual.
+El acta de cobro no mantiene una relación fija con un período semanal ni con un mes calendario. Las cantidades certificadas permanecen disponibles para facturación hasta ser incorporadas completamente a una o más actas. Un acta podrá agrupar una o varias certificaciones pendientes de facturación. Excepcionalmente, por necesidades de cierre contable, una misma certificación podrá facturarse de forma parcial en más de un acta, siempre que la suma de las cantidades facturadas no supere la cantidad certificada. La numeración del acta corresponde a un consecutivo único del contrato, continuo entre años e independiente del calendario. Mientras el acta permanezca en estado borrador, sus valores se calculan utilizando la versión activa del POA. Una vez emitida, queda congelada y no vuelve a recalcularse.
 
 ### Regla 8: Conservación de la Trazabilidad
 Toda ejecución, cronograma, informe, fotografía, verificación, costo y acta deberán conservar la referencia a la versión del POA con la cual fueron generados. La publicación de una nueva versión del POA no modificará ni recalculará información histórica.
+
+Esta referencia histórica tiene fines exclusivamente de trazabilidad y auditoría. No determina los valores utilizados para el cálculo de un acta en estado borrador — esos valores siempre provienen de la versión activa del POA en el momento del cálculo (Regla 7; ADR-0003, Regla de negocio central). Son dos conceptos distintos: la versión con la que una ejecución fue planificada o certificada (histórico, inmutable) no es la versión contra la que se calcula un acta todavía no emitida (siempre la vigente).
 
 ### Regla 9: Catálogo Contractual Inmutable
 Durante la operación no podrán crearse, eliminarse ni modificarse actividades pertenecientes a una versión del POA. Los NP no modificarán el catálogo contractual ni la versión del POA sobre la cual se ejecutó el contrato; únicamente se incorporarán al proceso de facturación mediante el acta correspondiente. La única forma de modificar el catálogo contractual será la publicación de una nueva versión del POA. Las versiones anteriores permanecerán disponibles únicamente para consulta y trazabilidad.
