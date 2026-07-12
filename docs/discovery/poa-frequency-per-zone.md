@@ -2,6 +2,8 @@
 
 **Esto no es un ADR.** Es evidencia de investigación sobre una decisión que depende del dueño del proceso (quien mantiene el POA oficial), no de una elección técnica. Se convertirá en un ADR que modifique `poa-domain.md` (Regla 18) únicamente cuando esa decisión exista.
 
+**Actualización (2026-07-11):** [`ADR-0005`](../adr/ADR-0005-poa-frecuencia-ausente.md) resolvió el subconjunto de este discovery donde `FREC.` está **completamente vacío** para una actividad (`3.14`) — se persiste `frecuencia = null`, sin bloquear. La pregunta de fondo de este documento (actividades con `FREC.` real que no concuerda entre zonas — el Grupo A/B/C/D de abajo, más `3.1`, que combina un valor vacío con valores reales que tampoco concuerdan entre sí) **sigue abierta**. Este documento no se reescribe; el resto de su contenido conserva su valor como evidencia de investigación original.
+
 ## Fecha
 2026-07-09
 
