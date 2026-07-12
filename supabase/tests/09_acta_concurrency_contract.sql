@@ -18,6 +18,15 @@
 -- es práctico. Esto es deliberadamente una prueba de contrato, no de
 -- comportamiento en tiempo de ejecución.
 --
+-- ESTE TEST ESTÁ INTENCIONADAMENTE ACOPLADO A LA IMPLEMENTACIÓN (nombres de
+-- variable locales incluidos, p_board_id / v_board_id). Su objetivo es
+-- detectar cualquier modificación del mecanismo oficial de sincronización
+-- — incluso si eso implica actualizar el test tras una refactorización
+-- legítima (ej. un rename de variable). No es un descuido: la propiedad
+-- protegida no es "existe algún lock", sino "esta función sincroniza sobre
+-- el recurso correcto" — y eso solo se puede verificar leyendo el código
+-- real, no infiriéndolo de un patrón genérico.
+--
 -- Ejecutar:
 --   supabase test db --linked supabase/tests/09_acta_concurrency_contract.sql
 -- =============================================================================
