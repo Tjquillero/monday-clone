@@ -41,7 +41,8 @@ export interface ScopeMapping {
 // sobre esta forma — nunca sobre ActivityStandard crudo, que ya no trae
 // frecuencia (ADR-0002).
 export type ActivityStandardWithFrecuencia = ActivityStandard & {
-  frecuencia: number;
+  /** null = actividad contratada sin programación periódica en esta versión del POA (ADR-0005). */
+  frecuencia: number | null;
   poa_activity_zone_id: string;
 };
 
@@ -75,7 +76,8 @@ export interface PoaActivity {
   id: string;
   poa_version_id: string;
   activity_key: string;
-  frecuencia: number;
+  /** null = actividad contratada sin programación periódica en esta versión del POA (ADR-0005). */
+  frecuencia: number | null;
   precio_unitario: number;
   created_at: string;
 }
@@ -116,6 +118,7 @@ export interface PlanningActivity {
   qty: number;
   unit: string;
   rendimiento: number;
+  /** Nunca null aquí: buildWeeklyPlanningContext() excluye actividades con frecuencia null (ADR-0005) antes de construir PlanningActivity. */
   frecuencia: number;
   theoretical_journals_month: number;
   theoretical_journals_week: number;

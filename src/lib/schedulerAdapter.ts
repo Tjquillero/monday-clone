@@ -35,8 +35,13 @@ export function buildActivityMappings(
       (result[scopeKey] ??= []).push({
         name: s.name,
         unit: s.unit,
-        rend: s.rendimiento,   // campo renombrado: rendimiento → rend
-        freq: s.frecuencia,    // campo renombrado: frecuencia → freq
+        rend: s.rendimiento,     // campo renombrado: rendimiento → rend
+        // s.frecuencia puede ser null (ADR-0005: sin programación periódica
+        // en esta versión del POA). ActivityRule.freq es la forma que ya
+        // consume el motor de cálculo de este widget (siempre number) — 0
+        // produce el mismo resultado que el resto del motor ya trata como
+        // "sin jornales" (ver schedulerMath.ts), no un valor inventado.
+        freq: s.frecuencia ?? 0,
         category: s.category,
       });
     }

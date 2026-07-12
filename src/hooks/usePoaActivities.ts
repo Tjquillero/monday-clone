@@ -26,7 +26,8 @@ export interface PoaActivityZoneEntry {
 export interface PoaActivityEntry {
   poaActivityId: string;
   activityKey: string;
-  frecuencia: number;
+  /** null = actividad contratada sin programación periódica en esta versión del POA (ADR-0005) — no genera jornales teóricos hasta que una versión futura le asigne frecuencia. */
+  frecuencia: number | null;
   precioUnitario: number;
   zones: Map<string, PoaActivityZoneEntry>; // keyed by zoneId
 }
@@ -42,7 +43,7 @@ interface PoaActivityZoneRow {
 interface PoaActivityRow {
   id: string;
   activity_key: string;
-  frecuencia: number;
+  frecuencia: number | null;
   precio_unitario: number;
   poa_activity_zones: PoaActivityZoneRow[];
 }

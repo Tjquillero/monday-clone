@@ -38,14 +38,16 @@ export interface CapacityResult {
  *   frec=4  → semanal
  *   frec=1  → mensual
  *   frec=12.5 → cada dos días aproximadamente
+ *   frec=null → actividad contratada sin programación periódica en esta
+ *     versión del POA (ADR-0005) — no genera jornales, igual que frec<=0.
  */
 export function calculateTheoreticalJournals(
   qty: number,
   rendimiento: number,
-  frecuencia: number,
+  frecuencia: number | null,
   workingDays = WORKING_DAYS_MONTH,
 ): number {
-  if (qty <= 0 || rendimiento <= 0 || frecuencia <= 0 || workingDays <= 0) return 0;
+  if (qty <= 0 || rendimiento <= 0 || frecuencia === null || frecuencia <= 0 || workingDays <= 0) return 0;
   return qty / (rendimiento * (frecuencia / workingDays));
 }
 

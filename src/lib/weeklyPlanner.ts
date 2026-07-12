@@ -123,6 +123,13 @@ export function buildWeeklyPlanningContext(
     for (const scopeKey of scopeByKey.get(s.activity_key) ?? []) {
       const qty = scopeQuantities[scopeKey] ?? 0;
       if (qty <= 0) continue;
+      // frecuencia === null: actividad contratada sin programación periódica
+      // en esta versión del POA (ADR-0005) — no genera un ítem planificable
+      // hasta que una versión futura le asigne frecuencia. Se excluye aquí,
+      // antes de construir PlanningActivity, no en la capa de persistencia
+      // (replace_weekly_plan_items exige planned_frecuencia > 0 — un envío
+      // con frecuencia nula sería rechazado por el RPC, no silenciado).
+      if (s.frecuencia === null) continue;
 
       const jr_month = calculateTheoreticalJournals(qty, s.rendimiento, s.frecuencia);
       const distribution = calculateWeeklyDistribution(jr_month, CONTRACT_PERIODS_PER_MONTH);
