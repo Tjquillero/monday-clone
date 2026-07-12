@@ -1,6 +1,6 @@
 # Diseño: Esquema del Acta de Cobro
 
-**Estado: Propuesto — diseño previo a la primera migración, no implementado todavía.**
+**Estado: Implementado.** Esquema (`20260727_acta_billing_schema.sql`), generador de borrador (`generate_acta_draft`, `20260728_generate_acta_draft.sql`) y emisión (`issue_acta`, `20260729_issue_acta.sql` + hardening de concurrencia en `20260730_generate_acta_draft_lock_board.sql`) ya están en producción, con 133/133 pgTAP en verde. Pendiente: UI de edición del borrador, PDF, y RLS para las 3 tablas.
 
 Traduce a esquema técnico las reglas ya congeladas en `docs/domain/poa-domain.md` (Regla 7) y `docs/adr/ADR-0003-billing-source.md` ("Mecanismo de emisión del Acta"). No decide ninguna regla de negocio nueva — solo estructura las entidades necesarias para representarlas. Referencia técnica, no un ADR: si algo aquí necesita cambiar, se cambia este documento directamente, sin el proceso de gobernanza de un ADR.
 
@@ -90,6 +90,17 @@ Acta 12
 5. Una línea (`ActaItem`) puede alimentarse de múltiples ejecuciones.
 6. Una ejecución puede alimentar múltiples líneas de acta, en la misma o en distintas actas, mientras le quede saldo certificado sin facturar.
 7. Cada `ActaItem` referencia exactamente una `poa_activity` — nunca combina dos actividades contractuales distintas en una sola línea, incluso si comparten precio y descripción.
+
+## Concurrencia
+
+Toda operación que crea o consume el único borrador (`draft`) de un board se serializa mediante `SELECT ... FROM boards WHERE id = board_id FOR UPDATE` sobre la fila correspondiente de `boards` — **ese lock es el mecanismo oficial de sincronización de este subsistema**, no un detalle interno de una función aislada.
+
+Lo comparten hoy `generate_acta_draft()` e `issue_acta()`:
+
+- `issue_acta()` lo toma para calcular `numero` de forma segura bajo concurrencia (mismo patrón que `import_poa_version()` para `poa_versions.version_number`).
+- `generate_acta_draft()` lo toma (desde `20260730_generate_acta_draft_lock_board.sql`) por la misma razón que `issue_acta()`, aunque no calcula ningún número: sin el lock, un `SELECT` de "¿ya hay un draft abierto?" podía leer `draft` un instante antes de que otra transacción confirmara la emisión de esa misma acta, devolviendo un `acta_id` que dejaba de ser editable justo después. No corrompía datos (el índice único parcial y los triggers de inmutabilidad ya lo impedían) pero violaba el contrato observable de la API. Serializar ambas funciones sobre el mismo recurso cierra la ventana sin introducir un segundo mecanismo de concurrencia.
+
+**Cualquier función nueva que cree, lea el estado de, o modifique el borrador único de un board** (ej. una futura `cancel_acta_draft()` o `rebuild_acta()`) debe tomar este mismo lock como primer paso, antes de leer o decidir nada sobre `actas`. No introducir un mecanismo de sincronización alternativo (otra tabla de lock, un campo de versión optimista, etc.) sin una razón concreta que el lock de `boards` no pueda cubrir.
 
 ## RLS
 
