@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Personnel } from '@/types/monday';
 import { 
     User, Search, Plus, Trash2, Edit2, 
-    Save, X, CheckCircle2, DollarSign, Briefcase 
+    Save, X, DollarSign, Briefcase 
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { usePersonnel, usePersonnelMutations } from '@/hooks/usePersonnel';

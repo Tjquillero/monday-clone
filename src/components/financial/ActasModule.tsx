@@ -1,19 +1,19 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Group, Item, Column, Acta, ActaDetail } from '@/types/monday';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { Group, Item, Acta } from '@/types/monday';
 import { useActas, useActaDetails, useActaMutations, useActaDetailsByBoard } from '@/hooks/useActas';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Calendar, FileText, ChevronRight, Save, X, Edit, DollarSign, Check, Maximize2, Minimize2, Eraser } from 'lucide-react';
+import { Plus, Trash2, Calendar, FileText, ChevronRight, Check, Maximize2, Minimize2, Eraser } from 'lucide-react';
 import { useBoardMutations } from '@/hooks/useBoardMutations';
 import { useUI } from '@/contexts/UIContext';
 import dynamic from 'next/dynamic';
 
 const ActasHotTable = dynamic(() => import('./ActasHotTable'), { ssr: false });
 
-import { motion, AnimatePresence } from 'framer-motion';
-import BudgetSeeder from './BudgetSeeder';
-import { EditableCell, MatrixQtyInput } from './ActasModuleComponents';
+import { motion } from 'framer-motion';
+
+import { MatrixQtyInput } from './ActasModuleComponents';
 
 interface ActasModuleProps {
     groups: Group[];

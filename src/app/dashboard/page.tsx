@@ -1,15 +1,15 @@
 'use client';
 
-import { Group, Column } from '@/types/monday';
+
 import {
-  Calculator, Users, CheckCircle2,
-  MapPin, Wand2, TrendingUp, Filter, LayoutDashboard,
-  ChevronRight, Camera, Terminal, AlertTriangle, Clock,
-  MoreVertical, Plus, Settings, Search, Info,
-  Maximize2, Eye, ShieldCheck, Gauge, Layers, Info as InfoIcon,
+
+  MapPin, TrendingUp, 
+  AlertTriangle, 
+  Search, 
+
   Zap, Download, Layout,
   Star, ChevronDown, FileText, FileSpreadsheet,
-  Sun, Moon, Scissors, Sprout, Wrench, Shovel
+  Sun, Moon
 } from 'lucide-react';
 import { BOARD_TABS, VALID_VIEW_PARAMS, type BoardViewId } from '@/config/navigation';
 import { useState, useMemo, useEffect, Suspense } from 'react';
@@ -18,7 +18,7 @@ import { useBoard, useBoardColumns, useBoardGroups } from '@/hooks/useBoardData'
 import { useBoardMutations } from '@/hooks/useBoardMutations';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
-import { usePermissions, PERMISSIONS } from '@/hooks/usePermissions';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 
 import BoardViewContainer from '@/components/views/BoardViewContainer';

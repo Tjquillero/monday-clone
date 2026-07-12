@@ -1,19 +1,19 @@
 'use client';
 
 import { 
-  X, MessageSquare, Info, History, User, Calendar, Tag, MoreHorizontal, 
-  Camera, Image as ImageIcon, Trash2, CheckCircle2, Calculator, 
-  Link as LinkIcon, Search, Plus, FileText, MapPin, ChevronRight, Activity, Globe, Loader2, Archive, GitGraph, FileCode, Music, Video, ArrowRight
+  X, MessageSquare, Info, History, User, Calendar, 
+  Camera, Image as ImageIcon, Trash2, CheckCircle2, 
+  Link as LinkIcon, Search, Plus, FileText, MapPin, Activity, Globe, Loader2, GitGraph, FileCode, ArrowRight
 } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+
 import { useState, useCallback, useEffect } from 'react';
 import Image from 'next/image';
-import { Item, Column } from '@/types/monday';
+import { Item } from '@/types/monday';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAttachments } from '@/hooks/useAttachments';
-import MentionSelector from '@/components/board/MentionSelector';
+
 import { generateServerItemPDF } from '@/lib/serverReports';
 import { useBoardColumns } from '@/hooks/useBoardData';
 import { LocationPicker } from '@/components/LocationPicker';

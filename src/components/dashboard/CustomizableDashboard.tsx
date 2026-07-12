@@ -2,9 +2,9 @@
 
 import { useState, useMemo } from 'react';
 import { Responsive, WidthProvider } from 'react-grid-layout';
-import { useDashboard, DashboardWidget } from '@/hooks/useDashboard';
+import { useDashboard } from '@/hooks/useDashboard';
 import { renderWidget, WIDGET_TITLES } from './WidgetRegistry';
-import { Plus, Trash2, Layout, Save, Settings2, X } from 'lucide-react';
+import { Plus, Trash2, Layout, Save, Settings2 } from 'lucide-react';
 import { Group, Column } from '@/types/monday';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);

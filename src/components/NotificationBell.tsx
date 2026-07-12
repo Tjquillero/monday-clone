@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Bell, X, Check, Info, AlertTriangle, CheckCircle, Plus } from 'lucide-react';
+import { Bell, X, Check, Info, AlertTriangle, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,7 +18,7 @@ interface Notification {
     link?: string;
 }
 
-import NewsModal from '@/components/modals/NewsModal';
+
 
 export default function NotificationBell() {
     const [notifications, setNotifications] = useState<Notification[]>([]);

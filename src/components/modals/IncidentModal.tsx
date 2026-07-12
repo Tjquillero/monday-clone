@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { X, AlertTriangle, Camera, Check } from 'lucide-react';
+import { X, AlertTriangle, Camera } from 'lucide-react';
 import Image from 'next/image';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Incident } from '@/types/monday';
 
 interface IncidentModalProps {

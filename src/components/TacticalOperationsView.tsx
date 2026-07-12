@@ -11,8 +11,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   GitGraph, Target, LayoutGrid, Clock, Users, 
   TrendingUp, AlertTriangle, CheckCircle2, 
-  Calendar as CalendarIcon, Filter, Layers, 
-  Activity, Gauge, Zap, ChevronRight, BarChart3,
+  Filter, Layers, 
+  Activity, Gauge, ChevronRight, BarChart3,
   CalendarDays, Flame, MousePointer2
 } from 'lucide-react';
 import { Group, Item, Column } from '@/types/monday';

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
     Users, 
     Layers, 
@@ -7,18 +7,16 @@ import {
     Maximize2,
     Wand2
 } from 'lucide-react';
-import { Group, Item } from '@/types/monday';
+import { Item } from '@/types/monday';
 import { ExecutionViewProps } from './execution/types';
 import { ExecutionRow } from './execution/ExecutionRow';
 import { HeaderCell } from './execution/CommonCells';
 import { 
     getSiteCapacity, 
-    isActivityDueToday, 
-    hasPhysicalBacklog,
+
     calculateTotalJornales,
     calculateVerifiedJornales,
-    calculateTargetJornales,
-    getFrecValue,
+
     calculateGroupSchedule
 } from './execution/utils';
 import PersonnelPicker from './PersonnelPicker';

@@ -4,11 +4,9 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  X, Users, CheckCircle2, Calendar, Clock, 
-  ChevronRight, Camera, Droplets, Scissors, Sparkles, 
-  Sprout, Leaf, Biohazard, Activity, Zap, Plus, 
-  Filter, MapPin, Trash2, Shovel, Brush, HardHat, 
-  Construction, Terminal, Gauge
+  X, Users, Calendar, Clock, 
+  ChevronRight, 
+
 } from 'lucide-react';
 import Image from 'next/image';
 import { Group, Item } from '@/types/monday';

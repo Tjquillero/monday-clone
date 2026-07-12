@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { Personnel } from '@/types/monday';
-import { UserPlus, Search, Check, X, User } from 'lucide-react';
+import { UserPlus, Search, Check, X } from 'lucide-react';
 
 interface PersonnelPickerProps {
   currentValue: string;

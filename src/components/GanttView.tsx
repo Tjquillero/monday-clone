@@ -1,8 +1,8 @@
 'use client';
 
-import { Group, Item, Column, Dependency } from '@/types/monday';
+import { Group, Item, Dependency } from '@/types/monday';
 import { motion } from 'framer-motion';
-import { ChevronRight, ChevronDown, Clock, Link as LinkIcon, Plus, Trash2, Calendar as CalendarIcon, X, GitGraph } from 'lucide-react';
+import { ChevronRight, ChevronDown, Clock, Link as LinkIcon, Plus, Trash2, GitGraph } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect, useCallback, memo } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import DateRangeModal from './DateRangeModal';

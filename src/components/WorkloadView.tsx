@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   Users, BarChart3, AlertCircle, 
   CheckCircle2, Clock, Loader2, Info

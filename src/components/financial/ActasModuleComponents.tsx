@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 
 export const EditableCell = ({ value, type, onSave, className = '', step = 'any', align = 'center', renderValue }: any) => {
     const ref = useRef<HTMLInputElement>(null);

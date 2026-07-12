@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Filter, Check, Eye, EyeOff, LayoutPanelLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Filter, LayoutPanelLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-import { Item, Group } from '@/types/monday';
+import { Group } from '@/types/monday';
 
 interface CalendarViewProps {
   groups: Group[];

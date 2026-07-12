@@ -1,5 +1,5 @@
 // src/lib/offlineDB.ts
-import { supabase } from './supabaseClient';
+
 
 const DB_NAME = 'mantenix_offline_db';
 const DB_VERSION = 5;

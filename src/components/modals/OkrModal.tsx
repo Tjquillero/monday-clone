@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { 
-  X, Target, Calendar, Globe, Lock, ArrowRight, 
-  Save, Trash2, PieChart, TrendingUp, Sparkles, ChevronRight
+  X, Target, Calendar, Globe, Lock, 
+  Save, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabaseClient';

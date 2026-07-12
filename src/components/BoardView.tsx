@@ -1,33 +1,33 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { ChevronDown, Plus, GripVertical, ChevronRight, CornerDownRight, Trash2, MapPin, Settings2, Leaf, Umbrella, Layers } from 'lucide-react';
+import { ChevronDown, Plus, GripVertical, ChevronRight, CornerDownRight, Trash2, MapPin, Leaf, Umbrella, Layers } from 'lucide-react';
 import { Item, Group, Column, ColumnType, ActivityTemplate } from '@/types/monday';
 import { getColumnValueKey } from '@/utils/columnUtils';
 import { CellRenderer } from '@/components/columns/CellRenderer';
 import { ColumnEditorPanel } from '@/components/columns/ColumnEditorPanel';
 import { AddColumnButton } from '@/components/columns/AddColumnButton';
 import { SortableColumnHeader } from '@/components/columns/SortableColumnHeader';
-import { LocationPicker } from '@/components/LocationPicker';
+
 import {
   SortableContext,
-  verticalListSortingStrategy,
+
   horizontalListSortingStrategy,
   useSortable,
   arrayMove
 } from '@dnd-kit/sortable';
 import {
   DndContext,
-  closestCorners,
+
   closestCenter,
-  KeyboardSensor,
+
   PointerSensor,
   useSensor,
   useSensors,
   DragOverlay,
-  defaultDropAnimationSideEffects,
+
   DragStartEvent,
-  DragOverEvent,
+
   DragEndEvent
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';

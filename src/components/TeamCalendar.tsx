@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
-  ChevronLeft, ChevronRight, Filter, 
+  ChevronLeft, ChevronRight, 
   LayoutPanelLeft, Loader2, Users, Search 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';

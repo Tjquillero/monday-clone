@@ -1,6 +1,6 @@
 import { Item } from '@/types/monday';
 import { 
-    calculateTotalJornales, 
+
     isActivityDueToday,
     getSiteCapacity,
     isHolidayOrRestDay

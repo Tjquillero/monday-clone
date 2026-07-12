@@ -8,7 +8,7 @@
 
 import { useMemo } from 'react';
 import TacticalOperationsView from '@/components/TacticalOperationsView';
-import { useBoard, useBoardGroups, useBoardColumns, useTaskDependencies } from '@/hooks/useBoardData';
+import { useBoard, useBoardGroups, useBoardColumns } from '@/hooks/useBoardData';
 import { useBoardMutations } from '@/hooks/useBoardMutations';
 import { isActivityItem } from '@/utils/itemUtils';
 import { getColumnValueKey } from '@/utils/columnUtils';

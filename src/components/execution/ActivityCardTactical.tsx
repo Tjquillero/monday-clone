@@ -4,7 +4,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { 
   Zap, 
-  Timer, 
+
   Users, 
   CheckCircle2, 
   Loader2, 

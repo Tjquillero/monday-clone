@@ -11,7 +11,7 @@ import {
   AlertCircle, 
   ChevronRight, 
   Database,
-  ShieldCheck,
+
   Zap,
   Cpu,
   Terminal,

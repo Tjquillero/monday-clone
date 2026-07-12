@@ -7,11 +7,11 @@ import {
     CheckCircle2,
     Zap
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+
 import { ExecutionRowProps } from './types';
 import { Cell, EditableCell } from './CommonCells';
 import { Item } from '@/types/monday';
-import { getVal, getFrecValue, calculateVerifiedJornales } from './utils';
+import { getFrecValue } from './utils';
 
 export const ExecutionRow = ({ 
     curr, level, indexStr, allExpanded, deferredIds, today, group, columns, 

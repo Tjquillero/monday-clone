@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, GripVertical } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { ColumnLabel, LabelOptions } from '@/types/monday';
 
 const PRESET_COLORS = [

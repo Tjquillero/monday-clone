@@ -2,15 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import {
-  Search, Bell, Plus, Users, Megaphone,
+  Search, Users, Megaphone,
   ChevronLeft, ChevronRight, Folder, ChevronDown,
   Menu, X as CloseIcon, LogOut, PanelLeft, Settings
 } from 'lucide-react';
 import { SIDEBAR_ITEMS } from '@/config/navigation';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import Image from 'next/image';
-import { motion, AnimatePresence } from 'framer-motion';
+
 import NotificationBell from './NotificationBell';
 import OfflineIndicator from './OfflineIndicator';
 import SyncToast from './offline/SyncToast';

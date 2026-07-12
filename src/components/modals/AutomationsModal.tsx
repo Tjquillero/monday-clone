@@ -1,8 +1,8 @@
 'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { X, Zap, ArrowRight, CheckCircle2, Bell, Plus, Trash2, ToggleLeft, ToggleRight, ShieldAlert, Settings, Package, Cpu } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+
 import { useState } from 'react';
 import { useAutomations } from '@/hooks/useAutomations';
 import { useBoardColumns } from '@/hooks/useBoardData';

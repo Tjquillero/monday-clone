@@ -9,18 +9,18 @@ import {
   useSensors,
   DndContext,
   DragStartEvent,
-  DragOverEvent,
+
   DragEndEvent,
   DragOverlay,
   defaultDropAnimationSideEffects
 } from '@dnd-kit/core';
-import { sortableKeyboardCoordinates, arrayMove } from '@dnd-kit/sortable';
+import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import KanbanView from './KanbanView';
 import { useBoard, useBoardColumns, useBoardGroups } from '@/hooks/useBoardData';
 import { useBoardMutations } from '@/hooks/useBoardMutations';
 import { isActivityItem } from '@/utils/itemUtils';
 import { getColumnValueKey } from '@/utils/columnUtils';
-import { Item, Group, Column } from '@/types/monday';
+import { Item } from '@/types/monday';
 import { createPortal } from 'react-dom';
 
 interface KanbanViewContainerProps {

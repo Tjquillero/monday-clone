@@ -3,7 +3,7 @@ import React from 'react';
 import { render } from '@testing-library/react';
 import GanttView from './GanttView';
 import { Group } from '@/types/monday';
-import { UIProvider } from '@/contexts/UIContext';
+
 
 // Mock framer-motion
 jest.mock('framer-motion', () => ({

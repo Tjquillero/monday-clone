@@ -12,7 +12,7 @@ import {
   DragOverEvent,
   DragEndEvent,
 } from '@dnd-kit/core';
-import { sortableKeyboardCoordinates, arrayMove } from '@dnd-kit/sortable';
+import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import BoardView from '@/components/BoardView';
 import { ViewBar } from '@/components/views/ViewBar';
 import { useBoard, useBoardColumns, useBoardGroups, useActivityTemplates, useTaskDependencies } from '@/hooks/useBoardData';
@@ -23,7 +23,7 @@ import { useBoardViews } from '@/hooks/useBoardViews';
 import { useAuth } from '@/contexts/AuthContext';
 import { isActivityItem } from '@/utils/itemUtils';
 import { getColumnValueKey, getDefaultLabelId } from '@/utils/columnUtils';
-import { Column, ColumnType, Group, Item } from '@/types/monday';
+import { Column, ColumnType } from '@/types/monday';
 import { SortRule } from '@/types/views';
 import { supabase } from '@/lib/supabaseClient';
 import { useQueryClient } from '@tanstack/react-query';

@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect, useId } from 'react';
-import { Filter, ArrowUpDown, Columns3, Save, Plus, Trash2, Check, X, ChevronDown } from 'lucide-react';
+import { Filter, ArrowUpDown, Columns3, Save, Trash2, Check, X, ChevronDown } from 'lucide-react';
 import { Column, ColumnType } from '@/types/monday';
-import { FilterRule, SortRule, BoardView, FilterOperator, SortDirection } from '@/types/views';
+import { FilterRule, SortRule, BoardView, FilterOperator } from '@/types/views';
 import { getLabelOptions, getColumnValueKey } from '@/utils/columnUtils';
 
 // ─── Filter operator labels ────────────────────────────────────────────────────

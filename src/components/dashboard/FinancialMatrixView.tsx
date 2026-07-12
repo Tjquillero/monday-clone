@@ -1,18 +1,12 @@
 
-import React, { useState, useMemo, useEffect, Fragment } from 'react';
+import React, { useState, useMemo, Fragment } from 'react';
 import { 
   BarChart3, 
   TrendingUp, 
-  DollarSign, 
-  Layers, 
-  ChevronRight, 
-  ChevronDown,
-  ChevronUp,
-  CreditCard,
+
   Briefcase,
   Trash2,
-  AlertCircle,
-  Plus
+
 } from 'lucide-react';
 import { EditableCell } from '../common/EditableCell';
 import { resolveFinancialColumns } from '@/utils/financialUtils';

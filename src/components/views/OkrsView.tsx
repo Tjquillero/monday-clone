@@ -3,12 +3,12 @@
 import { useState } from 'react';
 import { 
   Target, TrendingUp, Calendar, ChevronRight, Plus, 
-  Users, Lock, MoreVertical, ExternalLink 
+  Users, Lock, MoreVertical 
 } from 'lucide-react';
 import { useOkrs, OKR } from '@/hooks/useOkrs';
 import { motion } from 'framer-motion';
 import OkrModal from '@/components/modals/OkrModal';
-import Link from 'next/link';
+
 
 export default function OkrsView() {
   const { okrs, isLoading, deleteOkr } = useOkrs();

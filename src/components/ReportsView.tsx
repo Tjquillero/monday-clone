@@ -1,12 +1,12 @@
 'use client';
 
-import { Group, Item, Incident, Column } from '@/types/monday';
+import { Group, Incident, Column } from '@/types/monday';
 import { motion } from 'framer-motion';
-import { FileText, Download, Filter, Calendar, Loader2, Database, Trash2, CheckCircle2, Clock, MapPin, AlertTriangle } from 'lucide-react';
+import { FileText, Download, Calendar, Loader2, CheckCircle2, Clock, MapPin, AlertTriangle } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import { generateExecutivePDF, generateNewsPDF } from '@/lib/serverReports';
-import { ExecutiveReportItem, ExecutiveLocation } from '@/components/reports/ExecutiveReportTemplate';
+import { ExecutiveReportItem } from '@/components/reports/ExecutiveReportTemplate';
 import { supabase } from '@/lib/supabaseClient';
 
 

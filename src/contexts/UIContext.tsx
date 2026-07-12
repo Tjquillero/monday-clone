@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, ReactNode, useCallback, useMemo } from 'react';
 import { Item } from '@/types/monday';
 
 interface UIContextType {

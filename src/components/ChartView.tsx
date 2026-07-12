@@ -1,6 +1,6 @@
 'use client';
 
-import { Item, Group } from '@/types/monday';
+import { Group } from '@/types/monday';
 
 interface ChartViewProps {
   groups: Group[];

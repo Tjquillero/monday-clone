@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Column, Item, ColumnType } from '@/types/monday';
-import { getColumnValueKey, getColumnLabelColor, getColumnLabelTitle, getNextLabelId, getDefaultLabelId, getLabelOptions, getPeopleOptions } from '@/utils/columnUtils';
+import { getColumnValueKey, getColumnLabelColor, getColumnLabelTitle, getNextLabelId, getDefaultLabelId, getLabelOptions } from '@/utils/columnUtils';
 
 interface CellProps {
   column: Column;

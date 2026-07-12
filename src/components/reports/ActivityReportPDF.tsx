@@ -2,7 +2,7 @@
 // It should only contain layout and data display logic.
 // All data is passed in as props.
 
-import { Item, Group } from '@/types/monday';
+import { Group } from '@/types/monday';
 
 interface ActivityReportProps {
   projectName: string;

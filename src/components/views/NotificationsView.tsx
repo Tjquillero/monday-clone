@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { Bell, Check, Trash2, Mail, Info, AlertTriangle, Filter, ChevronRight, User } from 'lucide-react';
+import { Bell, Check, Trash2, Mail, Info, AlertTriangle, ChevronRight, User } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';

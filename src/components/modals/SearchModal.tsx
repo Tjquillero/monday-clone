@@ -3,9 +3,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Search, X, Layout, CheckSquare, ArrowRight, 
-  Terminal, Home, PieChart, LogOut, Megaphone, Plus, Users,
-  Clock, Sparkles, ChevronRight, Info, AlertCircle, Target, Activity, Cpu, Box
+  CheckSquare, 
+  Terminal, Home, PieChart, 
+  ChevronRight, Target, Activity, Cpu, Box
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';

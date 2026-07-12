@@ -4,9 +4,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  X, Camera, Trash2, CheckCircle, Plus,
+  X, Camera, Trash2, Plus,
   Image as ImageIcon, Loader2, ShieldCheck, 
-  Terminal, Maximize2, Download, Zap
+  Terminal, Maximize2, Zap
 } from 'lucide-react';
 import Image from 'next/image';
 
