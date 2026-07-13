@@ -91,11 +91,18 @@ export async function generateExecutionObservations(
 
   for (const group of exactDuplicates) {
     const occurrencesHere = group.occurrences.filter((occ) => occ.executionId === executionId);
+    if (occurrencesHere.length === 0) continue;
+    // "en otra jornada" solo es cierto si el hash aparece en una ejecución
+    // DISTINTA a esta — si el grupo entero vive dentro de la misma jornada
+    // (ej. la misma foto subida dos veces aquí), decirlo sería un dato falso.
+    const existsElsewhere = group.occurrences.some((occ) => occ.executionId !== executionId);
     for (const occ of occurrencesHere) {
       observations.push({
         severity: 'info',
         category: 'possible_duplicate',
-        message: `El archivo "${occ.fileName}" ya existe idéntico (mismo archivo, byte a byte) en otra jornada de esta actividad.`,
+        message: existsElsewhere
+          ? `El archivo "${occ.fileName}" ya existe idéntico (mismo archivo, byte a byte) en otra jornada de esta actividad.`
+          : `El archivo "${occ.fileName}" se subió más de una vez a esta misma jornada (mismo archivo, byte a byte).`,
       });
     }
   }

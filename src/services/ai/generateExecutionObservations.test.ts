@@ -114,6 +114,33 @@ describe('generateExecutionObservations', () => {
     expect(dupObservations[0].message).toContain('idéntico');
   });
 
+  // Reproduce el bug de la revisión: si el mismo archivo se subió DOS veces
+  // a esta misma ejecución (mismo file_hash, ambas ocurrencias con
+  // executionId === executionId), el mensaje no puede decir "en otra
+  // jornada" -- ambas copias están aquí mismo.
+  it('no afirma "en otra jornada" cuando el duplicado exacto está dentro de esta misma ejecución', async () => {
+    mockGetExecutionAttachments.mockResolvedValue([attachment('before'), attachment('after')]);
+    mockEvaluateExecutionEvidence.mockResolvedValue({ summary: '', observations: [], limitations: [], confidence: 'high' });
+    mockGetDuplicateAttachments.mockResolvedValue([
+      {
+        fileHash: 'hash-y',
+        occurrences: [
+          { executionId: 'exec-1', activityKey: 'A', activityName: 'A', executionDate: '2026-11-02', fileName: 'foto.jpg' },
+          { executionId: 'exec-1', activityKey: 'A', activityName: 'A', executionDate: '2026-11-02', fileName: 'foto.jpg' },
+        ],
+      },
+    ]);
+
+    const result = await generateExecutionObservations({} as any, 'exec-1', 'board-1');
+
+    const dupObservations = result.observations.filter((o) => o.category === 'possible_duplicate');
+    expect(dupObservations).toHaveLength(2);
+    for (const obs of dupObservations) {
+      expect(obs.message).not.toContain('otra jornada');
+      expect(obs.message).toContain('esta misma jornada');
+    }
+  });
+
   it('reporta possible_duplicate a partir de un posible duplicado visual (v2.4b)', async () => {
     mockGetExecutionAttachments.mockResolvedValue([attachment('before'), attachment('after')]);
     mockEvaluateExecutionEvidence.mockResolvedValue({ summary: '', observations: [], limitations: [], confidence: 'high' });
