@@ -2,6 +2,7 @@ import type { AiToolDefinition } from './types';
 import { getCurrentBoardTool } from './getCurrentBoard';
 import { getActaTotalsTool } from './getActaTotals';
 import { getPendingBillableWorkTool } from './getPendingBillableWork';
+import { getBoardSummaryTool } from './getBoardSummary';
 
 // La whitelist. Si un tool no está aquí, el modelo no puede usarlo — el
 // Orchestrator valida el nombre contra este registro independientemente de
@@ -9,13 +10,14 @@ import { getPendingBillableWorkTool } from './getPendingBillableWork';
 // profundidad, no solo confiar en la declaración enviada al modelo).
 //
 // Hito 0 (infraestructura): get_current_board, sin valor de negocio.
-// Hito 1: get_acta_totals (adaptador de compute_acta_totals(), vía DomainTools).
-// Hito 2: get_pending_billable_work (primer tool "inteligente" — extrae la
-//   elegibilidad ya probada de generate_acta_draft(), vía DomainTools).
+// Hito 1+2: get_acta_totals, get_pending_billable_work (vía DomainTools).
+// Catálogo mínimo: get_board_summary (punto de entrada — "¿cómo va el
+//   contrato?", "hazme un resumen").
 export const AI_TOOL_REGISTRY: Record<string, AiToolDefinition> = {
   [getCurrentBoardTool.name]: getCurrentBoardTool,
   [getActaTotalsTool.name]: getActaTotalsTool,
   [getPendingBillableWorkTool.name]: getPendingBillableWorkTool,
+  [getBoardSummaryTool.name]: getBoardSummaryTool,
 };
 
 export function getToolDefinition(name: string): AiToolDefinition | undefined {
