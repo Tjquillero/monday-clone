@@ -49,17 +49,17 @@ describe('getExecutionsWithoutEvidence', () => {
 });
 
 describe('getExecutionAttachments', () => {
-  it('mapea las filas de la RPC al DTO (camelCase), incluyendo phase', async () => {
+  it('mapea las filas de la RPC al DTO (camelCase), incluyendo phase y file_hash', async () => {
     const supabase = mockSupabase([
-      { file_url: 'https://example.test/a.jpg', file_name: 'a.jpg', file_type: 'image/jpeg', phase: 'before' },
-      { file_url: 'https://example.test/b.jpg', file_name: 'b.jpg', file_type: 'image/jpeg', phase: null },
+      { file_url: 'https://example.test/a.jpg', file_name: 'a.jpg', file_type: 'image/jpeg', phase: 'before', file_hash: 'hash-a' },
+      { file_url: 'https://example.test/b.jpg', file_name: 'b.jpg', file_type: 'image/jpeg', phase: null, file_hash: null },
     ]);
 
     const dto = await getExecutionAttachments(supabase, 'exec-1');
 
     expect(dto).toEqual([
-      { fileUrl: 'https://example.test/a.jpg', fileName: 'a.jpg', fileType: 'image/jpeg', phase: 'before' },
-      { fileUrl: 'https://example.test/b.jpg', fileName: 'b.jpg', fileType: 'image/jpeg', phase: null },
+      { fileUrl: 'https://example.test/a.jpg', fileName: 'a.jpg', fileType: 'image/jpeg', phase: 'before', fileHash: 'hash-a' },
+      { fileUrl: 'https://example.test/b.jpg', fileName: 'b.jpg', fileType: 'image/jpeg', phase: null, fileHash: null },
     ]);
     expect(supabase.rpc).toHaveBeenCalledWith('get_execution_attachments', { p_execution_id: 'exec-1' });
   });

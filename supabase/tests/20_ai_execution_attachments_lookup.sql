@@ -2,11 +2,12 @@
 -- Tests: get_execution_attachments() (IA)
 --
 -- CONTRATO: supabase/migrations/20260811_ai_execution_attachments_lookup.sql,
--- 20260813_ai_execution_attachments_phase.sql (agrega columna phase)
+-- 20260813_ai_execution_attachments_phase.sql (agrega columna phase),
+-- 20260817_ai_execution_attachments_file_hash.sql (agrega columna file_hash)
 --
 -- Cubre: devuelve las fotos reales de una ejecución, orden por created_at,
 -- una ejecución sin fotos devuelve 0 filas sin error, autorización, phase
--- correcto (incluye NULL para fotos sin clasificar).
+-- correcto (incluye NULL para fotos sin clasificar), file_hash correcto.
 --
 -- Sin SAVEPOINT/ROLLBACK TO por test (ver nota en 01_state_machine.sql).
 --
@@ -25,7 +26,7 @@ SELECT set_config(
 
 BEGIN;
 
-SELECT plan(10);
+SELECT plan(11);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Fixtures (prefijo ec0e0000...0021 / 5ca1ab1e...2101).
@@ -69,10 +70,10 @@ BEGIN
   VALUES (v_item_id, '2026-11-02', 2, '2026-11-02 07:00', '2026-11-02 15:00', 40, 'verified', 'aaaaaaaa-0000-0000-0000-000000000001', NOW(), 'aaaaaaaa-0000-0000-0000-000000000001')
   RETURNING id INTO v_exec_with_photos;
 
-  INSERT INTO public.execution_attachments (execution_id, file_name, file_url, file_type, uploaded_by, phase, created_at)
+  INSERT INTO public.execution_attachments (execution_id, file_name, file_url, file_type, uploaded_by, phase, file_hash, created_at)
   VALUES
-    (v_exec_with_photos, 'foto1.jpg', 'https://example.test/foto1.jpg', 'image/jpeg', 'aaaaaaaa-0000-0000-0000-000000000001', 'before', NOW() - INTERVAL '2 minutes'),
-    (v_exec_with_photos, 'foto2.jpg', 'https://example.test/foto2.jpg', 'image/jpeg', 'aaaaaaaa-0000-0000-0000-000000000001', NULL, NOW() - INTERVAL '1 minutes');
+    (v_exec_with_photos, 'foto1.jpg', 'https://example.test/foto1.jpg', 'image/jpeg', 'aaaaaaaa-0000-0000-0000-000000000001', 'before', 'hash_foto1', NOW() - INTERVAL '2 minutes'),
+    (v_exec_with_photos, 'foto2.jpg', 'https://example.test/foto2.jpg', 'image/jpeg', 'aaaaaaaa-0000-0000-0000-000000000001', NULL, NULL, NOW() - INTERVAL '1 minutes');
 
   INSERT INTO public.weekly_plan_item_executions
     (plan_item_id, execution_date, worker_count, started_at, finished_at, executed_qty, status, verified_by, verified_at, created_by)
@@ -118,6 +119,11 @@ SELECT is(
   (SELECT phase FROM public.get_execution_attachments(current_setting('at_test.exec_with_photos')::UUID) WHERE file_name = 'foto2.jpg'),
   NULL,
   'Test 7: phase = NULL para la foto sin clasificar (nunca se infiere) ✓'
+);
+SELECT is(
+  (SELECT file_hash FROM public.get_execution_attachments(current_setting('at_test.exec_with_photos')::UUID) WHERE file_name = 'foto1.jpg'),
+  'hash_foto1',
+  'Test 7b: file_hash correcto para la foto que lo tiene ✓'
 );
 
 SELECT set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000005","role":"authenticated"}', true);

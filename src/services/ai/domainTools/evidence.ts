@@ -49,13 +49,15 @@ export interface ExecutionAttachmentRef {
   fileName: string;
   fileType: string | null;
   phase: 'before' | 'after' | null;
+  fileHash: string | null;
 }
 
 // Lookup autorizado de fotos de una ejecución — usado por
-// evaluateExecutionEvidence.ts (v2.2) y compareBeforeAfterEvidence.ts (v2.3).
-// Separado de esos archivos a propósito: este es un wrapper de RPC puro,
-// sin dependencia de @google/genai, para poder testear el resto de la capa
-// sin pelear con Jest transformando el SDK de Gemini (mismo patrón que
+// evaluateExecutionEvidence.ts (v2.2), compareBeforeAfterEvidence.ts (v2.3)
+// y findPossibleVisualDuplicates.ts (v2.4b). Separado de esos archivos a
+// propósito: este es un wrapper de RPC puro, sin dependencia de
+// @google/genai, para poder testear el resto de la capa sin pelear con
+// Jest transformando el SDK de Gemini (mismo patrón que
 // proactiveSummary.ts/explainImportErrorsPrompt.ts).
 export async function getExecutionAttachments(
   supabase: SupabaseClient,
@@ -71,12 +73,14 @@ export async function getExecutionAttachments(
     file_name: string;
     file_type: string | null;
     phase: 'before' | 'after' | null;
+    file_hash: string | null;
   }>;
   return rows.map((row) => ({
     fileUrl: row.file_url,
     fileName: row.file_name,
     fileType: row.file_type,
     phase: row.phase,
+    fileHash: row.file_hash,
   }));
 }
 

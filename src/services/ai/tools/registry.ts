@@ -10,6 +10,7 @@ import { getExecutionsWithoutEvidenceTool } from './getExecutionsWithoutEvidence
 import { evaluateExecutionEvidenceTool } from './evaluateExecutionEvidence';
 import { compareBeforeAfterEvidenceTool } from './compareBeforeAfterEvidence';
 import { getDuplicateAttachmentsTool } from './getDuplicateAttachments';
+import { findPossibleVisualDuplicatesTool } from './findPossibleVisualDuplicates';
 
 // La whitelist. Si un tool no está aquí, el modelo no puede usarlo — el
 // Orchestrator valida el nombre contra este registro independientemente de
@@ -33,6 +34,7 @@ export const AI_TOOL_REGISTRY: Record<string, AiToolDefinition> = {
   [evaluateExecutionEvidenceTool.name]: evaluateExecutionEvidenceTool,
   [compareBeforeAfterEvidenceTool.name]: compareBeforeAfterEvidenceTool,
   [getDuplicateAttachmentsTool.name]: getDuplicateAttachmentsTool,
+  [findPossibleVisualDuplicatesTool.name]: findPossibleVisualDuplicatesTool,
 };
 
 export function getToolDefinition(name: string): AiToolDefinition | undefined {

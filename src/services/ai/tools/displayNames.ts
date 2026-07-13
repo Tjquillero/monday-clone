@@ -14,6 +14,7 @@ export const TOOL_DISPLAY_NAMES: Record<string, string> = {
   evaluate_execution_evidence: 'Evaluación visual de evidencia',
   compare_before_after_evidence: 'Comparación antes/después',
   get_duplicate_attachments: 'Evidencia duplicada',
+  find_possible_visual_duplicates: 'Posibles duplicados visuales',
 };
 
 export function getToolDisplayName(tool: string): string {
