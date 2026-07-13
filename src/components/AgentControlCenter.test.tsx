@@ -29,7 +29,7 @@ jest.mock('framer-motion', () => ({
 function mockNextAskResponse(text: string, history: unknown) {
   return {
     ok: true,
-    json: async () => ({ text, toolsUsed: [], history }),
+    json: async () => ({ text, citations: [], history }),
   };
 }
 
@@ -107,5 +107,58 @@ describe('AgentControlCenter — memoria conversacional por board', () => {
     const thirdCallBody = JSON.parse((global.fetch as jest.Mock).mock.calls[2][1].body);
     expect(thirdCallBody.boardId).toBe('board-a');
     expect(thirdCallBody.history).toEqual(historyA);
+  });
+});
+
+describe('AgentControlCenter — respuestas con citas', () => {
+  beforeEach(() => {
+    currentBoardId = 'board-a';
+    (global as any).fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  async function openWidget() {
+    const toggleButton = screen.getAllByRole('button')[0];
+    fireEvent.click(toggleButton);
+    return screen.findByPlaceholderText(/Pregunta algo/i);
+  }
+
+  it('muestra la fuente (tool + argumentos reales) devuelta por el Orchestrator', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        text: 'El acta vale $78.000',
+        citations: [{ tool: 'get_acta_totals', args: { acta_id: 'c828e09f-f221-484c-8530-493bc142ac36' } }],
+        history: { contents: [] },
+      }),
+    });
+
+    render(<AgentControlCenter />);
+    const input = await openWidget();
+    fireEvent.change(input, { target: { value: '¿Cuánto vale el acta?' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => expect(screen.getByText('El acta vale $78.000')).toBeInTheDocument());
+    expect(
+      screen.getByText('Fuente: get_acta_totals(acta_id=c828e09f-f221-484c-8530-493bc142ac36)')
+    ).toBeInTheDocument();
+  });
+
+  it('no muestra ninguna fuente cuando la respuesta viene solo de memoria (sin nuevas tools)', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ text: 'El AIU es $18.000', citations: [], history: { contents: [] } }),
+    });
+
+    render(<AgentControlCenter />);
+    const input = await openWidget();
+    fireEvent.change(input, { target: { value: '¿Y cuánto de eso es AIU?' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => expect(screen.getByText('El AIU es $18.000')).toBeInTheDocument());
+    expect(screen.queryByText(/Fuente:/)).not.toBeInTheDocument();
   });
 });

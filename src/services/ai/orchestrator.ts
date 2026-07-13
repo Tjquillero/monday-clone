@@ -33,9 +33,19 @@ const SYSTEM_INSTRUCTION_BASE =
   'cuenta (por ejemplo, un total o un porcentaje) — si necesitas un cálculo, debe ' +
   'venir ya resuelto en la respuesta de una herramienta.';
 
+// Fuente de un dato citado en la respuesta: qué tool se invocó y con qué
+// argumentos, tal cual se ejecutó — nunca lo que el modelo "diga" que usó.
+// Igual que las cifras (nunca las calcula el modelo), la cita tampoco se le
+// confía al modelo: se construye en código a partir de la llamada real, o
+// no se muestra ninguna.
+export interface ToolCitation {
+  tool: string;
+  args: Record<string, unknown>;
+}
+
 export interface AiOrchestratorResult {
   text: string;
-  toolsUsed: string[];
+  citations: ToolCitation[];
   history: ConversationState;
 }
 
@@ -80,7 +90,7 @@ export async function runAiOrchestrator(args: {
     throw lastError instanceof Error ? lastError : new Error('No se pudo contactar a Gemini.');
   }
 
-  const toolsUsed: string[] = [];
+  const citations: ToolCitation[] = [];
   let anyToolRejected = false;
   const functionCalls = response.functionCalls as Array<{ name: string; args?: Record<string, unknown> }> | undefined;
 
@@ -123,7 +133,7 @@ export async function runAiOrchestrator(args: {
         p_error: errorMsg,
       });
 
-      if (isWhitelisted && !errorMsg) toolsUsed.push(call.name);
+      if (isWhitelisted && !errorMsg) citations.push({ tool: call.name, args: call.args || {} });
       if (!isWhitelisted) anyToolRejected = true;
 
       responseParts.push({
@@ -159,5 +169,5 @@ export async function runAiOrchestrator(args: {
 
   const history = trimConversationState({ contents });
 
-  return { text, toolsUsed, history };
+  return { text, citations, history };
 }

@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bot, X, Send, Zap, Cpu, Activity, Wrench } from 'lucide-react';
 import { EMPTY_CONVERSATION, trimConversationState, type ConversationState } from '@/services/ai/conversationState';
+import type { ToolCitation } from '@/services/ai/orchestrator';
 
 // Copiloto del dominio (Incremento 5 en adelante). Cliente muy fino: nunca
 // calcula, nunca conoce tablas — solo envía el mensaje del usuario a
@@ -16,7 +17,16 @@ import { EMPTY_CONVERSATION, trimConversationState, type ConversationState } fro
 interface Message {
   role: 'user' | 'assistant';
   content: string;
-  toolsUsed?: string[];
+  citations?: ToolCitation[];
+}
+
+// La cita se arma con los mismos datos que ya devolvió el Orchestrator
+// (tool + argumentos reales de la llamada) — nunca texto libre del modelo.
+function formatCitation(c: ToolCitation): string {
+  const args = Object.entries(c.args)
+    .map(([k, v]) => `${k}=${v}`)
+    .join(', ');
+  return args ? `${c.tool}(${args})` : `${c.tool}()`;
 }
 
 // Sin board seleccionado (vistas globales) usa su propio balde de memoria —
@@ -96,7 +106,7 @@ export default function AgentControlCenter() {
 
       const latest = chatStoreRef.current.get(targetBoardKey) ?? { messages: withUserMsg, conversation: before.conversation };
       const newMessages: Message[] = res.ok
-        ? [...latest.messages, { role: 'assistant', content: data.text, toolsUsed: data.toolsUsed }]
+        ? [...latest.messages, { role: 'assistant', content: data.text, citations: data.citations }]
         : [...latest.messages, { role: 'assistant', content: `Error: ${data.error || 'algo salió mal.'}` }];
       const newConversation: ConversationState = res.ok && data.history ? data.history : latest.conversation;
 
@@ -188,11 +198,11 @@ export default function AgentControlCenter() {
                         <div className="h-[1px] flex-1 bg-current opacity-20" />
                       </div>
                       <div className="whitespace-pre-wrap">{m.content}</div>
-                      {m.toolsUsed && m.toolsUsed.length > 0 && (
-                        <div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-current/10 opacity-50">
-                          <Wrench className="w-3 h-3" />
-                          <span className="text-[8px] font-bold uppercase tracking-wider">
-                            {m.toolsUsed.join(', ')}
+                      {m.citations && m.citations.length > 0 && (
+                        <div className="flex items-start gap-1.5 mt-3 pt-2 border-t border-current/10 opacity-50">
+                          <Wrench className="w-3 h-3 mt-[1px] shrink-0" />
+                          <span className="text-[8px] font-bold uppercase tracking-wider break-all">
+                            Fuente: {m.citations.map(formatCitation).join(' · ')}
                           </span>
                         </div>
                       )}
