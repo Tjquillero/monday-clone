@@ -212,6 +212,14 @@ export interface CertifiedActaItem {
   updated_at: string;
 }
 
+export interface CertifiedActaTotals {
+  subtotal: number;
+  administracion: number;
+  imprevistos: number;
+  utilidad: number;
+  total_pagar: number;
+}
+
 export interface CertifiedActa {
   id: string;
   board_id: string;

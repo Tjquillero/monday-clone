@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { FileText, FileCheck, Loader2, Plus, Send } from 'lucide-react';
+import { FileText, FileCheck, Loader2, Plus, Send, Download } from 'lucide-react';
 import {
   useCertifiedActaDraft,
   useCertifiedActasIssued,
   useCertifiedActaMutations,
+  useCertifiedActaTotals,
 } from '@/hooks/useCertifiedActas';
 import { useBoardHasActivePoa } from '@/hooks/usePoaActivities';
 import { MatrixQtyInput } from './ActasModuleComponents';
@@ -41,6 +42,35 @@ export default function CertifiedActasModule({ boardId }: CertifiedActasModulePr
 
   const displayedActa = selectedIssued || draft;
   const isReadOnly = displayedActa?.estado === 'issued';
+  const { data: totals } = useCertifiedActaTotals(displayedActa?.id);
+
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportPdf = async () => {
+    if (!displayedActa || !totals || displayedActa.estado !== 'issued') return;
+    setExporting(true);
+    try {
+      const response = await fetch('/api/reports/certified-acta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acta: displayedActa, totals }),
+      });
+      if (!response.ok) throw new Error('No se pudo generar el PDF');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Acta_${displayedActa.numero}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error: any) {
+      alert(`Error al exportar el PDF: ${error.message}`);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleIssue = async () => {
     if (!draft) return;
@@ -157,7 +187,16 @@ export default function CertifiedActasModule({ boardId }: CertifiedActasModulePr
                     )}
                   </p>
                 </div>
-                {!isReadOnly && (
+                {isReadOnly ? (
+                  <button
+                    onClick={handleExportPdf}
+                    disabled={exporting || !totals}
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors shadow-lg shadow-slate-900/20 text-xs disabled:opacity-40"
+                  >
+                    {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                    Exportar PDF
+                  </button>
+                ) : (
                   <button
                     onClick={handleIssue}
                     disabled={issueActa.isPending || displayedActa.items.length === 0}
@@ -208,6 +247,33 @@ export default function CertifiedActasModule({ boardId }: CertifiedActasModulePr
                   </tbody>
                 </table>
               </div>
+
+              {totals && (
+                <div className="mt-4 flex justify-end">
+                  <div className="w-72 border border-slate-200 rounded-2xl overflow-hidden text-sm">
+                    <div className="flex justify-between px-4 py-2 text-slate-500">
+                      <span>Costos Directos</span>
+                      <span>{currencyFormatter.format(totals.subtotal)}</span>
+                    </div>
+                    <div className="flex justify-between px-4 py-2 text-slate-500 bg-slate-50">
+                      <span>Administración 20%</span>
+                      <span>{currencyFormatter.format(totals.administracion)}</span>
+                    </div>
+                    <div className="flex justify-between px-4 py-2 text-slate-500">
+                      <span>Imprevistos 5%</span>
+                      <span>{currencyFormatter.format(totals.imprevistos)}</span>
+                    </div>
+                    <div className="flex justify-between px-4 py-2 text-slate-500 bg-slate-50">
+                      <span>Utilidad 5%</span>
+                      <span>{currencyFormatter.format(totals.utilidad)}</span>
+                    </div>
+                    <div className="flex justify-between px-4 py-3 bg-slate-900 text-white font-black">
+                      <span>Total a Pagar</span>
+                      <span>{currencyFormatter.format(totals.total_pagar)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

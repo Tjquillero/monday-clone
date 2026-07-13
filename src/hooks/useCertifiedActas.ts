@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
-import { CertifiedActa } from '@/types/monday';
+import { CertifiedActa, CertifiedActaTotals } from '@/types/monday';
 
 // Único punto de acceso al subsistema "Actas certificadas" (Incremento 5).
 // La UI nunca llama supabase.from('actas'/'acta_items'/'acta_item_sources')
@@ -47,6 +47,21 @@ export const useCertifiedActasIssued = (boardId?: string) => {
       return (data ?? []) as CertifiedActa[];
     },
     enabled: !!boardId,
+  });
+};
+
+export const useCertifiedActaTotals = (actaId?: string) => {
+  return useQuery({
+    queryKey: ['certified-acta-totals', actaId],
+    queryFn: async () => {
+      if (!actaId) return null;
+      const { data, error } = await supabase
+        .rpc('compute_acta_totals', { p_acta_id: actaId })
+        .single();
+      if (error) throw error;
+      return data as CertifiedActaTotals;
+    },
+    enabled: !!actaId,
   });
 };
 
