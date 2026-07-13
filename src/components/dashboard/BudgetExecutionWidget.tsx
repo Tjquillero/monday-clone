@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect } from 'react';
 import { Group, Item, Column } from '@/types/monday';
+import { getFinancialValues } from '@/utils/financialUtils';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { MapPin } from 'lucide-react';
 
@@ -30,12 +31,6 @@ export default function BudgetExecutionWidget({ groups, columns, activeSiteId: p
         ? groups 
         : groups.filter(g => g.id === activeSiteId);
 
-    // Column Mapping
-    // Column Mapping
-    const priceCol = columns.find(c => ['precio', 'unit_price', 'costo', 'valor'].some(term => c.id === term || c.title.toLowerCase().includes(term))) || { id: 'unit_price' };
-    const qtyCol = columns.find(c => ['cant', 'm2', 'volumen', 'metrado'].some(term => c.id === term || c.title.toLowerCase().includes(term))) || { id: 'cant' };
-    
-    // For grouping, we prefer 'category' but fallback to mapping if item values are missing
     const categoryTotals: Record<string, { planned: number; executed: number }> = {};
     let totalBudget = 0;
     let totalExecuted = 0;
@@ -47,36 +42,18 @@ export default function BudgetExecutionWidget({ groups, columns, activeSiteId: p
             return;
         }
 
-        // Get category from item values or fallback
-        const cat = item.values['category'] || item.values['parent_group'] || 'General';
-        const categoryKey = String(cat).trim();
+        const { quantity, executedQty, unitPrice, budgetTotal, executedTotal, category } = getFinancialValues(item, columns);
+        const categoryKey = category || 'General';
 
         if (!categoryTotals[categoryKey]) {
             categoryTotals[categoryKey] = { planned: 0, executed: 0 };
         }
 
-        const unitPrice = parseFloat(item.values[priceCol.id] || 0);
-        const qty = parseFloat(item.values[qtyCol.id] || 0);
-        
-        // Executed Quantity Calculation
-        let executedQty = parseFloat(item.values['executed_qty'] || 0);
-        if (executedQty === 0 && item.values['daily_execution']) {
-            const dailyExec = item.values['daily_execution'] || {};
-            executedQty = Object.values(dailyExec).reduce((acc: number, val: any) => {
-                 const v = typeof val === 'object' ? (val.val || 0) : (parseFloat(val) || 0);
-                 return acc + v;
-            }, 0);
-        }
+        categoryTotals[categoryKey].planned += budgetTotal;
+        categoryTotals[categoryKey].executed += executedTotal;
 
-        // Amounts
-        const plannedAmount = unitPrice * qty;
-        const executedAmount = unitPrice * executedQty;
-
-        categoryTotals[categoryKey].planned += plannedAmount;
-        categoryTotals[categoryKey].executed += executedAmount;
-
-        totalBudget += plannedAmount;
-        totalExecuted += executedAmount;
+        totalBudget += budgetTotal;
+        totalExecuted += executedTotal;
     };
 
     filteredGroups.forEach(group => {

@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo, Fragment, useState, useEffect } from 'react';
-import { ChevronRight, ChevronDown, CheckCircle, AlertCircle, Plus, Trash2, Maximize2, Minimize2 } from 'lucide-react';
 import { Group, Item, Column } from '@/types/monday';
+import { resolveFinancialColumns, getFinancialValues } from '@/utils/financialUtils';
+import { ChevronRight, ChevronDown, CheckCircle, AlertCircle, Plus, Trash2, Maximize2, Minimize2 } from 'lucide-react';
 
 interface FinancialTableViewProps {
   groups: Group[];
@@ -97,15 +98,7 @@ export default function FinancialTableView({
 
   const { hierarchicalGroups, totalBudget, totalExecuted, currencyFormatter, priceColId, qtyColId, unitColId, catColId } = useMemo(() => {
     // 1. Column Identification
-    const priceCol = columns.find(c => ['precio', 'unit', 'costo', 'valor'].some(term => c.title.toLowerCase().includes(term)) || c.id === 'unit_price') || { id: 'unit_price' };
-    const qtyCol = columns.find(c => ['cant', 'm2', 'volumen', 'metrado'].some(term => c.title.toLowerCase().includes(term)) || c.id === 'cant') || { id: 'cant' };
-    const unitCol = columns.find(c => ['und', 'unidad', 'medida'].some(term => c.title.toLowerCase().includes(term)) || c.id === 'unit') || { id: 'unit' };
-    
-    // Detailed Category (Sub-Category)
-    const catCol = columns.find(c => c.id === 'category' || c.title.toLowerCase().includes('categ') || c.title.toLowerCase().includes('sub')) || { id: 'category' };
-
-    // Major Category (Rubro/Tipo) - Look for columns like 'Rubro', 'Tipo', 'Grupo', 'Clase'
-    const typeCol = columns.find(c => c.id !== catCol.id && ['rubro', 'tipo', 'clase', 'grupo', 'type', 'class'].some(term => c.title.toLowerCase().includes(term))) || { id: 'rubro' };
+    const resolvedCols = resolveFinancialColumns(columns);
 
     // 2. Filter Groups
     const filteredGroups = (activeSiteId === 'all') 
@@ -134,49 +127,22 @@ export default function FinancialTableView({
             return String(val);
         };
 
-        const safeNumber = (val: any) => {
-            if (typeof val === 'number') return val;
-            const s = safeText(val); 
-            if (!s || s.trim() === '') return 0;
-            const clean = s.replace(/[^0-9.-]/g, ''); 
-            const n = parseFloat(clean);
-            return isNaN(n) ? 0 : n;
-        };
-
-        const unitPrice = item.values?.[priceCol.id] !== undefined ? safeNumber(item.values[priceCol.id]) : (item.values?.unit_price || 0);
-        const qty = item.values?.[qtyCol.id] !== undefined ? safeNumber(item.values[qtyCol.id]) : (item.values?.cant || 0);
-        const unit = safeText(item.values?.[unitCol.id]) || item.values?.unit || 'Und';
-        
-        // Categories
-        const category = safeText(item.values?.[catCol.id]) || item.values?.category || 'Sin Categoría';
-        const majorCategory = safeText(item.values?.[typeCol.id]) || item.values?.rubro || 'Otros Costos Directos'; 
+        const { quantity, executedQty, unitPrice, unit, category, rubro, budgetTotal, executedTotal } = getFinancialValues(item, columns, resolvedCols);
 
         // FILTER: Remove items without a valid category as requested
         if (category.toLowerCase().includes('sin categoría') || 
-            majorCategory.toLowerCase().includes('sin categoría') ||
-            majorCategory.toLowerCase().trim() === 'otros' ||
+            rubro.toLowerCase().includes('sin categoría') ||
+            rubro.toLowerCase().trim() === 'otros' ||
             category.toLowerCase().trim() === 'general' // Optionally check for default values if they count as 'no category'
         ) {
             // However, the user specifically mentioned "Sin Categoría"
-            if (category.toLowerCase().includes('sin categoría') || majorCategory.toLowerCase().includes('sin categoría')) {
+            if (category.toLowerCase().includes('sin categoría') || rubro.toLowerCase().includes('sin categoría')) {
                 return;
             }
         }
 
-        // Execution Calculation
-        const dailyExec = item.values['daily_execution'] || {};
-        // Allow manual override 'executed_qty' or fall back to sum of daily logs
-        const manualExec = item.values['executed_qty'] !== undefined ? safeNumber(item.values['executed_qty']) : undefined;
-        
-        const executedQty = manualExec !== undefined ? manualExec : Object.values(dailyExec).reduce((acc: number, val: any) => {
-             const v = typeof val === 'object' ? (val.val || 0) : (parseFloat(val) || 0);
-             return acc + v;
-        }, 0);
-
-        const obs = safeText(item.values?.observaciones) || '';
-
-        const budgetTotal = unitPrice * qty;
-        const executedTotal = unitPrice * executedQty;
+        const vals = item.values || {};
+        const obs = safeText(vals.observaciones) || '';
 
         // Always show items to allow adding new ones with 0 value
         processedItems.push({
@@ -184,11 +150,11 @@ export default function FinancialTableView({
             name: item.name,
             unit,
             category,
-            majorCategory,
+            majorCategory: rubro,
             groupName,
             groupId, // Store groupId
             unitPrice,
-            budgetQty: qty,
+            budgetQty: quantity,
             budgetTotal,
             executedQty,
             executedTotal,
@@ -227,10 +193,10 @@ export default function FinancialTableView({
         totalBudget: tBudget, 
         totalExecuted: tExec,
         currencyFormatter,
-        priceColId: priceCol.id,
-        qtyColId: qtyCol.id,
-        unitColId: unitCol.id,
-        catColId: catCol.id
+        priceColId: resolvedCols.priceColKey,
+        qtyColId: resolvedCols.qtyColKey,
+        unitColId: resolvedCols.unitColKey,
+        catColId: resolvedCols.catColKey
     };
 
   }, [groups, columns, activeSiteId]);

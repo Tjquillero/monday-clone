@@ -1,6 +1,7 @@
 'use client';
 
 import { Group, Item, Column } from '@/types/monday';
+import { getFinancialValues } from '@/utils/financialUtils';
 import { useMemo, useState, useEffect } from 'react';
 import { DollarSign, TrendingUp, AlertTriangle, CheckCircle2, Users } from 'lucide-react';
 
@@ -21,10 +22,6 @@ export default function FinancialWidget({ groups, columns, activeSiteId = 'all',
     // Filter groups by site
     const filteredGroups = activeSiteId === 'all' ? groups : groups.filter(g => g.id === activeSiteId);
 
-    // Dynamic Columns Mapping
-    const priceCol = columns.find(c => ['precio', 'unit_price', 'costo', 'valor'].some(term => c.id === term || c.title.toLowerCase().includes(term))) || { id: 'unit_price' };
-    const qtyCol = columns.find(c => ['cant', 'm2', 'volumen', 'metrado'].some(term => c.id === term || c.title.toLowerCase().includes(term))) || { id: 'cant' };
-
     let totalBudget = 0;
     let totalExecutedCost = 0;
     let totalItems = 0;
@@ -37,28 +34,17 @@ export default function FinancialWidget({ groups, columns, activeSiteId = 'all',
             return;
         }
 
-        const unitPrice = parseFloat(item.values[priceCol.id] || 0);
-        const totalQty = parseFloat(item.values[qtyCol.id] || 0);
-        
-        let executedQty = parseFloat(item.values['executed_qty'] || 0);
-        const dailyExec = item.values['daily_execution'] || {};
-        
-        if (executedQty === 0) {
-            executedQty = Object.values(dailyExec).reduce((acc: number, val: any) => {
-                const v = typeof val === 'object' ? (val.val || 0) : (parseFloat(val) || 0);
-                return acc + (isNaN(v) ? 0 : v);
-            }, 0);
-        }
-        
-        const itemBudget = unitPrice * totalQty;
-        const itemExecutedCost = unitPrice * executedQty;
+        const { quantity, executedQty, unitPrice, budgetTotal, executedTotal } = getFinancialValues(item, columns);
 
-        totalBudget += itemBudget;
-        totalExecutedCost += itemExecutedCost;
+        totalBudget += budgetTotal;
+        totalExecutedCost += executedTotal;
+
+        const vals = item.values || {};
+        const dailyExec = vals.daily_execution || {};
 
         // Yield & Resource Analysis
-        const targetYield = parseFloat(item.values['rend'] || 0);
-        const frequency = parseFloat(item.values['frequency'] || 25) || 25;
+        const targetYield = parseFloat(vals['rend'] || 0);
+        const frequency = parseFloat(vals['frequency'] || 25) || 25;
 
         if (targetYield > 0) {
             const daysWorked = Object.keys(dailyExec).filter(k => {
@@ -73,7 +59,7 @@ export default function FinancialWidget({ groups, columns, activeSiteId = 'all',
             }
 
             const factor = 25 / (frequency || 25);
-            const reqManDays = (totalQty / targetYield) * factor;
+            const reqManDays = (quantity / targetYield) * factor;
             totalRequiredManDays += reqManDays;
         }
         

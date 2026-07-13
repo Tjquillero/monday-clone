@@ -6,6 +6,7 @@ import ResourceEfficiencyWidget from '@/components/dashboard/ResourceEfficiencyW
 import { useBoard, useBoardColumns, useBoardGroups, useActivityTemplates } from '@/hooks/useBoardData';
 import { useBoardMutations } from '@/hooks/useBoardMutations';
 import { isFinancialItem, isActivityItem } from '@/utils/itemUtils';
+import { resolveFinancialColumns } from '@/utils/financialUtils';
 import { Calculator } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useQueryClient } from '@tanstack/react-query';
@@ -16,7 +17,7 @@ export default function FinancialViewContainer() {
   const { data: groups, isLoading: groupsLoading } = useBoardGroups(board?.id);
   const { data: columns } = useBoardColumns(board?.id);
   const { data: activityTemplates } = useActivityTemplates();
-  const { updateItem, addItem, deleteItem } = useBoardMutations(board?.id);
+  const { updateItem, addItem, createOrGetFinancialItem, deleteItem } = useBoardMutations(board?.id);
 
   const financialGroups = useMemo(() => {
     if (!groups) return [];
@@ -54,9 +55,42 @@ export default function FinancialViewContainer() {
       <CentralizedFinancialDashboard 
         groups={financialGroups} 
         columns={columns || []} 
-        onUpdateItemValue={async (groupId: string, itemId: string | number, columnId: string, value: any) => {
+        onUpdateItemValue={async (groupId: string, itemId: string | number, columnId: string, value: any, metadata?: any) => {
+            // Map the field key if it is a financial item
+            let targetField = columnId;
+            const item = groups?.flatMap(g => g.items).find(i => String(i.id) === String(itemId));
+            const isFin = item ? isFinancialItem(item) : (metadata !== undefined);
+
+            if (isFin && columns) {
+                const cols = resolveFinancialColumns(columns);
+                if (columnId === cols.priceColKey) targetField = 'unit_price';
+                else if (columnId === cols.qtyColKey) targetField = 'cant';
+                else if (columnId === cols.unitColKey) targetField = 'unit';
+                else if (columnId === cols.catColKey) targetField = 'category';
+                else if (columnId === cols.typeColKey) targetField = 'rubro';
+            }
+
+            if (!itemId && metadata) {
+                // El ítem no existe en este sitio/grupo, lo creamos
+                createOrGetFinancialItem.mutate({
+                    groupId,
+                    name: metadata.name,
+                    initialValues: {
+                        rubro: metadata.rubro,
+                        category: metadata.category,
+                        sub_category: metadata.sub_category,
+                        item_type: 'financial',
+                        unit: metadata.unit || 'Und',
+                        cant: targetField === 'cant' ? (Number(value) || 0) : 0,
+                        executed_qty: targetField === 'executed_qty' ? (Number(value) || 0) : 0,
+                        unit_price: targetField === 'unit_price' ? (Number(value) || 0) : 0
+                    }
+                });
+                return;
+            }
+
             // Map common financial fields to the internal storage or specific columns
-            let updates: any = { [columnId]: value };
+            let updates: any = { [targetField]: value };
             let isValuesUpdate = true;
 
             // If it's one of our mapped financial items, they store data in 'values'
@@ -170,7 +204,6 @@ export default function FinancialViewContainer() {
                  
                  if (itemsToCopy.length > 0) {
                      const copies = itemsToCopy.map(i => ({
-                         board_id: board.id,
                          group_id: newGroup.id,
                          name: i.name,
                          position: i.position,
@@ -191,7 +224,6 @@ export default function FinancialViewContainer() {
              } else if (newGroup) {
                 // If no reference exists, create at least one dummy item to ensure visibility
                 await supabase.from('items').insert({
-                    board_id: board.id,
                     group_id: newGroup.id,
                     name: 'INICIO DE PROYECTO',
                     values: { rubro: 'INICIO', category: 'GENERAL', item_type: 'financial', cant: 0, unit_price: 0 },

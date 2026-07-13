@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Group, Item, Column } from '@/types/monday';
 import { getColumnValueKey } from '@/utils/columnUtils';
+import { getFinancialValues } from '@/utils/financialUtils';
 import { format, eachWeekOfInterval, startOfWeek, endOfWeek, isAfter, isBefore, addWeeks, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ResponsiveContainer, ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
@@ -35,11 +36,7 @@ export default function SCurveWidget({ groups, columns, activeSiteId: propActive
 
     // Dynamic Column Mapping — uses semantic key (getColumnValueKey) not UUID
     const timelineCol = columns.find(c => c.type === 'timeline' || c.type === 'date' || ['cronograma', 'fecha', 'timeline'].some(term => c.title.toLowerCase().includes(term))) || { id: 'timeline', key: 'timeline' };
-    const priceCol = columns.find(c => ['precio', 'unit_price', 'costo', 'valor'].some(term => c.id === term || c.title.toLowerCase().includes(term))) || { id: 'unit_price', key: null };
-    const qtyCol = columns.find(c => ['cant', 'm2', 'volumen', 'metrado'].some(term => c.id === term || c.title.toLowerCase().includes(term))) || { id: 'cant', key: null };
     const timelineKey = getColumnValueKey(timelineCol as Column);
-    const priceKey = getColumnValueKey(priceCol as Column);
-    const qtyKey = getColumnValueKey(qtyCol as Column);
 
     let minDate = new Date();
     let maxDate = new Date();
@@ -51,7 +48,8 @@ export default function SCurveWidget({ groups, columns, activeSiteId: propActive
             return;
         }
         
-        const tVal = item.values[timelineKey] || item.values['timeline'];
+        const vals = item.values || {};
+        const tVal = vals[timelineKey] || vals['timeline'];
         const startStr = typeof tVal === 'object' ? tVal?.from : tVal;
         const endStr = typeof tVal === 'object' ? tVal?.to : tVal;
         
@@ -68,7 +66,7 @@ export default function SCurveWidget({ groups, columns, activeSiteId: propActive
         }
 
         // Also check actual execution dates
-        const dailyExec = item.values['daily_execution'] || {};
+        const dailyExec = vals['daily_execution'] || {};
         Object.keys(dailyExec).forEach(dateStr => {
              if (!dateStr.includes('-')) return;
              const d = parseISO(dateStr);
@@ -82,16 +80,22 @@ export default function SCurveWidget({ groups, columns, activeSiteId: propActive
     
     filteredGroups.forEach(g => g.items.forEach(item => processItemForDates(item)));
 
-    if (!hasDates) {
-        minDate = startOfWeek(new Date());
-        maxDate = addWeeks(endOfWeek(new Date()), 8);
-    } else {
-        minDate = startOfWeek(minDate);
-        maxDate = addWeeks(endOfWeek(maxDate), 2);
-    }
+    const weeks = useMemo(() => {
+        if (!hasDates) {
+            const start = startOfWeek(new Date());
+            return eachWeekOfInterval({ start, end: addWeeks(start, 8) });
+        }
+        try {
+            return eachWeekOfInterval({
+                start: startOfWeek(minDate),
+                end: addWeeks(endOfWeek(maxDate), 2)
+            });
+        } catch (e) {
+            console.error('Error calculating week interval:', e);
+            return [];
+        }
+    }, [minDate, maxDate, hasDates]);
 
-    const weeks = eachWeekOfInterval({ start: minDate, end: maxDate });
-    
     let cumulativePlanned = 0;
     let cumulativeActual = 0;
     let totalProjectValue = 0;
@@ -101,9 +105,8 @@ export default function SCurveWidget({ groups, columns, activeSiteId: propActive
             item.subItems.forEach(sub => calculateTotalValue(sub));
             return;
         }
-        const qty = parseFloat(item.values[qtyKey] || 0);
-        const price = parseFloat(item.values[priceKey] || 0);
-        totalProjectValue += (qty * price);
+        const { budgetTotal } = getFinancialValues(item, columns);
+        totalProjectValue += budgetTotal;
     };
 
     filteredGroups.forEach(g => g.items.forEach(item => calculateTotalValue(item)));
@@ -118,18 +121,17 @@ export default function SCurveWidget({ groups, columns, activeSiteId: propActive
                 return;
             }
 
-            const qty = parseFloat(item.values[qtyKey] || 0);
-            const price = parseFloat(item.values[priceKey] || 0);
-            const budget = qty * price;
+            const vals = item.values || {};
+            const { unitPrice, budgetTotal } = getFinancialValues(item, columns);
             
             // Planned (Linear Distribution over timeline)
-            const tVal = item.values[timelineKey] || item.values['timeline'];
+            const tVal = vals[timelineKey] || vals['timeline'];
             const startStr = typeof tVal === 'object' ? tVal?.from : tVal;
             const endStr = typeof tVal === 'object' ? tVal?.to : tVal;
             const start = startStr ? new Date(startStr) : null;
             const end = endStr ? new Date(endStr) : null;
 
-            if (start && !isNaN(start.getTime()) && budget > 0) {
+            if (start && !isNaN(start.getTime()) && budgetTotal > 0) {
                 const endDate = (end && !isNaN(end.getTime())) ? end : start;
                 const totalDuration = Math.max(endDate.getTime() - start.getTime(), 86400000); 
                 const weekStart = week.getTime();
@@ -140,18 +142,18 @@ export default function SCurveWidget({ groups, columns, activeSiteId: propActive
                 
                 if (overlapEnd > overlapStart) {
                     const ratio = (overlapEnd - overlapStart) / totalDuration;
-                    weeklyPlanned += (budget * ratio);
+                    weeklyPlanned += (budgetTotal * ratio);
                 }
             }
 
             // Actual (From Daily Execution logs)
-            const dailyExec = item.values['daily_execution'] || {};
+            const dailyExec = vals['daily_execution'] || {};
             Object.keys(dailyExec).forEach(dateStr => {
                  const execDate = parseISO(dateStr);
                  if (!isNaN(execDate.getTime()) && isAfter(execDate, week) && isBefore(execDate, addWeeks(week, 1))) {
                      const val = dailyExec[dateStr];
                      const amount = typeof val === 'object' ? (val.val || 0) : parseFloat(val || 0);
-                     weeklyActual += (amount * price);
+                     weeklyActual += (amount * unitPrice);
                  }
             });
         };

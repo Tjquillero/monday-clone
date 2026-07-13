@@ -16,7 +16,7 @@ import { MapPin, DollarSign, Wallet, LayoutGrid, List, Plus, FileText, Calculato
 interface CentralizedFinancialDashboardProps {
   groups: Group[];
   columns: Column[];
-  onUpdateItemValue?: (groupId: string, itemId: number | string, columnId: string, value: any) => void;
+  onUpdateItemValue?: (groupId: string, itemId: number | string, columnId: string, value: any, metadata?: any) => void;
   onAddItem?: (rubro: string, category: string, subSub?: string) => void;
   onDeleteItem?: (itemId: number | string) => void;
   onDeleteItems?: (itemIds: (number | string)[]) => void;

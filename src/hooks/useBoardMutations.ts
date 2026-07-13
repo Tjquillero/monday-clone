@@ -150,6 +150,83 @@ export function useBoardMutations(boardId?: string) {
     },
   });
 
+  const createOrGetFinancialItem = useMutation({
+    mutationFn: async ({ groupId, name, initialValues }: { groupId: string, name: string, initialValues: any }) => {
+      try {
+        // Online: call RPC get_or_create_financial_item
+        const { data, error } = await supabase.rpc('get_or_create_financial_item', {
+          p_group_id: groupId,
+          p_name: name,
+          p_values: initialValues
+        });
+
+        if (error) {
+          console.warn('[RPC fallback] get_or_create_financial_item failed, falling back to select-or-insert:', error);
+          const { data: existing, error: findError } = await supabase
+            .from('items')
+            .select('*')
+            .eq('group_id', groupId)
+            .eq('name', name)
+            .limit(1);
+
+          if (!findError && existing && existing.length > 0) {
+            return existing[0];
+          }
+
+          const { data: inserted, error: insertError } = await supabase.from('items').insert({
+            group_id: groupId,
+            name: name,
+            values: initialValues,
+            position: 999 
+          }).select().single();
+
+          if (insertError) throw insertError;
+          return inserted;
+        }
+
+        if (offlineDB && data) {
+          await offlineDB.upsertRecords('items', [data]);
+        }
+        return data;
+      } catch (err: any) {
+        if (isNetworkError(err) && offlineDB) {
+          console.log('[Offline] createOrGetFinancialItem failed due to network. Checking local DB.');
+          const localItems = await offlineDB.getTable('items');
+          const match = localItems.find((item: any) => String(item.group_id) === String(groupId) && item.name === name);
+          if (match) {
+            console.log('[Offline Idempotent] Returning local match:', match.id);
+            return match;
+          }
+
+          const newId = generateUUID();
+          const newItem = {
+            id: newId,
+            group_id: groupId,
+            name: name,
+            values: initialValues,
+            position: 999,
+            created_at: new Date().toISOString()
+          };
+
+          localItems.push(newItem);
+          await offlineDB.saveTable('items', localItems);
+
+          await offlineDB.addMutation({
+            table: 'items',
+            action: 'insert',
+            payload: newItem
+          });
+
+          return newItem;
+        }
+        throw err;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['groups', boardId] });
+    },
+  });
+
   const updateItem = useMutation({
     mutationFn: async ({ itemId, updates, isValuesUpdate }: { itemId: string | number, updates: any, isValuesUpdate: boolean }) => {
       try {
@@ -412,6 +489,7 @@ export function useBoardMutations(boardId?: string) {
 
   return {
     addItem,
+    createOrGetFinancialItem,
     updateItem,
     deleteItem,
     deleteItems
