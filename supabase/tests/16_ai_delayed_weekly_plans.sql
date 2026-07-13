@@ -9,7 +9,9 @@
 -- abortado deliberadamente, nunca fue ni será ejecutado (fix del
 -- code-review: 20260818_fix_delayed_weekly_plans_exclude_cancelled.sql);
 -- un plan cuya semana todavía no termina NO aparece aunque no esté closed;
--- days_late correcto; una fila por actividad dentro del plan; autorización.
+-- días de negocio en America/Bogota, no UTC (fix del code-review:
+-- 20260819_fix_delayed_weekly_plans_bogota_timezone.sql); days_late
+-- correcto; una fila por actividad dentro del plan; autorización.
 --
 -- Sin SAVEPOINT/ROLLBACK TO por test (ver nota en 01_state_machine.sql).
 --
@@ -28,7 +30,7 @@ SELECT set_config(
 
 BEGIN;
 
-SELECT plan(9);
+SELECT plan(11);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Fixtures (prefijo de1a0000 / 5ca1ab1e).
@@ -80,6 +82,7 @@ $$;
 DO $$
 DECLARE v_activity_id UUID; v_paz_id UUID;
         v_plan_delayed UUID; v_plan_closed UUID; v_plan_future UUID; v_plan_cancelled UUID;
+        v_plan_boundary UUID;
 BEGIN
   v_activity_id := _test_seed_poa_activity_16('de1a0000-0000-0000-0000-000000000001', 'DP_001');
   INSERT INTO public.poa_activity_zones (poa_activity_id, zone_id, cantidad_contratada)
@@ -135,40 +138,61 @@ BEGIN
      planned_frecuencia, priority, planned_qty, unit, planned_jr)
   VALUES (v_plan_cancelled, 1, 'DP_001', v_paz_id, 10, 4, 'preferred', 50, 'und', 2.5);
 
+  -- Plan 5: week_end = CURRENT_DATE exacto (relativo, no fecha absoluta --
+  -- para que el test no se vuelva frágil con el paso del tiempo real). Sirve
+  -- para probar el límite UTC/Bogotá con p_reference_instant construido
+  -- también relativo a CURRENT_DATE (ver Tests 8 y 9). 'confirmed' (nunca
+  -- closed/cancelled) para que solo dependa de la comparación de fecha.
+  INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by, confirmed_by, confirmed_at)
+  VALUES ('de1a0000-0000-0000-0000-000000000001', '5ca1ab1e-0000-0000-0000-000000000601',
+          (CURRENT_DATE - 6), 1, 'confirmed', 'aaaaaaaa-0000-0000-0000-000000000001',
+          'aaaaaaaa-0000-0000-0000-000000000001', NOW())
+  RETURNING id INTO v_plan_boundary;
+  INSERT INTO public.weekly_plan_items
+    (plan_id, planned_sequence, activity_key, poa_activity_zone_id, planned_rendimiento,
+     planned_frecuencia, priority, planned_qty, unit, planned_jr)
+  VALUES (v_plan_boundary, 1, 'DP_001', v_paz_id, 10, 4, 'preferred', 50, 'und', 2.5);
+
   PERFORM set_config('dp_test.plan_delayed', v_plan_delayed::TEXT, false);
   PERFORM set_config('dp_test.plan_closed', v_plan_closed::TEXT, false);
   PERFORM set_config('dp_test.plan_future', v_plan_future::TEXT, false);
   PERFORM set_config('dp_test.plan_cancelled', v_plan_cancelled::TEXT, false);
+  PERFORM set_config('dp_test.plan_boundary', v_plan_boundary::TEXT, false);
 END;
 $$;
 
 SELECT is(
   (SELECT COUNT(*)::INT FROM public.get_delayed_weekly_plans('de1a0000-0000-0000-0000-000000000001')),
   1,
-  'Test 1: solo 1 fila entre los 3 planes — únicamente el vencido y no cerrado ✓'
+  'Test 1: solo 1 fila entre los 5 planes — únicamente el vencido y no cerrado (el plan 5 tiene week_end = hoy exacto, todavía no atrasado) ✓'
 );
 SELECT is(
-  (SELECT weekly_plan_id FROM public.get_delayed_weekly_plans('de1a0000-0000-0000-0000-000000000001')),
+  (SELECT weekly_plan_id FROM public.get_delayed_weekly_plans('de1a0000-0000-0000-0000-000000000001')
+   WHERE weekly_plan_id = current_setting('dp_test.plan_delayed')::UUID),
   current_setting('dp_test.plan_delayed')::UUID,
-  'Test 2: la fila corresponde al plan vencido correcto ✓'
+  'Test 2: el plan vencido correcto aparece entre los resultados ✓'
 );
 SELECT is(
-  (SELECT status FROM public.get_delayed_weekly_plans('de1a0000-0000-0000-0000-000000000001')),
+  (SELECT status FROM public.get_delayed_weekly_plans('de1a0000-0000-0000-0000-000000000001')
+   WHERE weekly_plan_id = current_setting('dp_test.plan_delayed')::UUID),
   'confirmed',
   'Test 3: el status devuelto es el real del plan (confirmed, nunca llegó a closed) ✓'
 );
 SELECT is(
-  (SELECT days_late FROM public.get_delayed_weekly_plans('de1a0000-0000-0000-0000-000000000001')),
+  (SELECT days_late FROM public.get_delayed_weekly_plans('de1a0000-0000-0000-0000-000000000001')
+   WHERE weekly_plan_id = current_setting('dp_test.plan_delayed')::UUID),
   41,
-  'Test 4: days_late = CURRENT_DATE - week_end = 41 (week_start hace 47 días, semana de 7 días) ✓'
+  'Test 4: days_late = hoy (America/Bogota) - week_end = 41 (week_start hace 47 días, semana de 7 días) ✓'
 );
 SELECT is(
-  (SELECT activity_name FROM public.get_delayed_weekly_plans('de1a0000-0000-0000-0000-000000000001')),
+  (SELECT activity_name FROM public.get_delayed_weekly_plans('de1a0000-0000-0000-0000-000000000001')
+   WHERE weekly_plan_id = current_setting('dp_test.plan_delayed')::UUID),
   'Poda de árboles',
   'Test 5: activity_name resuelto desde board_activity_standards (mismo patrón que generate_acta_draft) ✓'
 );
 SELECT is(
-  (SELECT zone_name FROM public.get_delayed_weekly_plans('de1a0000-0000-0000-0000-000000000001')),
+  (SELECT zone_name FROM public.get_delayed_weekly_plans('de1a0000-0000-0000-0000-000000000001')
+   WHERE weekly_plan_id = current_setting('dp_test.plan_delayed')::UUID),
   'Zona Norte',
   'Test 6: zone_name = título del group (no se inventó un "código" que no existe en el esquema) ✓'
 );
@@ -179,11 +203,37 @@ SELECT is(
   'Test 7: un plan CANCELADO no aparece aunque su semana haya vencido -- fue abortado, no está atrasado ✓'
 );
 
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Límite UTC/Bogotá (fix del code-review: reproducción determinística con
+-- p_reference_instant, independiente del reloj real de la máquina que corre
+-- el test).
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- p_reference_instant construido relativo a CURRENT_DATE: (CURRENT_DATE+1)
+-- interpretado como medianoche UTC + 2 horas = "01:00/02:00 UTC del día
+-- siguiente" -- que en Bogotá (UTC-5) sigue siendo las 19:00-21:00 de HOY.
+SELECT is(
+  (SELECT COUNT(*)::INT FROM public.get_delayed_weekly_plans(
+     'de1a0000-0000-0000-0000-000000000001',
+     ((CURRENT_DATE + 1)::TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '2 hours'
+   ) WHERE weekly_plan_id = current_setting('dp_test.plan_boundary')::UUID),
+  0,
+  'Test 8: a las 02:00 UTC del día siguiente (= 21:00 de HOY en Bogotá), un plan cuya semana termina HOY NO está atrasado todavía -- el día de negocio sigue siendo hoy ✓'
+);
+SELECT is(
+  (SELECT days_late FROM public.get_delayed_weekly_plans(
+     'de1a0000-0000-0000-0000-000000000001',
+     ((CURRENT_DATE + 2)::TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '2 hours'
+   ) WHERE weekly_plan_id = current_setting('dp_test.plan_boundary')::UUID),
+  1,
+  'Test 9: un día de negocio (Bogotá) después, el mismo plan SÍ aparece atrasado, con days_late = 1 ✓'
+);
+
 SELECT set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000005","role":"authenticated"}', true);
 SELECT throws_like(
   $$ SELECT * FROM public.get_delayed_weekly_plans('de1a0000-0000-0000-0000-000000000001') $$,
   '%No tiene acceso%',
-  'Test 8: un no-miembro no puede leer get_delayed_weekly_plans() ✓'
+  'Test 10: un no-miembro no puede leer get_delayed_weekly_plans() ✓'
 );
 SELECT set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
 
@@ -198,7 +248,7 @@ ON CONFLICT (board_id, user_id) DO NOTHING;
 SELECT is(
   (SELECT COUNT(*)::INT FROM public.get_delayed_weekly_plans('de1a0000-0000-0000-0000-000000000002')),
   0,
-  'Test 9: un board sin planes devuelve 0 filas, sin error ✓'
+  'Test 11: un board sin planes devuelve 0 filas, sin error ✓'
 );
 
 SELECT * FROM finish();
