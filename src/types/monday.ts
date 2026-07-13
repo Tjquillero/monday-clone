@@ -193,3 +193,37 @@ export interface ActaDetail {
   percentage?: number;
   created_at?: string;
 }
+
+// Actas Certificadas (Incremento 5) — dominio POA/weekly_plan_item_executions.
+// Sin relación con Acta/ActaDetail arriba (sistema histórico, financial_actas):
+// ver docs/adr/ADR-0003-billing-source.md. Toda escritura pasa por RPC
+// (generate_acta_draft/adjust_acta_item_quantity/issue_acta) — estos tipos
+// son de solo lectura desde React.
+export interface CertifiedActaItem {
+  id: string;
+  acta_id: string;
+  poa_activity_id: string;
+  descripcion_snapshot: string;
+  unidad_snapshot: string;
+  precio_unitario_snapshot: number;
+  cantidad_facturada: number;
+  valor_total: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CertifiedActa {
+  id: string;
+  board_id: string;
+  numero: number | null;
+  estado: 'draft' | 'issued';
+  fecha: string | null;
+  observaciones: string | null;
+  generated_by: string;
+  generated_at: string;
+  issued_by: string | null;
+  issued_at: string | null;
+  created_at: string;
+  updated_at: string;
+  items: CertifiedActaItem[];
+}

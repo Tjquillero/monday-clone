@@ -9,8 +9,9 @@ import FinancialWidget from './FinancialWidget';
 import FinancialTableView from './FinancialTableView';
 import FinancialMatrixView from './FinancialMatrixView';
 import ActasModule from '../financial/ActasModule';
+import CertifiedActasModule from '../financial/CertifiedActasModule';
 import ResourceEfficiencyWidget from './ResourceEfficiencyWidget';
-import { MapPin, DollarSign, Wallet, LayoutGrid, List, Plus, FileText, Calculator } from 'lucide-react';
+import { MapPin, DollarSign, Wallet, LayoutGrid, List, Plus, FileText, Calculator, FileCheck } from 'lucide-react';
 
 interface CentralizedFinancialDashboardProps {
   groups: Group[];
@@ -50,7 +51,7 @@ export default function CentralizedFinancialDashboard({
     activityTemplates
 }: CentralizedFinancialDashboardProps) {
   const [activeSiteId, setActiveSiteId] = useState<string>('all');
-  const [viewMode, _setViewMode] = useState<'list' | 'matrix' | 'actas'>('list'); // Vista por defecto: Resumen (Dashboards) para mejor UX inicial
+  const [viewMode, _setViewMode] = useState<'list' | 'matrix' | 'actas' | 'certified-actas'>('list'); // Vista por defecto: Resumen (Dashboards) para mejor UX inicial
   
   const setViewMode = (mode: any) => {
       _setViewMode(mode);
@@ -107,11 +108,17 @@ export default function CentralizedFinancialDashboard({
                         >
                             <List size={14} /> RESUMEN
                         </button>
-                        <button 
+                        <button
                             onClick={() => setViewMode('actas')}
                             className={`flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-black transition-all duration-300 ${viewMode === 'actas' ? 'bg-white text-emerald-800 shadow-md ring-1 ring-emerald-100' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-500/50'}`}
                         >
-                            <FileText size={14} /> ACTAS
+                            <FileText size={14} /> ACTAS HISTÓRICAS
+                        </button>
+                        <button
+                            onClick={() => setViewMode('certified-actas')}
+                            className={`flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-black transition-all duration-300 ${viewMode === 'certified-actas' ? 'bg-white text-blue-800 shadow-md ring-1 ring-blue-100' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-500/50'}`}
+                        >
+                            <FileCheck size={14} /> ACTAS CERTIFICADAS
                         </button>
                      </div>
 
@@ -149,7 +156,9 @@ export default function CentralizedFinancialDashboard({
 
         {/* Detailed Financial Table vs Matrix vs Actas */}
         <div className="flex-1 min-h-0 relative">
-             {viewMode === 'actas' ? (
+             {viewMode === 'certified-actas' ? (
+                <CertifiedActasModule boardId={boardId} />
+             ) : viewMode === 'actas' ? (
                 <ActasModule groups={groups} boardId={boardId} onAddSite={onAddSite} />
              ) : viewMode === 'list' ? (
                 <FinancialTableView 
@@ -216,7 +225,7 @@ export default function CentralizedFinancialDashboard({
         )}
 
         {/* Resource Efficiency - Visible in List and Matrix, HIDDEN in Actas */}
-        {viewMode !== 'actas' && (
+        {viewMode !== 'actas' && viewMode !== 'certified-actas' && (
             <div className="mt-12 mb-8">
                 <h2 className="text-xl font-black text-slate-800 mb-6 px-1 flex items-center gap-3">
                     <Calculator className="text-primary" />
