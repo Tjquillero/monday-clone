@@ -143,8 +143,27 @@ describe('AgentControlCenter — respuestas con citas', () => {
 
     await waitFor(() => expect(screen.getByText('El acta vale $78.000')).toBeInTheDocument());
     expect(
-      screen.getByText('Fuente: get_acta_totals(acta_id=c828e09f-f221-484c-8530-493bc142ac36)')
+      screen.getByText('Fuente: Resumen financiero del acta (acta_id=c828e09f-f221-484c-8530-493bc142ac36)')
     ).toBeInTheDocument();
+  });
+
+  it('cae al nombre técnico si una tool no tiene rótulo de presentación', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        text: 'Respuesta de una tool sin rótulo',
+        citations: [{ tool: 'get_tool_sin_rotulo_todavia', args: {} }],
+        history: { contents: [] },
+      }),
+    });
+
+    render(<AgentControlCenter />);
+    const input = await openWidget();
+    fireEvent.change(input, { target: { value: 'pregunta' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => expect(screen.getByText('Respuesta de una tool sin rótulo')).toBeInTheDocument());
+    expect(screen.getByText('Fuente: get_tool_sin_rotulo_todavia')).toBeInTheDocument();
   });
 
   it('no muestra ninguna fuente cuando la respuesta viene solo de memoria (sin nuevas tools)', async () => {

@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Bot, X, Send, Zap, Cpu, Activity, Wrench } from 'lucide-react';
 import { EMPTY_CONVERSATION, trimConversationState, type ConversationState } from '@/services/ai/conversationState';
 import type { ToolCitation } from '@/services/ai/orchestrator';
+import { getToolDisplayName } from '@/services/ai/tools/displayNames';
 
 // Copiloto del dominio (Incremento 5 en adelante). Cliente muy fino: nunca
 // calcula, nunca conoce tablas — solo envía el mensaje del usuario a
@@ -22,11 +23,15 @@ interface Message {
 
 // La cita se arma con los mismos datos que ya devolvió el Orchestrator
 // (tool + argumentos reales de la llamada) — nunca texto libre del modelo.
+// El nombre técnico se traduce a un rótulo natural solo para presentación
+// (displayNames.ts); los argumentos crudos se conservan entre paréntesis
+// para no perder trazabilidad/auditabilidad.
 function formatCitation(c: ToolCitation): string {
+  const label = getToolDisplayName(c.tool);
   const args = Object.entries(c.args)
     .map(([k, v]) => `${k}=${v}`)
     .join(', ');
-  return args ? `${c.tool}(${args})` : `${c.tool}()`;
+  return args ? `${label} (${args})` : label;
 }
 
 // Sin board seleccionado (vistas globales) usa su propio balde de memoria —
