@@ -5,10 +5,12 @@
 // reimplementa ninguna regla; solo interpreta el resultado ya producido.
 
 import Link from 'next/link';
+import { useState } from 'react';
 import {
-  CheckCircle2, MapPinX, ScaleIcon, AlertTriangle, ServerCrash, RotateCw,
+  CheckCircle2, MapPinX, ScaleIcon, AlertTriangle, ServerCrash, RotateCw, Sparkles,
 } from 'lucide-react';
 import type { ImportPoaResult } from '@/lib/poaImport/service/types';
+import type { ImportValidationError } from '@/lib/poaImport/types';
 
 interface ImportResultViewProps {
   poaId: string;
@@ -103,25 +105,75 @@ function AmbiguousFrequencySection({
   );
 }
 
-function ValidationErrorsSection({ errors }: { errors: { message: string; activityKey?: string; excelRow?: number }[] }) {
+function ValidationErrorsSection({ errors }: { errors: ImportValidationError[] }) {
+  const [explanation, setExplanation] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   if (errors.length === 0) return null;
+
+  const handleExplain = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/ai/explain-import-errors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ errors }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setExplanation(data.explanation);
+      } else {
+        setError(data.error || 'No se pudo generar la explicación.');
+      }
+    } catch {
+      setError('No pude conectar con el copiloto. Intenta de nuevo.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="bg-red-50/50 border border-red-200 rounded-xl p-5 space-y-3">
-      <div className="flex items-center gap-2 text-red-700">
-        <AlertTriangle className="w-5 h-5" />
-        <p className="font-bold">{errors.length} error{errors.length !== 1 ? 'es' : ''} en el Excel</p>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-red-700">
+          <AlertTriangle className="w-5 h-5" />
+          <p className="font-bold">{errors.length} error{errors.length !== 1 ? 'es' : ''} en el Excel</p>
+        </div>
+        {!explanation && (
+          <button
+            type="button"
+            onClick={handleExplain}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-40 transition-colors shrink-0"
+          >
+            <Sparkles className={`w-3.5 h-3.5 ${loading ? 'animate-pulse' : ''}`} />
+            {loading ? 'Explicando…' : 'Explícame estos errores'}
+          </button>
+        )}
       </div>
       <ul className="text-sm text-slate-700 space-y-1.5">
         {errors.map((e, i) => (
           <li key={i} className="flex gap-2">
             <span className="text-red-400">•</span>
             <span>
-              {e.excelRow && <span className="text-slate-400">fila {e.excelRow}: </span>}
+              {e.excelRow != null && <span className="text-slate-400">fila {e.excelRow}: </span>}
               {e.message}
             </span>
           </li>
         ))}
       </ul>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      {explanation && (
+        <div className="bg-white border border-red-200 rounded-lg p-4 text-sm text-slate-700 whitespace-pre-wrap">
+          <div className="flex items-center gap-1.5 mb-2 text-red-700">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span className="text-xs font-bold uppercase tracking-wide">Explicación del copiloto</span>
+          </div>
+          {explanation}
+        </div>
+      )}
     </div>
   );
 }
