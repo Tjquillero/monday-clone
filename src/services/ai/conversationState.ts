@@ -24,7 +24,22 @@ export const EMPTY_CONVERSATION: ConversationState = { contents: [] };
 // user/functionResponse, model/texto final).
 const MAX_CONTENTS = 40;
 
+// Único punto donde se mira la forma de una entrada (no su contenido): si el
+// corte por conteo crudo cae justo entre el functionCall del modelo y su
+// functionResponse, la ventana quedaría empezando por una respuesta de
+// función huérfana — un historial que Gemini nunca produjo, y que puede
+// fallar con INVALID_ARGUMENT en el siguiente turno. Se descarta esa entrada
+// en vez de reconstruir la llamada perdida (reconstruirla arrastraría de
+// vuelta la pregunta que la originó, y esa cascada nunca converge).
+function isOrphanFunctionResponse(content: Content): boolean {
+  return !!content.parts?.some((p) => 'functionResponse' in p);
+}
+
 export function trimConversationState(state: ConversationState): ConversationState {
   if (state.contents.length <= MAX_CONTENTS) return state;
-  return { contents: state.contents.slice(-MAX_CONTENTS) };
+  let trimmed = state.contents.slice(-MAX_CONTENTS);
+  while (trimmed.length > 0 && isOrphanFunctionResponse(trimmed[0])) {
+    trimmed = trimmed.slice(1);
+  }
+  return { contents: trimmed };
 }
