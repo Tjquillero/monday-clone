@@ -5,8 +5,12 @@ import ReportsView from '@/components/ReportsView';
 import { useBoard, useBoardGroups, useBoardColumns } from '@/hooks/useBoardData';
 import { isActivityItem } from '@/utils/itemUtils';
 
-export default function ReportsViewContainer() {
-  const { data: board } = useBoard();
+interface ReportsViewContainerProps {
+  boardId?: string;
+}
+
+export default function ReportsViewContainer({ boardId }: ReportsViewContainerProps) {
+  const { data: board } = useBoard(boardId);
   const { data: groups, isLoading: groupsLoading } = useBoardGroups(board?.id);
   const { data: columns, isLoading: columnsLoading } = useBoardColumns(board?.id);
 

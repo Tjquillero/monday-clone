@@ -29,6 +29,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useQueryClient } from '@tanstack/react-query';
 
 interface BoardViewContainerProps {
+  boardId?: string;
   searchQuery: string;
   selectedGroupId: string | null;
   filters: {
@@ -39,13 +40,13 @@ interface BoardViewContainerProps {
   onOpenItem: (groupId: string, item: any, tab?: any) => void;
 }
 
-export default function BoardViewContainer({ searchQuery, selectedGroupId, filters, onOpenItem }: BoardViewContainerProps) {
+export default function BoardViewContainer({ boardId, searchQuery, selectedGroupId, filters, onOpenItem }: BoardViewContainerProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const role = (user?.user_metadata as any)?.role?.toLowerCase();
   const isAdmin = role === 'admin' || user?.email === 'admin@mantenix.com';
 
-  const { data: board, isLoading: boardLoading } = useBoard();
+  const { data: board, isLoading: boardLoading } = useBoard(boardId);
   const { data: columns } = useBoardColumns(board?.id);
   const { data: groups } = useBoardGroups(board?.id);
   const { data: activityTemplates } = useActivityTemplates();

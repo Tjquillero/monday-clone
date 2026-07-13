@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useQueryClient } from '@tanstack/react-query';
 
 interface ExecutionViewContainerProps {
+  boardId?: string;
   searchQuery: string;
   selectedGroupId: string | null;
   filters: {
@@ -21,13 +22,13 @@ interface ExecutionViewContainerProps {
   onOpenItem: (groupId: string, item: any) => void;
 }
 
-export default function ExecutionViewContainer({ searchQuery, selectedGroupId, filters, onOpenItem }: ExecutionViewContainerProps) {
+export default function ExecutionViewContainer({ boardId, searchQuery, selectedGroupId, filters, onOpenItem }: ExecutionViewContainerProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const role = (user?.user_metadata as any)?.role?.toLowerCase();
   const isAdmin = role === 'admin' || user?.email === 'admin@mantenix.com';
 
-  const { data: board } = useBoard();
+  const { data: board } = useBoard(boardId);
   const { data: groups, isLoading } = useBoardGroups(board?.id);
   const { data: columns } = useBoardColumns(board?.id);
   const { data: activityTemplates } = useActivityTemplates();

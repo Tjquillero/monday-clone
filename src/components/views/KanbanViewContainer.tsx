@@ -24,6 +24,7 @@ import { Item } from '@/types/monday';
 import { createPortal } from 'react-dom';
 
 interface KanbanViewContainerProps {
+  boardId?: string;
   searchQuery: string;
   selectedGroupId: string | null;
   filters: {
@@ -34,8 +35,8 @@ interface KanbanViewContainerProps {
   onOpenItem: (groupId: string, item: any) => void;
 }
 
-export default function KanbanViewContainer({ searchQuery, selectedGroupId, filters, onOpenItem }: KanbanViewContainerProps) {
-  const { data: board, isLoading: boardLoading } = useBoard();
+export default function KanbanViewContainer({ boardId, searchQuery, selectedGroupId, filters, onOpenItem }: KanbanViewContainerProps) {
+  const { data: board, isLoading: boardLoading } = useBoard(boardId);
   const { data: columns, isLoading: columnsLoading } = useBoardColumns(board?.id);
   const { data: groups, isLoading: groupsLoading } = useBoardGroups(board?.id);
   const { updateItem } = useBoardMutations(board?.id);

@@ -11,9 +11,13 @@ import { Calculator } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useQueryClient } from '@tanstack/react-query';
 
-export default function FinancialViewContainer() {
+interface FinancialViewContainerProps {
+  boardId?: string;
+}
+
+export default function FinancialViewContainer({ boardId }: FinancialViewContainerProps) {
   const queryClient = useQueryClient();
-  const { data: board, isLoading: boardLoading } = useBoard();
+  const { data: board, isLoading: boardLoading } = useBoard(boardId);
   const { data: groups, isLoading: groupsLoading } = useBoardGroups(board?.id);
   const { data: columns } = useBoardColumns(board?.id);
   const { data: activityTemplates } = useActivityTemplates();

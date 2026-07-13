@@ -242,9 +242,9 @@ function DashboardContent() {
             exit={{ opacity: 0 }}
             className="h-full w-full"
           >
-            {currentView === 'financial' && <div className="h-full overflow-auto custom-scrollbar"><FinancialViewContainer /></div>}
-            {currentView === 'board' && <div className="h-full overflow-auto p-4 custom-scrollbar"><BoardViewContainer searchQuery={searchQuery} selectedGroupId={selectedGroupId} filters={activeFilters} onOpenItem={openItemModal} /></div>}
-            {currentView === 'execution' && <ExecutionViewContainer onOpenItem={openItemModal} searchQuery={searchQuery} selectedGroupId={selectedGroupId} filters={activeFilters} />}
+            {currentView === 'financial' && <div className="h-full overflow-auto custom-scrollbar"><FinancialViewContainer boardId={board?.id} /></div>}
+            {currentView === 'board' && <div className="h-full overflow-auto p-4 custom-scrollbar"><BoardViewContainer boardId={board?.id} searchQuery={searchQuery} selectedGroupId={selectedGroupId} filters={activeFilters} onOpenItem={openItemModal} /></div>}
+            {currentView === 'execution' && <ExecutionViewContainer boardId={board?.id} onOpenItem={openItemModal} searchQuery={searchQuery} selectedGroupId={selectedGroupId} filters={activeFilters} />}
             {currentView === 'map' && (
               <div className="h-full p-4">
                  <div className="industrial-card rounded-2xl overflow-hidden h-full border border-[#3B7EF8]/10 shadow-2xl">
@@ -256,9 +256,9 @@ function DashboardContent() {
                  </div>
               </div>
             )}
-            {currentView === 'dashboards' && <div className="h-full overflow-auto custom-scrollbar"><DashboardViewContainer /></div>}
-            {currentView === 'kanban' && <div className="h-full overflow-auto p-8 custom-scrollbar"><KanbanViewContainer searchQuery={searchQuery} selectedGroupId={selectedGroupId} filters={activeFilters} onOpenItem={openItemModal} /></div>}
-            {currentView === 'reports' && <div className="h-full overflow-auto custom-scrollbar"><ReportsViewContainer /></div>}
+            {currentView === 'dashboards' && <div className="h-full overflow-auto custom-scrollbar"><DashboardViewContainer boardId={board?.id} /></div>}
+            {currentView === 'kanban' && <div className="h-full overflow-auto p-8 custom-scrollbar"><KanbanViewContainer boardId={board?.id} searchQuery={searchQuery} selectedGroupId={selectedGroupId} filters={activeFilters} onOpenItem={openItemModal} /></div>}
+            {currentView === 'reports' && <div className="h-full overflow-auto custom-scrollbar"><ReportsViewContainer boardId={board?.id} /></div>}
             {currentView === 'notifications' && <div className="h-full overflow-auto custom-scrollbar"><NotificationsView /></div>}
             {currentView === 'planner' && <WeeklyPlannerContainer boardId={board?.id} selectedGroupId={selectedGroupId} groups={groups} />}
           </motion.div>
