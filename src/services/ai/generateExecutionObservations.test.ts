@@ -160,6 +160,41 @@ describe('generateExecutionObservations', () => {
     expect(dupObservations[0].message).toContain('medium');
   });
 
+  // Reproduce el bug de la revisión: las 3 sub-tools se piden con Promise.all
+  // ("todo o nada"). Si findPossibleVisualDuplicates falla (ej. Gemini 429),
+  // se perdían hasta los hechos deterministas YA calculados antes del
+  // Promise.all (missing_before/missing_after) porque la función entera
+  // rechazaba en vez de degradar con lo que sí se pudo obtener.
+  it('no pierde missing_before/missing_after si findPossibleVisualDuplicates falla', async () => {
+    mockGetExecutionAttachments.mockResolvedValue([]); // sin fotos -> se sabe de antemano que faltan ambas fases
+    mockEvaluateExecutionEvidence.mockResolvedValue({ summary: '', observations: [], limitations: [], confidence: 'low' });
+    mockFindPossibleVisualDuplicates.mockRejectedValue(new Error('429 quota exceeded'));
+
+    const result = await generateExecutionObservations({} as any, 'exec-1', 'board-1');
+
+    expect(result.observations).toEqual(
+      expect.arrayContaining([
+        { severity: 'warning', category: 'missing_before', message: 'No se encontró evidencia clasificada como "antes".' },
+        { severity: 'warning', category: 'missing_after', message: 'No se encontró evidencia clasificada como "después".' },
+      ])
+    );
+  });
+
+  it('no pierde missing_before/missing_after si getDuplicateAttachments falla', async () => {
+    mockGetExecutionAttachments.mockResolvedValue([]);
+    mockEvaluateExecutionEvidence.mockResolvedValue({ summary: '', observations: [], limitations: [], confidence: 'low' });
+    mockGetDuplicateAttachments.mockRejectedValue(new Error('conexión interrumpida'));
+
+    const result = await generateExecutionObservations({} as any, 'exec-1', 'board-1');
+
+    expect(result.observations).toEqual(
+      expect.arrayContaining([
+        { severity: 'warning', category: 'missing_before', message: 'No se encontró evidencia clasificada como "antes".' },
+        { severity: 'warning', category: 'missing_after', message: 'No se encontró evidencia clasificada como "después".' },
+      ])
+    );
+  });
+
   it('nunca produce severidades ni categorías fuera del contrato cerrado', async () => {
     mockGetExecutionAttachments.mockResolvedValue([attachment('before'), attachment('after')]);
     mockEvaluateExecutionEvidence.mockResolvedValue({ summary: '', observations: [], limitations: ['x'], confidence: 'low' });

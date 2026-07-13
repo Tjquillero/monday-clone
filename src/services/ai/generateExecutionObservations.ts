@@ -71,7 +71,13 @@ export async function generateExecutionObservations(
 
   // Los tres sub-resultados son independientes entre sí — se piden en
   // paralelo para no sumar latencias de Gemini innecesariamente.
-  const [evidenceAssessment, exactDuplicates, visualDuplicates] = await Promise.all([
+  //
+  // allSettled, no all: son 3 llamadas independientes (2 a Gemini, 1 SQL) y
+  // los hechos deterministas de arriba (missing_before/missing_after) ya se
+  // conocen antes de esto. Con Promise.all, un solo 429 de Gemini tumbaba
+  // TODA la función y perdía hasta esos hechos ya calculados -- se degrada
+  // con lo que sí se obtuvo en vez de perderlo todo por un fallo ajeno.
+  const [evidenceResult, exactDuplicatesResult, visualDuplicatesResult] = await Promise.allSettled([
     evaluateExecutionEvidence(supabase, executionId), // v2.2 (Gemini, o decline sin fotos)
     getDuplicateAttachments(supabase, boardId), // v2.4 (SQL, sin Gemini)
     findPossibleVisualDuplicates(supabase, executionId), // v2.4b (Gemini, o decline)
@@ -83,12 +89,19 @@ export async function generateExecutionObservations(
       category: 'poor_evidence',
       message: 'No hay evidencia fotográfica para evaluar.',
     });
-  } else {
-    for (const limitation of evidenceAssessment.limitations) {
+  } else if (evidenceResult.status === 'fulfilled') {
+    for (const limitation of evidenceResult.value.limitations) {
       observations.push({ severity: 'info', category: 'visual_limitation', message: limitation });
     }
+  } else {
+    observations.push({
+      severity: 'info',
+      category: 'visual_limitation',
+      message: 'No fue posible completar la evaluación visual de la evidencia en este momento.',
+    });
   }
 
+  const exactDuplicates = exactDuplicatesResult.status === 'fulfilled' ? exactDuplicatesResult.value : [];
   for (const group of exactDuplicates) {
     const occurrencesHere = group.occurrences.filter((occ) => occ.executionId === executionId);
     if (occurrencesHere.length === 0) continue;
@@ -107,11 +120,19 @@ export async function generateExecutionObservations(
     }
   }
 
-  for (const dup of visualDuplicates.possibleVisualDuplicates) {
+  if (visualDuplicatesResult.status === 'fulfilled') {
+    for (const dup of visualDuplicatesResult.value.possibleVisualDuplicates) {
+      observations.push({
+        severity: 'info',
+        category: 'possible_duplicate',
+        message: `Posible duplicado visual entre "${dup.fileNameA}" y "${dup.fileNameB}" (confianza ${dup.confidence}): ${dup.reason}`,
+      });
+    }
+  } else {
     observations.push({
       severity: 'info',
-      category: 'possible_duplicate',
-      message: `Posible duplicado visual entre "${dup.fileNameA}" y "${dup.fileNameB}" (confianza ${dup.confidence}): ${dup.reason}`,
+      category: 'visual_limitation',
+      message: 'No fue posible comparar visualmente las fotos en busca de posibles duplicados en este momento.',
     });
   }
 
