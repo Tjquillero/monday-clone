@@ -257,7 +257,7 @@ El criterio de ordenamiento es: **desbloquear módulos ya construidos primero, l
 | **Nuevos tipos de reporte** | Los módulos que alimentan los reportes (actas, incidentes) aún tienen la BD incompleta |
 | **App móvil nativa** | La PWA offline-first ya cubre el caso de uso de campo; una app nativa sería redundante en esta etapa |
 | **Multi-tenant / multi-organización** | El modelo actual es single-tenant. Introducir aislamiento de tenants requiere refactorizar RLS, routing y storage |
-| **IA generativa adicional** | `MantenixAgent` ya existe. Antes de expandir IA, hay que resolver los datos faltantes que la IA necesitaría consultar |
+| **IA generativa adicional** | `MantenixAgent` (prototipo de self-healing prompts) fue retirado por completo — reemplazado por un copiloto de dominio (Tool Registry + Orchestrator + DomainTools sobre las RPC oficiales, `AgentControlCenter.tsx` → `/api/ai/ask`). El catálogo mínimo (6 tools: actas, avance de contrato, cronograma, certificaciones) ya está implementado y verificado end-to-end. Expandirlo es agregar tools nuevos al registro, priorizados por `ai_tool_call_attempts` (qué pidió el modelo sin tener autorización) — no requiere resolver datos faltantes primero |
 | **Integraciones externas (ERP, SAP)** | No hay demanda documentada; agrega complejidad sin valor inmediato |
 | **Curva S animada / charts avanzados** | Recharts ya está disponible; dedicar tiempo a esto antes de tener datos completos no tiene sentido |
 | **Modo oscuro completo** | `isDarkMode` existe en el estado pero no tiene implementación completa. No es prioridad operativa |
