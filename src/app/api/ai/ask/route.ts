@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 import { runAiOrchestrator } from '@/services/ai/orchestrator';
+import type { ConversationState } from '@/services/ai/conversationState';
 
-// Endpoint nuevo del copiloto de IA (Fase 1). Deliberadamente separado de
-// /api/ai/chat (el widget viejo, self-healing prompts) — no se toca ese
-// endpoint hasta congelar y probar este por completo. Ver
-// src/services/ai/orchestrator.ts para el contrato de tool-calling.
+// Endpoint del copiloto de IA. El servidor no guarda estado de conversación
+// propio — `history` es el ConversationState opaco que el cliente reenvía
+// tal cual (ver src/services/ai/conversationState.ts) y `result.history` es
+// lo que el cliente debe guardar para la próxima pregunta.
 export async function POST(req: NextRequest) {
   try {
-    const { message, boardId } = await req.json();
+    const { message, boardId, history } = await req.json();
 
     if (!message || typeof message !== 'string') {
       return NextResponse.json({ error: 'message es requerido' }, { status: 400 });
@@ -27,6 +28,7 @@ export async function POST(req: NextRequest) {
       supabase,
       message,
       boardId: typeof boardId === 'string' ? boardId : null,
+      history: history && Array.isArray(history.contents) ? (history as ConversationState) : undefined,
     });
 
     return NextResponse.json(result);

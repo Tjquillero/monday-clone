@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bot, X, Send, Zap, Cpu, Activity, Wrench } from 'lucide-react';
+import { EMPTY_CONVERSATION, trimConversationState, type ConversationState } from '@/services/ai/conversationState';
 
 // Copiloto del dominio (Incremento 5 en adelante). Cliente muy fino: nunca
 // calcula, nunca conoce tablas — solo envía el mensaje del usuario a
@@ -27,6 +28,13 @@ export default function AgentControlCenter() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Estado de conversación opaco de Gemini (contents: user/model/functionCall/
+  // functionResponse) — separado de `messages` (que es solo para pintar la
+  // UI). Vive en un ref, no en estado de React: no necesita re-renderizar
+  // nada por sí mismo, solo viaja tal cual en cada petición. Se pierde al
+  // recargar la página o cerrar el panel — decisión explícita para esta
+  // primera iteración (ver memoria del proyecto, "Opción A").
+  const conversationRef = useRef<ConversationState>(EMPTY_CONVERSATION);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -43,14 +51,20 @@ export default function AgentControlCenter() {
     setIsLoading(true);
 
     try {
+      // Recorte antes de enviar (reduce el tamaño de la petición) — el
+      // Orchestrator también recorta defensivamente al recibirlo, así que
+      // un cliente que no recortara no rompería nada, solo enviaría de más.
+      const historyToSend = trimConversationState(conversationRef.current);
+
       const res = await fetch('/api/ai/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMsg, boardId }),
+        body: JSON.stringify({ message: userMsg, boardId, history: historyToSend }),
       });
       const data = await res.json();
 
       if (res.ok) {
+        if (data.history) conversationRef.current = data.history;
         setMessages((prev) => [
           ...prev,
           { role: 'assistant', content: data.text, toolsUsed: data.toolsUsed },

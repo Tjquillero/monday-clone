@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getToolDefinition, listToolDeclarations } from './tools/registry';
+import { EMPTY_CONVERSATION, trimConversationState, type ConversationState } from './conversationState';
 
 // El Orchestrator es la ÚNICA pieza que habla con Gemini. El modelo nunca
 // toca Supabase directamente — solo "pide" tools, y este código decide si
@@ -35,12 +36,14 @@ const SYSTEM_INSTRUCTION_BASE =
 export interface AiOrchestratorResult {
   text: string;
   toolsUsed: string[];
+  history: ConversationState;
 }
 
 export async function runAiOrchestrator(args: {
   supabase: SupabaseClient;
   message: string;
   boardId: string | null;
+  history?: ConversationState;
 }): Promise<AiOrchestratorResult> {
   const { supabase, message, boardId } = args;
 
@@ -54,7 +57,10 @@ export async function runAiOrchestrator(args: {
     SYSTEM_INSTRUCTION_BASE +
     (boardId ? `\nEl board_id actual de esta conversación es: ${boardId}.` : '');
 
-  const contents: any[] = [{ role: 'user', parts: [{ text: message }] }];
+  // El historial recibido es opaco: se recorta por longitud cruda (nunca se
+  // inspecciona su contenido) y se le agrega el mensaje nuevo del usuario.
+  const trimmedHistory = trimConversationState(args.history ?? EMPTY_CONVERSATION);
+  const contents: any[] = [...trimmedHistory.contents, { role: 'user', parts: [{ text: message }] }];
   const config = { systemInstruction, tools: [{ functionDeclarations: toolDeclarations }] };
 
   let response: any = null;
@@ -144,5 +150,14 @@ export async function runAiOrchestrator(args: {
       ? 'No puedo responder esa consulta porque no existe una herramienta autorizada para obtener esa información.'
       : 'No obtuve una respuesta del modelo. Intenta reformular la pregunta.');
 
-  return { text, toolsUsed };
+  // El turno final del modelo se agrega al historial de salida — sin esto,
+  // el siguiente turno "olvidaría" la propia respuesta anterior del modelo
+  // (la memoria conversacional dependería solo de las preguntas del
+  // usuario, no de lo que el copiloto ya contestó).
+  const finalModelContent = response.candidates?.[0]?.content;
+  contents.push(finalModelContent ?? { role: 'model', parts: [{ text }] });
+
+  const history = trimConversationState({ contents });
+
+  return { text, toolsUsed, history };
 }
