@@ -7,6 +7,7 @@ import {
   useCertifiedActasIssued,
   useCertifiedActaMutations,
 } from '@/hooks/useCertifiedActas';
+import { useBoardHasActivePoa } from '@/hooks/usePoaActivities';
 import { MatrixQtyInput } from './ActasModuleComponents';
 
 // Vista del subsistema "Actas certificadas" (Incremento 5, Commit 4).
@@ -33,6 +34,7 @@ export default function CertifiedActasModule({ boardId }: CertifiedActasModulePr
   const { data: draft, isLoading: draftLoading } = useCertifiedActaDraft(boardId);
   const { data: issuedActas, isLoading: issuedLoading } = useCertifiedActasIssued(boardId);
   const { generateDraft, adjustQuantity, issueActa } = useCertifiedActaMutations(boardId);
+  const { data: hasActivePoa, isLoading: poaCheckLoading } = useBoardHasActivePoa(boardId);
 
   const [selectedIssuedId, setSelectedIssuedId] = useState<string | null>(null);
   const selectedIssued = issuedActas?.find(a => a.id === selectedIssuedId) || null;
@@ -127,12 +129,19 @@ export default function CertifiedActasModule({ boardId }: CertifiedActasModulePr
 
         {/* Detalle del acta seleccionada (borrador o emitida) */}
         <div className="flex-1 min-w-0">
-          {draftLoading ? (
+          {draftLoading || poaCheckLoading ? (
             <div className="py-12 text-center text-slate-400">Cargando...</div>
           ) : !displayedActa ? (
             <div className="py-12 text-center text-slate-400 border-2 border-dashed border-slate-100 rounded-3xl">
               <FileText size={48} className="mx-auto mb-4 opacity-20" />
-              <p>No hay un borrador abierto. Genera uno para empezar.</p>
+              {hasActivePoa ? (
+                <p>No hay un borrador abierto. Genera uno para empezar.</p>
+              ) : (
+                <>
+                  <p>Este board todavía no tiene un POA activo cargado.</p>
+                  <p className="text-xs text-slate-300 mt-1">Importa el POA antes de generar el acta.</p>
+                </>
+              )}
             </div>
           ) : (
             <>

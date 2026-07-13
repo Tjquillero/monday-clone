@@ -114,3 +114,30 @@ export function usePoaActiveCatalog(boardId: string | undefined) {
     refetchOnWindowFocus: false,
   });
 }
+
+// Existencia pura (sin catálogo) — para distinguir en la UI "no hay POA
+// activo todavía" de "hay POA activo pero sin saldo elegible". A diferencia
+// de usePoaActiveCatalog, no colapsa ambos casos en un Map vacío.
+export function useBoardHasActivePoa(boardId: string | undefined) {
+  return useQuery({
+    queryKey: ['board_has_active_poa', boardId],
+    queryFn: async (): Promise<boolean> => {
+      if (!boardId) return false;
+
+      const { data, error } = await supabase
+        .from('poa')
+        .select('id, poa_versions!inner(id)')
+        .eq('board_id', boardId)
+        .eq('poa_versions.status', 'active')
+        .maybeSingle();
+
+      if (error?.code === '42P01') throw new SchedulerMigrationMissingError('poa_versions');
+      if (error) throw error;
+
+      return !!data;
+    },
+    enabled: !!boardId,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+}
