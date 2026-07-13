@@ -55,7 +55,12 @@ export default function AgentControlCenter() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  // Por board, igual que messages/conversation: un useState global aquí
+  // dejaba "cargando" atascado para siempre si el usuario cambiaba de board
+  // mientras la respuesta estaba en vuelo (el guard de escritura solo limpia
+  // el board ORIGINAL, nunca el que quedó en pantalla).
+  const [loadingBoards, setLoadingBoards] = useState<Set<string>>(new Set());
+  const isLoading = loadingBoards.has(boardKey);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Memoria conversacional (Opción A), separada POR BOARD: el widget vive
   // montado globalmente (layout.tsx) y no se desmonta al cambiar de board,
@@ -101,7 +106,7 @@ export default function AgentControlCenter() {
     const withUserMsg: Message[] = [...before.messages, { role: 'user', content: userMsg }];
     chatStoreRef.current.set(targetBoardKey, { messages: withUserMsg, conversation: before.conversation });
     if (boardKeyRef.current === targetBoardKey) setMessages(withUserMsg);
-    setIsLoading(true);
+    setLoadingBoards((prev) => new Set(prev).add(targetBoardKey));
 
     try {
       // Recorte antes de enviar (reduce el tamaño de la petición) — el
@@ -134,7 +139,15 @@ export default function AgentControlCenter() {
       chatStoreRef.current.set(targetBoardKey, { ...latest, messages: newMessages });
       if (boardKeyRef.current === targetBoardKey) setMessages(newMessages);
     } finally {
-      if (boardKeyRef.current === targetBoardKey) setIsLoading(false);
+      // Sin guardar por boardKeyRef a propósito: a diferencia de
+      // messages/conversation (que solo deben pintarse si el board de
+      // destino sigue activo), el estado de carga de un board debe limpiarse
+      // apenas su propia respuesta llega, esté o no ese board en pantalla.
+      setLoadingBoards((prev) => {
+        const next = new Set(prev);
+        next.delete(targetBoardKey);
+        return next;
+      });
     }
   };
 

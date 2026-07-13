@@ -120,6 +120,70 @@ describe('AgentControlCenter — memoria conversacional por board', () => {
   });
 });
 
+describe('AgentControlCenter — isLoading por board', () => {
+  beforeEach(() => {
+    currentBoardId = 'board-a';
+    mockProactiveSummary = null;
+    (global as any).fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  async function openWidget() {
+    const toggleButton = screen.getAllByRole('button')[0];
+    fireEvent.click(toggleButton);
+    return screen.findByPlaceholderText(/Pregunta algo/i);
+  }
+
+  // Reproduce el bug: isLoading era un único useState global, solo limpiado
+  // en `finally` si el board de destino seguía activo. Cambiar de board
+  // mientras la respuesta de A estaba en vuelo lo dejaba atascado en true
+  // para siempre — deshabilitando el envío en TODOS los boards.
+  it('no deja "cargando" atascado si el usuario cambia de board antes de que llegue la respuesta', async () => {
+    let resolveFetch: (value: any) => void;
+    const pendingFetch = new Promise((resolve) => {
+      resolveFetch = resolve;
+    });
+    (global.fetch as jest.Mock).mockReturnValueOnce(pendingFetch);
+
+    const { rerender } = render(<AgentControlCenter />);
+    const input = await openWidget();
+
+    sendMessage(input, '¿Cuánto vale el acta de este board?');
+
+    // Board A muestra el indicador de carga mientras la respuesta está en vuelo.
+    expect(document.querySelector('.animate-bounce')).not.toBeNull();
+
+    // Cambia a board B ANTES de que resuelva el fetch de A.
+    currentBoardId = 'board-b';
+    rerender(<AgentControlCenter />);
+
+    // Board B nunca envió nada -> no debe mostrar "cargando".
+    expect(document.querySelector('.animate-bounce')).toBeNull();
+
+    // Ahora resuelve la respuesta de A (el board que ya no está en pantalla).
+    resolveFetch!(mockNextAskResponse('Respuesta board A', { contents: [] }));
+    await waitFor(() => expect((global.fetch as jest.Mock)).toHaveBeenCalledTimes(1));
+
+    // Vuelve a A: debe poder enviar de nuevo, isLoading no debe seguir atascado.
+    currentBoardId = 'board-a';
+    rerender(<AgentControlCenter />);
+    await waitFor(() => expect(screen.getByText('Respuesta board A')).toBeInTheDocument());
+    expect(document.querySelector('.animate-bounce')).toBeNull();
+
+    (global.fetch as jest.Mock).mockResolvedValueOnce(mockNextAskResponse('Segunda respuesta A', { contents: [] }) as any);
+    sendMessage(input, 'otra pregunta');
+    await waitFor(() => expect(screen.getByText('Segunda respuesta A')).toBeInTheDocument());
+  });
+
+  function sendMessage(input: HTMLElement, text: string) {
+    fireEvent.change(input, { target: { value: text } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+  }
+});
+
 describe('AgentControlCenter — respuestas con citas', () => {
   beforeEach(() => {
     currentBoardId = 'board-a';
