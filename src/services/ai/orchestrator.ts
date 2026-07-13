@@ -67,7 +67,7 @@ export async function runAiOrchestrator(args: {
   const contents: any[] = [...trimmedHistory.contents, { role: 'user', parts: [{ text: message }] }];
   const config = { systemInstruction, tools: [{ functionDeclarations: toolDeclarations }] };
 
-  const { response: firstResponse, usedModel } = await generateWithModelFallback(client, (model) =>
+  const { response: firstResponse } = await generateWithModelFallback(client, (model) =>
     client.models.generateContent({ model, contents, config })
   );
   let response: any = firstResponse;
@@ -132,7 +132,13 @@ export async function runAiOrchestrator(args: {
 
     contents.push({ role: 'user', parts: responseParts });
 
-    response = await client.models.generateContent({ model: usedModel, contents, config });
+    // Misma protección de cuota que la primera llamada (línea ~70) — sin
+    // esto, un 429 justo en esta segunda vuelta (la que convierte los
+    // resultados del tool en la respuesta final) tumbaba todo el turno en
+    // vez de reintentar con el modelo de respaldo.
+    ({ response } = await generateWithModelFallback(client, (model) =>
+      client.models.generateContent({ model, contents, config })
+    ));
   }
 
   const text: string =
