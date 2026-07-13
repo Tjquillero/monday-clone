@@ -14,7 +14,15 @@ import { getToolDefinition, listToolDeclarations } from './tools/registry';
 // resolver esa consulta. El modelo nunca puede "improvisar" una respuesta
 // sin pasar por una herramienta autorizada.
 
-const MODELS_TO_TRY = ['gemini-3-flash-preview', 'gemini-1.5-flash'];
+// gemini-1.5-flash fue retirado del catálogo de la API (confirmado contra
+// GET /v1beta/models — ya no aparece); gemini-2.0-flash SÍ existe pero
+// devuelve 429 con "limit: 0" en este plan (cuota cero, no agotada — nunca
+// va a funcionar aquí, no solo "hoy"). gemini-flash-lite-latest es el único
+// de los candidatos probados con cuota real disponible en la capa gratuita
+// de este proyecto (verificado con una llamada real, no supuesto) — un
+// fallback genuino cuando 3-flash-preview devuelve 429 por cuota diaria
+// agotada (no un error de código).
+const MODELS_TO_TRY = ['gemini-3-flash-preview', 'gemini-flash-lite-latest'];
 
 const SYSTEM_INSTRUCTION_BASE =
   'Eres el copiloto de operaciones de Mantenix. SOLO puedes responder preguntas ' +

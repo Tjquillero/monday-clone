@@ -23,7 +23,6 @@ import PersonnelPicker from './PersonnelPicker';
 import PhotoVerificationModal from './modals/PhotoVerificationModal';
 import DailyAgendaPanel from './DailyAgendaPanel';
 import DateRangeModal from './DateRangeModal';
-import AgentControlCenter from './AgentControlCenter';
 import MantenixMap from './MantenixMap';
 
 export default function ExecutionView({ 
@@ -312,8 +311,7 @@ export default function ExecutionView({
       />
       {personnelPicker && <PersonnelPicker currentValue={personnelPicker.currentId} onSelect={handleAssignPersonnel} onClose={() => setPersonnelPicker(null)} position={{ top: personnelPicker.top, left: personnelPicker.left }} />}
       <DateRangeModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveDates} itemName={activePrompt?.item.name || ''} expectedDays={0} />
-      <AgentControlCenter />
-      <PhotoVerificationModal 
+      <PhotoVerificationModal
             isOpen={isPhotoModalOpen} 
             onClose={() => {setIsPhotoModalOpen(false); setActivePhotoItem(null);}} 
             onSave={handleSavePhoto} 

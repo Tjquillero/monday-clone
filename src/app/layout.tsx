@@ -1,4 +1,5 @@
 import './globals.css';
+import { Suspense } from 'react';
 import { Providers } from '@/components/Providers';
 import { Metadata } from 'next';
 import AgentControlCenter from '@/components/AgentControlCenter';
@@ -37,7 +38,9 @@ export default function RootLayout({
         <Providers>
           {children}
           {/* AGENTE DE IA MANTENIX (GLOBAL) */}
-          <AgentControlCenter />
+          <Suspense fallback={null}>
+            <AgentControlCenter />
+          </Suspense>
         </Providers>
       </body>
     </html>
