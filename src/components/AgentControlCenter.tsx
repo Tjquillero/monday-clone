@@ -19,22 +19,40 @@ interface Message {
   toolsUsed?: string[];
 }
 
+// Sin board seleccionado (vistas globales) usa su propio balde de memoria —
+// nunca comparte historial con un board real.
+const NO_BOARD_KEY = '__no_board__';
+
+interface BoardChatState {
+  messages: Message[];
+  conversation: ConversationState;
+}
+
 export default function AgentControlCenter() {
   const searchParams = useSearchParams();
   const boardId = searchParams?.get('boardId') ?? null;
+  const boardKey = boardId ?? NO_BOARD_KEY;
 
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  // Estado de conversación opaco de Gemini (contents: user/model/functionCall/
-  // functionResponse) — separado de `messages` (que es solo para pintar la
-  // UI). Vive en un ref, no en estado de React: no necesita re-renderizar
-  // nada por sí mismo, solo viaja tal cual en cada petición. Se pierde al
-  // recargar la página o cerrar el panel — decisión explícita para esta
-  // primera iteración (ver memoria del proyecto, "Opción A").
-  const conversationRef = useRef<ConversationState>(EMPTY_CONVERSATION);
+  // Memoria conversacional (Opción A), separada POR BOARD: el widget vive
+  // montado globalmente (layout.tsx) y no se desmonta al cambiar de board,
+  // así que sin este balde por board_id el historial de un board se
+  // filtraría al siguiente ("este contrato", "la última acta" resolverían
+  // mal). Cada entrada guarda tanto los `messages` (solo para pintar la UI)
+  // como el `ConversationState` opaco que viaja al Orchestrator. Vive en un
+  // ref, no en estado de React — cambiar de board no debe re-renderizar nada
+  // por sí solo. Se pierde al recargar la página, igual que la memoria base.
+  const chatStoreRef = useRef<Map<string, BoardChatState>>(new Map());
+  const boardKeyRef = useRef<string>(boardKey);
+
+  useEffect(() => {
+    boardKeyRef.current = boardKey;
+    setMessages(chatStoreRef.current.get(boardKey)?.messages ?? []);
+  }, [boardKey]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -47,41 +65,50 @@ export default function AgentControlCenter() {
 
     const userMsg = input.trim();
     setInput('');
-    setMessages((prev) => [...prev, { role: 'user', content: userMsg }]);
+
+    // El board de destino se fija al momento de enviar: si el usuario
+    // cambia de board mientras la respuesta está en vuelo, esta respuesta
+    // debe actualizar el balde del board ORIGINAL, nunca el que quede
+    // activo en pantalla en ese momento.
+    const targetBoardKey = boardKeyRef.current;
+    const before = chatStoreRef.current.get(targetBoardKey) ?? { messages: [], conversation: EMPTY_CONVERSATION };
+    const withUserMsg: Message[] = [...before.messages, { role: 'user', content: userMsg }];
+    chatStoreRef.current.set(targetBoardKey, { messages: withUserMsg, conversation: before.conversation });
+    if (boardKeyRef.current === targetBoardKey) setMessages(withUserMsg);
     setIsLoading(true);
 
     try {
       // Recorte antes de enviar (reduce el tamaño de la petición) — el
       // Orchestrator también recorta defensivamente al recibirlo, así que
       // un cliente que no recortara no rompería nada, solo enviaría de más.
-      const historyToSend = trimConversationState(conversationRef.current);
+      const historyToSend = trimConversationState(before.conversation);
 
       const res = await fetch('/api/ai/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMsg, boardId, history: historyToSend }),
+        body: JSON.stringify({
+          message: userMsg,
+          boardId: targetBoardKey === NO_BOARD_KEY ? null : targetBoardKey,
+          history: historyToSend,
+        }),
       });
       const data = await res.json();
 
-      if (res.ok) {
-        if (data.history) conversationRef.current = data.history;
-        setMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: data.text, toolsUsed: data.toolsUsed },
-        ]);
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: `Error: ${data.error || 'algo salió mal.'}` },
-        ]);
-      }
+      const latest = chatStoreRef.current.get(targetBoardKey) ?? { messages: withUserMsg, conversation: before.conversation };
+      const newMessages: Message[] = res.ok
+        ? [...latest.messages, { role: 'assistant', content: data.text, toolsUsed: data.toolsUsed }]
+        : [...latest.messages, { role: 'assistant', content: `Error: ${data.error || 'algo salió mal.'}` }];
+      const newConversation: ConversationState = res.ok && data.history ? data.history : latest.conversation;
+
+      chatStoreRef.current.set(targetBoardKey, { messages: newMessages, conversation: newConversation });
+      if (boardKeyRef.current === targetBoardKey) setMessages(newMessages);
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: 'No pude conectar con el copiloto. Intenta de nuevo.' },
-      ]);
+      const latest = chatStoreRef.current.get(targetBoardKey) ?? { messages: withUserMsg, conversation: before.conversation };
+      const newMessages: Message[] = [...latest.messages, { role: 'assistant', content: 'No pude conectar con el copiloto. Intenta de nuevo.' }];
+      chatStoreRef.current.set(targetBoardKey, { ...latest, messages: newMessages });
+      if (boardKeyRef.current === targetBoardKey) setMessages(newMessages);
     } finally {
-      setIsLoading(false);
+      if (boardKeyRef.current === targetBoardKey) setIsLoading(false);
     }
   };
 
