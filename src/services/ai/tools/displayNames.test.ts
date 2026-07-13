@@ -1,3 +1,13 @@
+// El Registry importa transitivamente evaluate_execution_evidence, que
+// importa @google/genai (paquete ESM-only que Jest no puede transformar).
+// Este test no necesita Gemini real — solo los nombres de las tools — así
+// que se mockea mínimamente, mismo patrón que orchestrator.test.ts.
+jest.mock('@google/genai', () => ({
+  GoogleGenAI: jest.fn(),
+  createPartFromUri: jest.fn(),
+  Type: { OBJECT: 'OBJECT', STRING: 'STRING', ARRAY: 'ARRAY' },
+}));
+
 import { AI_TOOL_REGISTRY } from './registry';
 import { TOOL_DISPLAY_NAMES } from './displayNames';
 

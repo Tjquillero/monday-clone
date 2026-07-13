@@ -11,6 +11,7 @@ export const TOOL_DISPLAY_NAMES: Record<string, string> = {
   get_execution_summary: 'Resumen de verificación',
   get_poa_version_diff: 'Comparación de versiones del POA',
   get_executions_without_evidence: 'Jornadas sin evidencia fotográfica',
+  evaluate_execution_evidence: 'Evaluación visual de evidencia',
 };
 
 export function getToolDisplayName(tool: string): string {

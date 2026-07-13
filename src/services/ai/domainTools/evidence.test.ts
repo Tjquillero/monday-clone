@@ -1,4 +1,4 @@
-import { getExecutionsWithoutEvidence } from './evidence';
+import { getExecutionsWithoutEvidence, getExecutionAttachments } from './evidence';
 
 function mockSupabase(rows: unknown[]) {
   return { rpc: jest.fn().mockResolvedValue({ data: rows, error: null }) } as any;
@@ -45,5 +45,24 @@ describe('getExecutionsWithoutEvidence', () => {
     await expect(getExecutionsWithoutEvidence(supabase, 'board-1')).rejects.toEqual({
       message: 'No tiene acceso a este board.',
     });
+  });
+});
+
+describe('getExecutionAttachments', () => {
+  it('mapea las filas de la RPC al DTO (camelCase)', async () => {
+    const supabase = mockSupabase([
+      { file_url: 'https://example.test/a.jpg', file_name: 'a.jpg', file_type: 'image/jpeg' },
+    ]);
+
+    const dto = await getExecutionAttachments(supabase, 'exec-1');
+
+    expect(dto).toEqual([{ fileUrl: 'https://example.test/a.jpg', fileName: 'a.jpg', fileType: 'image/jpeg' }]);
+    expect(supabase.rpc).toHaveBeenCalledWith('get_execution_attachments', { p_execution_id: 'exec-1' });
+  });
+
+  it('devuelve un arreglo vacío cuando la ejecución no tiene fotos', async () => {
+    const supabase = mockSupabase([]);
+    const dto = await getExecutionAttachments(supabase, 'exec-1');
+    expect(dto).toEqual([]);
   });
 });
