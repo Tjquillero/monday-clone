@@ -10,6 +10,7 @@ export const TOOL_DISPLAY_NAMES: Record<string, string> = {
   get_delayed_weekly_plans: 'Cronogramas retrasados',
   get_execution_summary: 'Resumen de verificación',
   get_poa_version_diff: 'Comparación de versiones del POA',
+  get_executions_without_evidence: 'Jornadas sin evidencia fotográfica',
 };
 
 export function getToolDisplayName(tool: string): string {

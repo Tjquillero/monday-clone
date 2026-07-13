@@ -6,6 +6,7 @@ import { getBoardSummaryTool } from './getBoardSummary';
 import { getDelayedWeeklyPlansTool } from './getDelayedWeeklyPlans';
 import { getExecutionSummaryTool } from './getExecutionSummary';
 import { getPoaVersionDiffTool } from './getPoaVersionDiff';
+import { getExecutionsWithoutEvidenceTool } from './getExecutionsWithoutEvidence';
 
 // La whitelist. Si un tool no está aquí, el modelo no puede usarlo — el
 // Orchestrator valida el nombre contra este registro independientemente de
@@ -25,6 +26,7 @@ export const AI_TOOL_REGISTRY: Record<string, AiToolDefinition> = {
   [getDelayedWeeklyPlansTool.name]: getDelayedWeeklyPlansTool,
   [getExecutionSummaryTool.name]: getExecutionSummaryTool,
   [getPoaVersionDiffTool.name]: getPoaVersionDiffTool,
+  [getExecutionsWithoutEvidenceTool.name]: getExecutionsWithoutEvidenceTool,
 };
 
 export function getToolDefinition(name: string): AiToolDefinition | undefined {
