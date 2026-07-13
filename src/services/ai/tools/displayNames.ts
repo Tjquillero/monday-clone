@@ -12,6 +12,7 @@ export const TOOL_DISPLAY_NAMES: Record<string, string> = {
   get_poa_version_diff: 'Comparación de versiones del POA',
   get_executions_without_evidence: 'Jornadas sin evidencia fotográfica',
   evaluate_execution_evidence: 'Evaluación visual de evidencia',
+  compare_before_after_evidence: 'Comparación antes/después',
 };
 
 export function getToolDisplayName(tool: string): string {

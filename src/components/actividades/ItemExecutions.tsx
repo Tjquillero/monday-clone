@@ -361,9 +361,10 @@ export default function ItemExecutions({ planId, groupId, planItemId, unit }: Pr
             if (entry.kind === 'pending') deletePendingAttachment.mutate(entry.pending.id);
             else deleteAttachment.mutate(entry.attachment);
           }}
-          onUpload={(file) => uploadAttachment.mutateAsync(file).then((result) =>
+          onUpload={(file, phase) => uploadAttachment.mutateAsync({ file, phase }).then((result) =>
             result.queued ? getPendingUrl(result.pending) : result.attachment.file_url
           )}
+          capturePhase
           itemName="Evidencia de jornada"
           itemId={evidenceExecId}
           initialGallery={galleryUrls}

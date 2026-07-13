@@ -1,10 +1,12 @@
 -- =============================================================================
 -- Tests: get_execution_attachments() (IA)
 --
--- CONTRATO: supabase/migrations/20260811_ai_execution_attachments_lookup.sql
+-- CONTRATO: supabase/migrations/20260811_ai_execution_attachments_lookup.sql,
+-- 20260813_ai_execution_attachments_phase.sql (agrega columna phase)
 --
 -- Cubre: devuelve las fotos reales de una ejecución, orden por created_at,
--- una ejecución sin fotos devuelve 0 filas sin error, autorización.
+-- una ejecución sin fotos devuelve 0 filas sin error, autorización, phase
+-- correcto (incluye NULL para fotos sin clasificar).
 --
 -- Sin SAVEPOINT/ROLLBACK TO por test (ver nota en 01_state_machine.sql).
 --
@@ -23,7 +25,7 @@ SELECT set_config(
 
 BEGIN;
 
-SELECT plan(6);
+SELECT plan(9);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Fixtures (prefijo ec0e0000...0021 / 5ca1ab1e...2101).
@@ -67,10 +69,10 @@ BEGIN
   VALUES (v_item_id, '2026-11-02', 2, '2026-11-02 07:00', '2026-11-02 15:00', 40, 'verified', 'aaaaaaaa-0000-0000-0000-000000000001', NOW(), 'aaaaaaaa-0000-0000-0000-000000000001')
   RETURNING id INTO v_exec_with_photos;
 
-  INSERT INTO public.execution_attachments (execution_id, file_name, file_url, file_type, uploaded_by, created_at)
+  INSERT INTO public.execution_attachments (execution_id, file_name, file_url, file_type, uploaded_by, phase, created_at)
   VALUES
-    (v_exec_with_photos, 'foto1.jpg', 'https://example.test/foto1.jpg', 'image/jpeg', 'aaaaaaaa-0000-0000-0000-000000000001', NOW() - INTERVAL '2 minutes'),
-    (v_exec_with_photos, 'foto2.jpg', 'https://example.test/foto2.jpg', 'image/jpeg', 'aaaaaaaa-0000-0000-0000-000000000001', NOW() - INTERVAL '1 minutes');
+    (v_exec_with_photos, 'foto1.jpg', 'https://example.test/foto1.jpg', 'image/jpeg', 'aaaaaaaa-0000-0000-0000-000000000001', 'before', NOW() - INTERVAL '2 minutes'),
+    (v_exec_with_photos, 'foto2.jpg', 'https://example.test/foto2.jpg', 'image/jpeg', 'aaaaaaaa-0000-0000-0000-000000000001', NULL, NOW() - INTERVAL '1 minutes');
 
   INSERT INTO public.weekly_plan_item_executions
     (plan_item_id, execution_date, worker_count, started_at, finished_at, executed_qty, status, verified_by, verified_at, created_by)
@@ -107,14 +109,31 @@ SELECT is(
   0,
   'Test 5: una ejecución sin fotos devuelve 0 filas, sin error ✓'
 );
+SELECT is(
+  (SELECT phase FROM public.get_execution_attachments(current_setting('at_test.exec_with_photos')::UUID) WHERE file_name = 'foto1.jpg'),
+  'before',
+  'Test 6: phase = before para la foto clasificada ✓'
+);
+SELECT is(
+  (SELECT phase FROM public.get_execution_attachments(current_setting('at_test.exec_with_photos')::UUID) WHERE file_name = 'foto2.jpg'),
+  NULL,
+  'Test 7: phase = NULL para la foto sin clasificar (nunca se infiere) ✓'
+);
 
 SELECT set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000005","role":"authenticated"}', true);
 SELECT throws_like(
   $$ SELECT * FROM public.get_execution_attachments(current_setting('at_test.exec_with_photos')::UUID) $$,
   '%No tiene acceso%',
-  'Test 6: un no-miembro no puede leer get_execution_attachments() ✓'
+  'Test 8: un no-miembro no puede leer get_execution_attachments() ✓'
 );
 SELECT set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
+
+SELECT throws_like(
+  $$ INSERT INTO public.execution_attachments (execution_id, file_name, file_url, phase, uploaded_by)
+     VALUES (current_setting('at_test.exec_with_photos')::UUID, 'invalida.jpg', 'https://example.test/invalida.jpg', 'durante', 'aaaaaaaa-0000-0000-0000-000000000001') $$,
+  '%execution_attachments_phase_check%',
+  'Test 9: phase solo acepta before/after — cualquier otro valor se rechaza (concepto de dominio, no texto libre) ✓'
+);
 
 SELECT * FROM finish();
 ROLLBACK;

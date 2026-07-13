@@ -21,8 +21,14 @@ interface PhotoVerificationModalProps {
   // Si se provee, sube el archivo de verdad y devuelve la URL persistente
   // (ej. useExecutionAttachments().uploadAttachment). Si se omite, conserva
   // el comportamiento original (blob local, no persiste) — no rompe a los
-  // consumidores existentes que todavía no pasan esta prop.
-  onUpload?: (file: File) => Promise<string>;
+  // consumidores existentes que todavía no pasan esta prop. `phase` solo se
+  // envía cuando `capturePhase` está activo (ver abajo).
+  onUpload?: (file: File, phase?: 'before' | 'after') => Promise<string>;
+  // Muestra el selector "Antes"/"Después" antes de capturar — concepto de
+  // dominio (execution_attachments.phase), no algo genérico de este modal.
+  // Los consumidores que no lo necesitan (ItemModal, VerificationContainer)
+  // simplemente no lo activan.
+  capturePhase?: boolean;
   // Oculta los controles de captura/agregar — para visores que solo revisan
   // evidencia ya subida (ej. Verificación del supervisor) y no deben crear
   // fotos locales sin persistir.
@@ -45,11 +51,13 @@ export default function PhotoVerificationModal({
   onUpload,
   readOnly = false,
   galleryStatuses,
+  capturePhase = false,
 }: PhotoVerificationModalProps) {
   const [uploading, setUploading] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [location, setLocation] = useState<{ lat: number, lng: number } | null>(null);
   const [timestamp, setTimestamp] = useState<string | null>(null);
+  const [nextCapturePhase, setNextCapturePhase] = useState<'before' | 'after'>('before');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mounted, setMounted] = useState(false);
 
@@ -96,7 +104,9 @@ export default function PhotoVerificationModal({
     setTimestamp(new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' }));
 
     try {
-      const url = onUpload ? await onUpload(file) : URL.createObjectURL(file);
+      const url = onUpload
+        ? await onUpload(file, capturePhase ? nextCapturePhase : undefined)
+        : URL.createObjectURL(file);
       onSave(url);
       setSelectedPhoto(url);
     } finally {
@@ -213,6 +223,27 @@ export default function PhotoVerificationModal({
                 </div>
 
                 <div className="w-full lg:w-80 flex flex-col shrink-0">
+                    {capturePhase && !readOnly && (
+                        <div className="mb-4">
+                            <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-2">Próxima foto es de</p>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setNextCapturePhase('before')}
+                                    className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${nextCapturePhase === 'before' ? 'bg-[#3B7EF8] text-white border-[#3B7EF8]' : 'bg-white/5 text-slate-500 border-white/10 hover:text-white'}`}
+                                >
+                                    Antes
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setNextCapturePhase('after')}
+                                    className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${nextCapturePhase === 'after' ? 'bg-[#3B7EF8] text-white border-[#3B7EF8]' : 'bg-white/5 text-slate-500 border-white/10 hover:text-white'}`}
+                                >
+                                    Después
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     <div className="flex items-center justify-between mb-4">
                         <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                            <Zap className="w-3 h-3 text-amber-500" /> Historial

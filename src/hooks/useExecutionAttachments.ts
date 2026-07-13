@@ -29,6 +29,11 @@ import { ATTACHMENT_BUCKET, buildAttachmentPath, extractStoragePathFromPublicUrl
 // nadie lo note mientras espera conexión.
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 
+// 'before' (previo a la intervención) | 'after' (posterior) | null (sin
+// clasificar — fotos históricas o subidas sin elegir fase). Concepto de
+// dominio, no una preparación para IA — ver 20260812_execution_attachments_phase.sql.
+export type EvidencePhase = 'before' | 'after';
+
 export interface ExecutionAttachment {
   id: string;
   execution_id: string;
@@ -37,6 +42,7 @@ export interface ExecutionAttachment {
   file_type: string | null;
   file_size: number | null;
   uploaded_by: string | null;
+  phase: EvidencePhase | null;
   created_at: string;
 }
 
@@ -76,8 +82,8 @@ export function useExecutionAttachments(executionId?: string) {
     staleTime: 0,
   });
 
-  const uploadAttachment = useMutation<UploadAttachmentResult, Error, File>({
-    mutationFn: async (file) => {
+  const uploadAttachment = useMutation<UploadAttachmentResult, Error, { file: File; phase?: EvidencePhase }>({
+    mutationFn: async ({ file, phase }) => {
       if (!executionId || !user) throw new Error('Falta executionId o usuario');
       if (file.size > MAX_ATTACHMENT_BYTES) {
         throw new Error(`La foto pesa ${(file.size / 1024 / 1024).toFixed(1)} MB — el máximo permitido es 8 MB.`);
@@ -101,6 +107,7 @@ export function useExecutionAttachments(executionId?: string) {
               file_type: file.type,
               file_size: file.size,
               uploaded_by: user.id,
+              phase: phase ?? null,
             })
             .select()
             .single();
@@ -120,6 +127,7 @@ export function useExecutionAttachments(executionId?: string) {
         file_type: file.type,
         file_size: file.size,
         uploaded_by: user.id,
+        phase: phase ?? null,
       });
       return { queued: true, pending };
     },

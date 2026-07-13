@@ -49,14 +49,18 @@ describe('getExecutionsWithoutEvidence', () => {
 });
 
 describe('getExecutionAttachments', () => {
-  it('mapea las filas de la RPC al DTO (camelCase)', async () => {
+  it('mapea las filas de la RPC al DTO (camelCase), incluyendo phase', async () => {
     const supabase = mockSupabase([
-      { file_url: 'https://example.test/a.jpg', file_name: 'a.jpg', file_type: 'image/jpeg' },
+      { file_url: 'https://example.test/a.jpg', file_name: 'a.jpg', file_type: 'image/jpeg', phase: 'before' },
+      { file_url: 'https://example.test/b.jpg', file_name: 'b.jpg', file_type: 'image/jpeg', phase: null },
     ]);
 
     const dto = await getExecutionAttachments(supabase, 'exec-1');
 
-    expect(dto).toEqual([{ fileUrl: 'https://example.test/a.jpg', fileName: 'a.jpg', fileType: 'image/jpeg' }]);
+    expect(dto).toEqual([
+      { fileUrl: 'https://example.test/a.jpg', fileName: 'a.jpg', fileType: 'image/jpeg', phase: 'before' },
+      { fileUrl: 'https://example.test/b.jpg', fileName: 'b.jpg', fileType: 'image/jpeg', phase: null },
+    ]);
     expect(supabase.rpc).toHaveBeenCalledWith('get_execution_attachments', { p_execution_id: 'exec-1' });
   });
 
