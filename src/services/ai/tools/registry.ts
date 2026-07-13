@@ -3,6 +3,7 @@ import { getCurrentBoardTool } from './getCurrentBoard';
 import { getActaTotalsTool } from './getActaTotals';
 import { getPendingBillableWorkTool } from './getPendingBillableWork';
 import { getBoardSummaryTool } from './getBoardSummary';
+import { getDelayedWeeklyPlansTool } from './getDelayedWeeklyPlans';
 
 // La whitelist. Si un tool no está aquí, el modelo no puede usarlo — el
 // Orchestrator valida el nombre contra este registro independientemente de
@@ -11,13 +12,14 @@ import { getBoardSummaryTool } from './getBoardSummary';
 //
 // Hito 0 (infraestructura): get_current_board, sin valor de negocio.
 // Hito 1+2: get_acta_totals, get_pending_billable_work (vía DomainTools).
-// Catálogo mínimo: get_board_summary (punto de entrada — "¿cómo va el
-//   contrato?", "hazme un resumen").
+// Catálogo mínimo: get_board_summary (punto de entrada), get_delayed_weekly_plans
+//   (la pregunta operativa más común — "¿qué está atrasado?").
 export const AI_TOOL_REGISTRY: Record<string, AiToolDefinition> = {
   [getCurrentBoardTool.name]: getCurrentBoardTool,
   [getActaTotalsTool.name]: getActaTotalsTool,
   [getPendingBillableWorkTool.name]: getPendingBillableWorkTool,
   [getBoardSummaryTool.name]: getBoardSummaryTool,
+  [getDelayedWeeklyPlansTool.name]: getDelayedWeeklyPlansTool,
 };
 
 export function getToolDefinition(name: string): AiToolDefinition | undefined {
