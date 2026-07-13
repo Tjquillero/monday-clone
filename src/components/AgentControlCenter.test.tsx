@@ -15,6 +15,15 @@ jest.mock('next/navigation', () => ({
   useSearchParams: () => ({ get: (key: string) => (key === 'boardId' ? currentBoardId : null) }),
 }));
 
+// La sugerencia proactiva se prueba aparte (useAiProactiveSummary.test.ts) —
+// aquí se mockea para no requerir credenciales reales de Supabase (el hook
+// importa @/lib/supabaseClient a nivel de módulo) y para controlar su valor
+// por test. Por defecto null (sin aviso), como si no hubiera nada pendiente.
+let mockProactiveSummary: string | null = null;
+jest.mock('@/hooks/useAiProactiveSummary', () => ({
+  useAiProactiveSummary: () => ({ data: mockProactiveSummary }),
+}));
+
 function stripMotionProps({ whileHover, whileTap, initial, animate, exit, ...rest }: any) {
   return rest;
 }
@@ -36,6 +45,7 @@ function mockNextAskResponse(text: string, history: unknown) {
 describe('AgentControlCenter — memoria conversacional por board', () => {
   beforeEach(() => {
     currentBoardId = 'board-a';
+    mockProactiveSummary = null;
     (global as any).fetch = jest.fn();
   });
 
@@ -113,6 +123,7 @@ describe('AgentControlCenter — memoria conversacional por board', () => {
 describe('AgentControlCenter — respuestas con citas', () => {
   beforeEach(() => {
     currentBoardId = 'board-a';
+    mockProactiveSummary = null;
     (global as any).fetch = jest.fn();
   });
 
@@ -179,5 +190,62 @@ describe('AgentControlCenter — respuestas con citas', () => {
 
     await waitFor(() => expect(screen.getByText('El AIU es $18.000')).toBeInTheDocument());
     expect(screen.queryByText(/Fuente:/)).not.toBeInTheDocument();
+  });
+});
+
+describe('AgentControlCenter — sugerencia proactiva', () => {
+  beforeEach(() => {
+    currentBoardId = 'board-a';
+    (global as any).fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  async function openWidget() {
+    const toggleButton = screen.getAllByRole('button')[0];
+    fireEvent.click(toggleButton);
+    return screen.findByPlaceholderText(/Pregunta algo/i);
+  }
+
+  it('muestra el aviso automático cuando el hook devuelve un mensaje y no hay conversación aún', async () => {
+    mockProactiveSummary = 'Detecté 4 planes semanales vencidos y 2 actividades certificables (~COP 500.000).';
+
+    render(<AgentControlCenter />);
+    await openWidget();
+
+    expect(screen.getByText('Aviso automático')).toBeInTheDocument();
+    expect(
+      screen.getByText('Detecté 4 planes semanales vencidos y 2 actividades certificables (~COP 500.000).')
+    ).toBeInTheDocument();
+  });
+
+  it('no muestra ningún aviso cuando el hook no tiene nada que reportar', async () => {
+    mockProactiveSummary = null;
+
+    render(<AgentControlCenter />);
+    await openWidget();
+
+    expect(screen.queryByText('Aviso automático')).not.toBeInTheDocument();
+    expect(screen.getByText(/Pregúntame sobre este board/)).toBeInTheDocument();
+  });
+
+  it('el aviso desaparece en cuanto hay una conversación real (no se mezcla con el historial)', async () => {
+    mockProactiveSummary = 'Detecté 1 plan semanal vencido.';
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ text: 'Respuesta real', citations: [], history: { contents: [] } }),
+    });
+
+    render(<AgentControlCenter />);
+    const input = await openWidget();
+    expect(screen.getByText('Aviso automático')).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: 'una pregunta real' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => expect(screen.getByText('Respuesta real')).toBeInTheDocument());
+    expect(screen.queryByText('Aviso automático')).not.toBeInTheDocument();
   });
 });

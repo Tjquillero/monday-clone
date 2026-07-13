@@ -7,6 +7,7 @@ import { Bot, X, Send, Zap, Cpu, Activity, Wrench } from 'lucide-react';
 import { EMPTY_CONVERSATION, trimConversationState, type ConversationState } from '@/services/ai/conversationState';
 import type { ToolCitation } from '@/services/ai/orchestrator';
 import { getToolDisplayName } from '@/services/ai/tools/displayNames';
+import { useAiProactiveSummary } from '@/hooks/useAiProactiveSummary';
 
 // Copiloto del dominio (Incremento 5 en adelante). Cliente muy fino: nunca
 // calcula, nunca conoce tablas — solo envía el mensaje del usuario a
@@ -63,6 +64,13 @@ export default function AgentControlCenter() {
   // por sí solo. Se pierde al recargar la página, igual que la memoria base.
   const chatStoreRef = useRef<Map<string, BoardChatState>>(new Map());
   const boardKeyRef = useRef<string>(boardKey);
+
+  // Sugerencia proactiva: solo se calcula si el panel está abierto y la
+  // conversación de este board sigue vacía — desaparece en cuanto el
+  // usuario envía un mensaje real (deja de cumplirse messages.length===0).
+  // No es un turno de Gemini ni se guarda en el historial: es un aviso vivo
+  // de la app, recalculado cada vez que aplica.
+  const { data: proactiveSummary } = useAiProactiveSummary(boardId, isOpen && messages.length === 0);
 
   useEffect(() => {
     boardKeyRef.current = boardKey;
@@ -181,7 +189,16 @@ export default function AgentControlCenter() {
 
             <div className="flex-1 overflow-hidden relative bg-[var(--bg-primary)]/30 p-6 flex flex-col">
               <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-6 pr-3 custom-scrollbar">
-                {messages.length === 0 && (
+                {messages.length === 0 && proactiveSummary && (
+                  <div className="p-4 rounded-2xl border border-[#3B7EF8]/20 bg-[#3B7EF8]/5 text-[12px] font-medium leading-relaxed text-[var(--text-primary)]">
+                    <div className="flex items-center gap-2 mb-2 opacity-60">
+                      <Activity className="w-3 h-3 text-[#3B7EF8]" />
+                      <span className="text-[8px] font-black uppercase tracking-widest">Aviso automático</span>
+                    </div>
+                    {proactiveSummary}
+                  </div>
+                )}
+                {messages.length === 0 && !proactiveSummary && (
                   <div className="h-full flex flex-col items-center justify-center text-center p-10 opacity-30">
                     <Bot className="w-16 h-16 mb-6 text-[#3B7EF8]" />
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] leading-loose">
