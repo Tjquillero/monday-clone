@@ -32,6 +32,13 @@ const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 // 'before' (previo a la intervención) | 'after' (posterior) | null (sin
 // clasificar — fotos históricas o subidas sin elegir fase). Concepto de
 // dominio, no una preparación para IA — ver 20260812_execution_attachments_phase.sql.
+// Se captura ÚNICAMENTE al subir (parámetro de uploadAttachment) — a
+// propósito NO hay ninguna mutación para editarla después: RLS no tiene
+// política UPDATE en execution_attachments (20260814_execution_attachments_phase_immutable.sql),
+// así que ni un admin del board puede cambiarla vía el cliente normal. Si
+// se necesita una corrección administrativa algún día, debe ser una
+// capacidad aparte con permisos específicos, no agregar aquí un
+// updateAttachment silencioso.
 export type EvidencePhase = 'before' | 'after';
 
 export interface ExecutionAttachment {

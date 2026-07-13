@@ -25,7 +25,7 @@ SELECT set_config(
 
 BEGIN;
 
-SELECT plan(9);
+SELECT plan(10);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Fixtures (prefijo ec0e0000...0021 / 5ca1ab1e...2101).
@@ -133,6 +133,25 @@ SELECT throws_like(
      VALUES (current_setting('at_test.exec_with_photos')::UUID, 'invalida.jpg', 'https://example.test/invalida.jpg', 'durante', 'aaaaaaaa-0000-0000-0000-000000000001') $$,
   '%execution_attachments_phase_check%',
   'Test 9: phase solo acepta before/after — cualquier otro valor se rechaza (concepto de dominio, no texto libre) ✓'
+);
+
+-- Contrato congelado con el usuario: phase se captura al momento de subir
+-- la foto, nunca se edita después como parte del flujo normal — sin
+-- política RLS de UPDATE en execution_attachments (deny-by-default), así
+-- que ni siquiera un admin/miembro del board puede cambiarla vía el
+-- cliente normal. Se prueba bajo el rol authenticated real (no postgres),
+-- porque BYPASSRLS ocultaría exactamente lo que se quiere proteger aquí.
+SET LOCAL ROLE authenticated;
+UPDATE public.execution_attachments
+SET phase = 'after'
+WHERE execution_id = current_setting('at_test.exec_with_photos')::UUID
+  AND file_name = 'foto1.jpg';
+SET LOCAL ROLE postgres;
+
+SELECT is(
+  (SELECT phase FROM public.execution_attachments WHERE execution_id = current_setting('at_test.exec_with_photos')::UUID AND file_name = 'foto1.jpg'),
+  'before',
+  'Test 10: RLS deny-by-default bloquea el UPDATE de phase — se captura al subir, no se edita después (sin política UPDATE en execution_attachments) ✓'
 );
 
 SELECT * FROM finish();
