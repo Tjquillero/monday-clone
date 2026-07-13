@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { offlineDB, PendingAttachment } from '@/lib/offlineDB';
 import { isNetworkError } from './useBoardData';
 import { useAuth } from '@/contexts/AuthContext';
-import { ATTACHMENT_BUCKET, buildAttachmentPath, extractStoragePathFromPublicUrl } from '@/lib/storageUtils';
+import { ATTACHMENT_BUCKET, buildAttachmentPath, extractStoragePathFromPublicUrl, computeFileHash } from '@/lib/storageUtils';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // useExecutionAttachments
@@ -50,6 +50,7 @@ export interface ExecutionAttachment {
   file_size: number | null;
   uploaded_by: string | null;
   phase: EvidencePhase | null;
+  file_hash: string | null;
   created_at: string;
 }
 
@@ -96,6 +97,11 @@ export function useExecutionAttachments(executionId?: string) {
         throw new Error(`La foto pesa ${(file.size / 1024 / 1024).toFixed(1)} MB — el máximo permitido es 8 MB.`);
       }
 
+      // SHA-256 del contenido, calculado en el cliente antes de subir — v2.4
+      // (detección de duplicados exactos). Se calcula siempre, aun sin
+      // conexión, para que la cola offline también lo conserve.
+      const fileHash = await computeFileHash(file);
+
       const offline = typeof window !== 'undefined' && !window.navigator.onLine;
       if (!offline) {
         try {
@@ -115,6 +121,7 @@ export function useExecutionAttachments(executionId?: string) {
               file_size: file.size,
               uploaded_by: user.id,
               phase: phase ?? null,
+              file_hash: fileHash,
             })
             .select()
             .single();
@@ -135,6 +142,7 @@ export function useExecutionAttachments(executionId?: string) {
         file_size: file.size,
         uploaded_by: user.id,
         phase: phase ?? null,
+        file_hash: fileHash,
       });
       return { queued: true, pending };
     },

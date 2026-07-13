@@ -86,6 +86,7 @@ export interface PendingAttachment {
   file_size: number;
   uploaded_by: string;
   phase: 'before' | 'after' | null;
+  file_hash: string | null;
   storage_path: string | null;
   status: PendingAttachmentStatus;
   attempts: number;
@@ -397,7 +398,7 @@ export class OfflineDB {
     });
   }
 
-  async addPendingAttachment(att: { execution_id: string; file: Blob; file_name: string; file_type: string; file_size: number; uploaded_by: string; phase?: 'before' | 'after' | null }): Promise<PendingAttachment> {
+  async addPendingAttachment(att: { execution_id: string; file: Blob; file_name: string; file_type: string; file_size: number; uploaded_by: string; phase?: 'before' | 'after' | null; file_hash?: string | null }): Promise<PendingAttachment> {
     const db = await this.init();
     const pending: PendingAttachment = {
       id: generateUUID(),
@@ -408,6 +409,7 @@ export class OfflineDB {
       file_size: att.file_size,
       uploaded_by: att.uploaded_by,
       phase: att.phase ?? null,
+      file_hash: att.file_hash ?? null,
       storage_path: null,
       status: 'queued',
       attempts: 0,

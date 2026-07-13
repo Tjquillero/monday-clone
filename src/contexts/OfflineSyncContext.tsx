@@ -207,6 +207,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
           file_size: p.file_size,
           uploaded_by: p.uploaded_by,
           phase: p.phase ?? null,
+          file_hash: p.file_hash ?? null,
         });
 
         if (dbError) {

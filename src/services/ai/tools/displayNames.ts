@@ -13,6 +13,7 @@ export const TOOL_DISPLAY_NAMES: Record<string, string> = {
   get_executions_without_evidence: 'Jornadas sin evidencia fotográfica',
   evaluate_execution_evidence: 'Evaluación visual de evidencia',
   compare_before_after_evidence: 'Comparación antes/después',
+  get_duplicate_attachments: 'Evidencia duplicada',
 };
 
 export function getToolDisplayName(tool: string): string {

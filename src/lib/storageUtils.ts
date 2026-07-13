@@ -32,6 +32,23 @@ export function extractStoragePathFromPublicUrl(publicUrl: string, bucket: strin
 }
 
 /**
+ * SHA-256 del contenido binario del archivo, calculado en el cliente antes
+ * de subir — v2.4 del copiloto de IA (detección de duplicados exactos),
+ * pero es un dato de dominio reutilizable fuera de la IA (auditoría,
+ * deduplicación de storage, detectar errores de subida). Dos archivos con
+ * el mismo hash son idénticos byte a byte; esto nunca lo decide un modelo.
+ * Usa Web Crypto (SubtleCrypto) — disponible en todos los navegadores
+ * modernos sin dependencias nuevas.
+ */
+export async function computeFileHash(file: File | Blob): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const digest = await crypto.subtle.digest('SHA-256', buffer);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/**
  * Uploads a file to Supabase Storage and returns the Public URL.
  * @param file The file to upload
  * @param bucket The storage bucket name (default: 'attachments')

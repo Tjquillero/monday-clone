@@ -9,6 +9,7 @@ import { getPoaVersionDiffTool } from './getPoaVersionDiff';
 import { getExecutionsWithoutEvidenceTool } from './getExecutionsWithoutEvidence';
 import { evaluateExecutionEvidenceTool } from './evaluateExecutionEvidence';
 import { compareBeforeAfterEvidenceTool } from './compareBeforeAfterEvidence';
+import { getDuplicateAttachmentsTool } from './getDuplicateAttachments';
 
 // La whitelist. Si un tool no está aquí, el modelo no puede usarlo — el
 // Orchestrator valida el nombre contra este registro independientemente de
@@ -31,6 +32,7 @@ export const AI_TOOL_REGISTRY: Record<string, AiToolDefinition> = {
   [getExecutionsWithoutEvidenceTool.name]: getExecutionsWithoutEvidenceTool,
   [evaluateExecutionEvidenceTool.name]: evaluateExecutionEvidenceTool,
   [compareBeforeAfterEvidenceTool.name]: compareBeforeAfterEvidenceTool,
+  [getDuplicateAttachmentsTool.name]: getDuplicateAttachmentsTool,
 };
 
 export function getToolDefinition(name: string): AiToolDefinition | undefined {
