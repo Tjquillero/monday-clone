@@ -24,14 +24,17 @@ const SYSTEM_INSTRUCTION_BASE =
   'cuenta (por ejemplo, un total o un porcentaje) — si necesitas un cálculo, debe ' +
   'venir ya resuelto en la respuesta de una herramienta.';
 
-// Fuente de un dato citado en la respuesta: qué tool se invocó y con qué
-// argumentos, tal cual se ejecutó — nunca lo que el modelo "diga" que usó.
-// Igual que las cifras (nunca las calcula el modelo), la cita tampoco se le
-// confía al modelo: se construye en código a partir de la llamada real, o
-// no se muestra ninguna.
+// Fuente de un dato citado en la respuesta: qué tool se invocó, con qué
+// argumentos y cuánto tardó, tal cual se ejecutó — nunca lo que el modelo
+// "diga" que usó. Igual que las cifras (nunca las calcula el modelo), la
+// cita tampoco se le confía al modelo: se construye en código a partir de
+// la llamada real (Date.now() alrededor de tool.execute), o no se muestra
+// ninguna. durationMs mide solo la ejecución del tool (RPC incluida) — no
+// el round-trip completo a Gemini, que es otro costo aparte.
 export interface ToolCitation {
   tool: string;
   args: Record<string, unknown>;
+  durationMs: number;
 }
 
 export interface AiOrchestratorResult {
@@ -91,14 +94,18 @@ export async function runAiOrchestrator(args: {
       const isWhitelisted = !!tool;
       let output: unknown;
       let errorMsg: string | null = null;
+      let durationMs = 0;
 
       if (!isWhitelisted) {
         errorMsg = `No existe una herramienta autorizada llamada "${call.name}".`;
       } else {
+        const startedAt = Date.now();
         try {
           output = await tool.execute(supabase, call.args || {});
         } catch (err: any) {
           errorMsg = err?.message || String(err);
+        } finally {
+          durationMs = Date.now() - startedAt;
         }
       }
 
@@ -112,7 +119,7 @@ export async function runAiOrchestrator(args: {
         p_error: errorMsg,
       });
 
-      if (isWhitelisted && !errorMsg) citations.push({ tool: call.name, args: call.args || {} });
+      if (isWhitelisted && !errorMsg) citations.push({ tool: call.name, args: call.args || {}, durationMs });
       if (!isWhitelisted) anyToolRejected = true;
 
       responseParts.push({

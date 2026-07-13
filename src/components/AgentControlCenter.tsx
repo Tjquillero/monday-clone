@@ -23,16 +23,19 @@ interface Message {
 }
 
 // La cita se arma con los mismos datos que ya devolvió el Orchestrator
-// (tool + argumentos reales de la llamada) — nunca texto libre del modelo.
-// El nombre técnico se traduce a un rótulo natural solo para presentación
-// (displayNames.ts); los argumentos crudos se conservan entre paréntesis
-// para no perder trazabilidad/auditabilidad.
+// (tool + argumentos + duración reales de la llamada) — nunca texto libre
+// del modelo. El nombre técnico se traduce a un rótulo natural solo para
+// presentación (displayNames.ts); los argumentos crudos se conservan entre
+// paréntesis para no perder trazabilidad/auditabilidad. La duración es
+// informativa para hoy (7 tools), mensaje pensado para cuando el catálogo
+// crezca y haga falta diagnosticar por qué una respuesta tardó más que otra.
 function formatCitation(c: ToolCitation): string {
   const label = getToolDisplayName(c.tool);
   const args = Object.entries(c.args)
     .map(([k, v]) => `${k}=${v}`)
     .join(', ');
-  return args ? `${label} (${args})` : label;
+  const base = args ? `${label} (${args})` : label;
+  return `${base} — ${c.durationMs} ms`;
 }
 
 // Sin board seleccionado (vistas globales) usa su propio balde de memoria —

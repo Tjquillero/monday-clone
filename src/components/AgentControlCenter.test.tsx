@@ -142,7 +142,7 @@ describe('AgentControlCenter — respuestas con citas', () => {
       ok: true,
       json: async () => ({
         text: 'El acta vale $78.000',
-        citations: [{ tool: 'get_acta_totals', args: { acta_id: 'c828e09f-f221-484c-8530-493bc142ac36' } }],
+        citations: [{ tool: 'get_acta_totals', args: { acta_id: 'c828e09f-f221-484c-8530-493bc142ac36' }, durationMs: 18 }],
         history: { contents: [] },
       }),
     });
@@ -154,7 +154,7 @@ describe('AgentControlCenter — respuestas con citas', () => {
 
     await waitFor(() => expect(screen.getByText('El acta vale $78.000')).toBeInTheDocument());
     expect(
-      screen.getByText('Fuente: Resumen financiero del acta (acta_id=c828e09f-f221-484c-8530-493bc142ac36)')
+      screen.getByText('Fuente: Resumen financiero del acta (acta_id=c828e09f-f221-484c-8530-493bc142ac36) — 18 ms')
     ).toBeInTheDocument();
   });
 
@@ -163,7 +163,7 @@ describe('AgentControlCenter — respuestas con citas', () => {
       ok: true,
       json: async () => ({
         text: 'Respuesta de una tool sin rótulo',
-        citations: [{ tool: 'get_tool_sin_rotulo_todavia', args: {} }],
+        citations: [{ tool: 'get_tool_sin_rotulo_todavia', args: {}, durationMs: 5 }],
         history: { contents: [] },
       }),
     });
@@ -174,7 +174,7 @@ describe('AgentControlCenter — respuestas con citas', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
 
     await waitFor(() => expect(screen.getByText('Respuesta de una tool sin rótulo')).toBeInTheDocument());
-    expect(screen.getByText('Fuente: get_tool_sin_rotulo_todavia')).toBeInTheDocument();
+    expect(screen.getByText('Fuente: get_tool_sin_rotulo_todavia — 5 ms')).toBeInTheDocument();
   });
 
   it('no muestra ninguna fuente cuando la respuesta viene solo de memoria (sin nuevas tools)', async () => {
