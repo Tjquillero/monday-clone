@@ -4,9 +4,12 @@
 -- CONTRATO: supabase/migrations/20260806_ai_delayed_weekly_plans.sql
 --
 -- Cubre: un plan con semana vencida y estado != closed aparece; un plan
--- cerrado (closed) NO aparece aunque su semana haya vencido; un plan cuya
--- semana todavía no termina NO aparece aunque no esté closed; days_late
--- correcto; una fila por actividad dentro del plan; autorización.
+-- cerrado (closed) NO aparece aunque su semana haya vencido; un plan
+-- cancelado (cancelled) NO aparece aunque su semana haya vencido -- fue
+-- abortado deliberadamente, nunca fue ni será ejecutado (fix del
+-- code-review: 20260818_fix_delayed_weekly_plans_exclude_cancelled.sql);
+-- un plan cuya semana todavía no termina NO aparece aunque no esté closed;
+-- days_late correcto; una fila por actividad dentro del plan; autorización.
 --
 -- Sin SAVEPOINT/ROLLBACK TO por test (ver nota en 01_state_machine.sql).
 --
@@ -25,7 +28,7 @@ SELECT set_config(
 
 BEGIN;
 
-SELECT plan(8);
+SELECT plan(9);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Fixtures (prefijo de1a0000 / 5ca1ab1e).
@@ -76,7 +79,7 @@ $$;
 
 DO $$
 DECLARE v_activity_id UUID; v_paz_id UUID;
-        v_plan_delayed UUID; v_plan_closed UUID; v_plan_future UUID;
+        v_plan_delayed UUID; v_plan_closed UUID; v_plan_future UUID; v_plan_cancelled UUID;
 BEGIN
   v_activity_id := _test_seed_poa_activity_16('de1a0000-0000-0000-0000-000000000001', 'DP_001');
   INSERT INTO public.poa_activity_zones (poa_activity_id, zone_id, cantidad_contratada)
@@ -121,9 +124,21 @@ BEGIN
      planned_frecuencia, priority, planned_qty, unit, planned_jr)
   VALUES (v_plan_future, 1, 'DP_001', v_paz_id, 10, 4, 'preferred', 50, 'und', 2.5);
 
+  -- Plan 4: semana igual de vencida, pero CANCELADA (abortada) -> NO debe
+  -- aparecer. Antes del fix, 'cancelled' <> 'closed' así que sí aparecía.
+  INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
+  VALUES ('de1a0000-0000-0000-0000-000000000001', '5ca1ab1e-0000-0000-0000-000000000601',
+          (CURRENT_DATE - 50), 4, 'cancelled', 'aaaaaaaa-0000-0000-0000-000000000001')
+  RETURNING id INTO v_plan_cancelled;
+  INSERT INTO public.weekly_plan_items
+    (plan_id, planned_sequence, activity_key, poa_activity_zone_id, planned_rendimiento,
+     planned_frecuencia, priority, planned_qty, unit, planned_jr)
+  VALUES (v_plan_cancelled, 1, 'DP_001', v_paz_id, 10, 4, 'preferred', 50, 'und', 2.5);
+
   PERFORM set_config('dp_test.plan_delayed', v_plan_delayed::TEXT, false);
   PERFORM set_config('dp_test.plan_closed', v_plan_closed::TEXT, false);
   PERFORM set_config('dp_test.plan_future', v_plan_future::TEXT, false);
+  PERFORM set_config('dp_test.plan_cancelled', v_plan_cancelled::TEXT, false);
 END;
 $$;
 
@@ -157,12 +172,18 @@ SELECT is(
   'Zona Norte',
   'Test 6: zone_name = título del group (no se inventó un "código" que no existe en el esquema) ✓'
 );
+SELECT is(
+  (SELECT COUNT(*)::INT FROM public.get_delayed_weekly_plans('de1a0000-0000-0000-0000-000000000001')
+   WHERE weekly_plan_id = current_setting('dp_test.plan_cancelled')::UUID),
+  0,
+  'Test 7: un plan CANCELADO no aparece aunque su semana haya vencido -- fue abortado, no está atrasado ✓'
+);
 
 SELECT set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000005","role":"authenticated"}', true);
 SELECT throws_like(
   $$ SELECT * FROM public.get_delayed_weekly_plans('de1a0000-0000-0000-0000-000000000001') $$,
   '%No tiene acceso%',
-  'Test 7: un no-miembro no puede leer get_delayed_weekly_plans() ✓'
+  'Test 8: un no-miembro no puede leer get_delayed_weekly_plans() ✓'
 );
 SELECT set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
 
@@ -177,7 +198,7 @@ ON CONFLICT (board_id, user_id) DO NOTHING;
 SELECT is(
   (SELECT COUNT(*)::INT FROM public.get_delayed_weekly_plans('de1a0000-0000-0000-0000-000000000002')),
   0,
-  'Test 8: un board sin planes devuelve 0 filas, sin error ✓'
+  'Test 9: un board sin planes devuelve 0 filas, sin error ✓'
 );
 
 SELECT * FROM finish();
