@@ -151,6 +151,18 @@ export default function ItemExecutions({ planId, groupId, planItemId, unit }: Pr
     return map;
   }, [galleryEntries]);
 
+  // Fase por foto (Antes/Después) — para que el modal pueda advertir si toda
+  // la evidencia quedó en una sola fase antes de confirmar (review: el
+  // selector nunca se autocorrige, así que esta es la única red de
+  // seguridad). Tanto synced como pending ya traen `phase` en su registro.
+  const galleryPhases = useMemo(() => {
+    const map: Record<string, 'before' | 'after' | null> = {};
+    for (const entry of galleryEntries) {
+      map[entry.url] = entry.kind === 'synced' ? entry.attachment.phase : entry.pending.phase;
+    }
+    return map;
+  }, [galleryEntries]);
+
   // Referencia estable: PhotoVerificationModal reselecciona initialGallery[0]
   // en un efecto que depende de esta prop por identidad. Si se le pasara
   // `galleryEntries.map(...)` inline, cada re-render de ItemExecutions crea
@@ -369,6 +381,7 @@ export default function ItemExecutions({ planId, groupId, planItemId, unit }: Pr
           itemId={evidenceExecId}
           initialGallery={galleryUrls}
           galleryStatuses={galleryStatuses}
+          galleryPhases={galleryPhases}
         />
       )}
     </div>

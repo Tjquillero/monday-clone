@@ -38,6 +38,11 @@ interface PhotoVerificationModalProps {
   // (ej. VerificationContainer, que solo muestra evidencia ya sincronizada)
   // simplemente no ven ningún indicador extra.
   galleryStatuses?: Record<string, 'pending' | 'syncing' | 'conflict'>;
+  // Fase de cada foto YA subida, keyed por la misma URL de initialGallery —
+  // necesaria para poder advertir en "Confirmar" si toda la evidencia quedó
+  // en una sola fase (ver phaseGap más abajo). Solo tiene efecto junto con
+  // capturePhase; si se omite, no hay advertencia (ningún consumidor rompe).
+  galleryPhases?: Record<string, 'before' | 'after' | null>;
 }
 
 export default function PhotoVerificationModal({
@@ -51,6 +56,7 @@ export default function PhotoVerificationModal({
   onUpload,
   readOnly = false,
   galleryStatuses,
+  galleryPhases,
   capturePhase = false,
 }: PhotoVerificationModalProps) {
   const [uploading, setUploading] = useState(false);
@@ -58,6 +64,10 @@ export default function PhotoVerificationModal({
   const [location, setLocation] = useState<{ lat: number, lng: number } | null>(null);
   const [timestamp, setTimestamp] = useState<string | null>(null);
   const [nextCapturePhase, setNextCapturePhase] = useState<'before' | 'after'>('before');
+  // Ninguna fase se infiere ni se autocorrige (el proyecto evita heurísticas
+  // de intención) — solo se detecta el desbalance objetivo para advertir
+  // antes de cerrar, nunca para elegir por el usuario.
+  const [phaseGapWarning, setPhaseGapWarning] = useState<'missing_before' | 'missing_after' | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mounted, setMounted] = useState(false);
 
@@ -85,6 +95,7 @@ export default function PhotoVerificationModal({
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
+      setPhaseGapWarning(null);
     }
     return () => { document.body.style.overflow = ''; };
   }, [isOpen]);
@@ -117,6 +128,32 @@ export default function PhotoVerificationModal({
 
   const handleCapture = () => {
     fileInputRef.current?.click();
+  };
+
+  // Desbalance objetivo de fases en la evidencia YA subida — no dice cuál es
+  // "correcta", solo que falta una de las dos. Sin galleryPhases (consumidor
+  // que no lo pasa) no hay forma de saberlo, así que no se advierte nada.
+  function computePhaseGap(): 'missing_before' | 'missing_after' | null {
+    if (!capturePhase || !galleryPhases) return null;
+    const hasBefore = initialGallery.some((url) => galleryPhases[url] === 'before');
+    const hasAfter = initialGallery.some((url) => galleryPhases[url] === 'after');
+    if (hasBefore && !hasAfter) return 'missing_after';
+    if (hasAfter && !hasBefore) return 'missing_before';
+    return null;
+  }
+
+  const handleConfirmClick = () => {
+    const gap = computePhaseGap();
+    if (gap) {
+      setPhaseGapWarning(gap);
+      return;
+    }
+    if (selectedPhoto) onSave(selectedPhoto);
+  };
+
+  const handleConfirmAnyway = () => {
+    setPhaseGapWarning(null);
+    if (selectedPhoto) onSave(selectedPhoto);
   };
 
   if (!mounted) return null;
@@ -299,6 +336,30 @@ export default function PhotoVerificationModal({
                 </div>
             </div>
 
+            {phaseGapWarning ? (
+                <div className="p-6 bg-amber-500/10 border-t border-amber-500/20 flex items-center justify-between gap-4 relative shrink-0">
+                    <p className="text-[11px] font-medium leading-relaxed text-amber-200">
+                        {phaseGapWarning === 'missing_after'
+                          ? 'La evidencia solo contiene fotos "Antes". No se registró evidencia "Después".'
+                          : 'La evidencia solo contiene fotos "Después". No se registró evidencia "Antes".'}
+                        {' '}Esto puede limitar las comparaciones antes/después y el análisis automático de evidencia.
+                    </p>
+                    <div className="flex items-center gap-4 shrink-0">
+                        <button
+                            onClick={() => setPhaseGapWarning(null)}
+                            className="text-[9px] font-black text-amber-200/80 hover:text-white uppercase tracking-widest transition-colors whitespace-nowrap"
+                        >
+                            Volver a revisar
+                        </button>
+                        <button
+                            onClick={handleConfirmAnyway}
+                            className="px-6 py-3 bg-amber-500 text-slate-950 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-xl whitespace-nowrap"
+                        >
+                            Confirmar de todos modos
+                        </button>
+                    </div>
+                </div>
+            ) : (
             <div className="p-6 bg-white/5 border-t border-white/10 flex items-center justify-between relative shrink-0">
                 <div className="flex items-center space-x-3 opacity-40">
                     {(selectedPhoto || initialGallery.length > 0) && (
@@ -314,7 +375,7 @@ export default function PhotoVerificationModal({
                     </button>
                     {!readOnly && (
                         <button
-                            onClick={() => selectedPhoto && onSave(selectedPhoto)}
+                            onClick={handleConfirmClick}
                             disabled={!selectedPhoto && initialGallery.length === 0}
                             className="px-6 py-3 bg-[#10B981] text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-xl shadow-[#10B981]/20 disabled:opacity-20"
                         >
@@ -323,6 +384,7 @@ export default function PhotoVerificationModal({
                     )}
                 </div>
             </div>
+            )}
 
             <input 
                 type="file" 
