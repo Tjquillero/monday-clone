@@ -83,6 +83,13 @@ DO $$
 DECLARE v_activity_id UUID; v_paz_id UUID;
         v_plan_delayed UUID; v_plan_closed UUID; v_plan_future UUID; v_plan_cancelled UUID;
         v_plan_boundary UUID;
+        -- Día de negocio (America/Bogota) -- NO CURRENT_DATE (sesión UTC).
+        -- Todos los fixtures se anclan aquí, igual que la función corregida,
+        -- para que los tests no se vuelvan frágiles durante la ventana de
+        -- ~5h donde UTC ya rodó al día siguiente pero Bogotá no (encontrado
+        -- en vivo: este test falló exactamente en esa ventana antes de este
+        -- ajuste -- ver 20260819_fix_delayed_weekly_plans_bogota_timezone.sql).
+        v_today DATE := (now() AT TIME ZONE 'America/Bogota')::DATE;
 BEGIN
   v_activity_id := _test_seed_poa_activity_16('de1a0000-0000-0000-0000-000000000001', 'DP_001');
   INSERT INTO public.poa_activity_zones (poa_activity_id, zone_id, cantidad_contratada)
@@ -97,7 +104,7 @@ BEGIN
   -- hace 41), estado 'confirmed' (nunca llegó a closed) -> DEBE aparecer.
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by, confirmed_by, confirmed_at)
   VALUES ('de1a0000-0000-0000-0000-000000000001', '5ca1ab1e-0000-0000-0000-000000000601',
-          (CURRENT_DATE - 47), 1, 'confirmed', 'aaaaaaaa-0000-0000-0000-000000000001',
+          (v_today - 47), 1, 'confirmed', 'aaaaaaaa-0000-0000-0000-000000000001',
           'aaaaaaaa-0000-0000-0000-000000000001', NOW())
   RETURNING id INTO v_plan_delayed;
   INSERT INTO public.weekly_plan_items
@@ -108,7 +115,7 @@ BEGIN
   -- Plan 2: semana igual de vencida, pero SÍ llegó a 'closed' -> NO debe aparecer.
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by, confirmed_by, confirmed_at, closed_by, closed_at)
   VALUES ('de1a0000-0000-0000-0000-000000000001', '5ca1ab1e-0000-0000-0000-000000000601',
-          (CURRENT_DATE - 60), 2, 'closed', 'aaaaaaaa-0000-0000-0000-000000000001',
+          (v_today - 60), 2, 'closed', 'aaaaaaaa-0000-0000-0000-000000000001',
           'aaaaaaaa-0000-0000-0000-000000000001', NOW(), 'aaaaaaaa-0000-0000-0000-000000000001', NOW())
   RETURNING id INTO v_plan_closed;
   INSERT INTO public.weekly_plan_items
@@ -120,7 +127,7 @@ BEGIN
   -- debe aparecer (no está vencida, aunque no esté closed).
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
   VALUES ('de1a0000-0000-0000-0000-000000000001', '5ca1ab1e-0000-0000-0000-000000000601',
-          CURRENT_DATE, 3, 'in_progress', 'aaaaaaaa-0000-0000-0000-000000000001')
+          v_today, 3, 'in_progress', 'aaaaaaaa-0000-0000-0000-000000000001')
   RETURNING id INTO v_plan_future;
   INSERT INTO public.weekly_plan_items
     (plan_id, planned_sequence, activity_key, poa_activity_zone_id, planned_rendimiento,
@@ -131,21 +138,23 @@ BEGIN
   -- aparecer. Antes del fix, 'cancelled' <> 'closed' así que sí aparecía.
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by)
   VALUES ('de1a0000-0000-0000-0000-000000000001', '5ca1ab1e-0000-0000-0000-000000000601',
-          (CURRENT_DATE - 50), 4, 'cancelled', 'aaaaaaaa-0000-0000-0000-000000000001')
+          (v_today - 50), 4, 'cancelled', 'aaaaaaaa-0000-0000-0000-000000000001')
   RETURNING id INTO v_plan_cancelled;
   INSERT INTO public.weekly_plan_items
     (plan_id, planned_sequence, activity_key, poa_activity_zone_id, planned_rendimiento,
      planned_frecuencia, priority, planned_qty, unit, planned_jr)
   VALUES (v_plan_cancelled, 1, 'DP_001', v_paz_id, 10, 4, 'preferred', 50, 'und', 2.5);
 
-  -- Plan 5: week_end = CURRENT_DATE exacto (relativo, no fecha absoluta --
-  -- para que el test no se vuelva frágil con el paso del tiempo real). Sirve
-  -- para probar el límite UTC/Bogotá con p_reference_instant construido
-  -- también relativo a CURRENT_DATE (ver Tests 8 y 9). 'confirmed' (nunca
-  -- closed/cancelled) para que solo dependa de la comparación de fecha.
+  -- Plan 5: week_end = v_today (hoy en Bogotá) exacto -- relativo, no fecha
+  -- absoluta, para que el test no se vuelva frágil con el paso del tiempo
+  -- real. Sirve para probar el límite UTC/Bogotá con p_reference_instant
+  -- construido también relativo a v_today (ver Tests 8 y 9), nunca a
+  -- CURRENT_DATE (UTC) -- esa era precisamente la asunción que fallaba
+  -- durante la ventana de ~5h. 'confirmed' (nunca closed/cancelled) para que
+  -- solo dependa de la comparación de fecha.
   INSERT INTO public.weekly_plans (board_id, group_id, week_start, period_number, status, created_by, confirmed_by, confirmed_at)
   VALUES ('de1a0000-0000-0000-0000-000000000001', '5ca1ab1e-0000-0000-0000-000000000601',
-          (CURRENT_DATE - 6), 1, 'confirmed', 'aaaaaaaa-0000-0000-0000-000000000001',
+          (v_today - 6), 1, 'confirmed', 'aaaaaaaa-0000-0000-0000-000000000001',
           'aaaaaaaa-0000-0000-0000-000000000001', NOW())
   RETURNING id INTO v_plan_boundary;
   INSERT INTO public.weekly_plan_items
@@ -209,21 +218,25 @@ SELECT is(
 -- el test).
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- p_reference_instant construido relativo a CURRENT_DATE: (CURRENT_DATE+1)
--- interpretado como medianoche UTC + 2 horas = "01:00/02:00 UTC del día
--- siguiente" -- que en Bogotá (UTC-5) sigue siendo las 19:00-21:00 de HOY.
+-- p_reference_instant construido a partir de v_today (Bogotá), NUNCA de
+-- CURRENT_DATE (UTC): "(v_today + hora) AT TIME ZONE 'America/Bogota'"
+-- interpreta esa hora naive COMO horario de Bogotá y la convierte al
+-- instante UTC correcto -- correcto sin importar qué día sea en UTC en ese
+-- momento (a diferencia de sumarle horas a CURRENT_DATE a mano, que fue
+-- justo la asunción que rompió este mismo test durante la ventana real de
+-- ~5h descubierta al verificar este fix).
 SELECT is(
   (SELECT COUNT(*)::INT FROM public.get_delayed_weekly_plans(
      'de1a0000-0000-0000-0000-000000000001',
-     ((CURRENT_DATE + 1)::TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '2 hours'
+     (((now() AT TIME ZONE 'America/Bogota')::DATE + TIME '21:00:00') AT TIME ZONE 'America/Bogota')
    ) WHERE weekly_plan_id = current_setting('dp_test.plan_boundary')::UUID),
   0,
-  'Test 8: a las 02:00 UTC del día siguiente (= 21:00 de HOY en Bogotá), un plan cuya semana termina HOY NO está atrasado todavía -- el día de negocio sigue siendo hoy ✓'
+  'Test 8: a las 21:00 de HOY en Bogotá, un plan cuya semana termina HOY NO está atrasado todavía -- el día de negocio sigue siendo hoy ✓'
 );
 SELECT is(
   (SELECT days_late FROM public.get_delayed_weekly_plans(
      'de1a0000-0000-0000-0000-000000000001',
-     ((CURRENT_DATE + 2)::TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '2 hours'
+     (((now() AT TIME ZONE 'America/Bogota')::DATE + 1 + TIME '21:00:00') AT TIME ZONE 'America/Bogota')
    ) WHERE weekly_plan_id = current_setting('dp_test.plan_boundary')::UUID),
   1,
   'Test 9: un día de negocio (Bogotá) después, el mismo plan SÍ aparece atrasado, con days_late = 1 ✓'
