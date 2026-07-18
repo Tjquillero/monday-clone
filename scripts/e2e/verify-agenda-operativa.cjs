@@ -1,9 +1,10 @@
-// Verifica en navegador real la Agenda Operativa (ADR-0006, Fase 1 / MVP):
-// semaforo, contadores y el enlace "listo para confirmar" navegando a
-// Cronograma con el sitio correcto ya seleccionado (deep-link groupId).
-// Complementa la verificacion SQL de get_board_operational_agenda
-// (supabase/tests/23_board_operational_agenda.sql) probando que la UI
-// realmente la consume y que el deep-link de sitio funciona de punta a punta.
+// Verifica en navegador real la Agenda Operativa (ADR-0006, Fase 1 + Fase 2):
+// semaforo de Hoy, toggle a Semana (tira de dias + % semanal), contadores, y
+// el enlace "listo para confirmar" navegando a Cronograma con el sitio
+// correcto ya seleccionado (deep-link groupId). Complementa la verificacion
+// SQL de get_board_operational_agenda / get_board_operational_agenda_week
+// (supabase/tests/23_.../24_...sql) probando que la UI realmente las
+// consume y que el deep-link de sitio funciona de punta a punta.
 //
 // Requiere: dev server en :3000, usuario E2E creado.
 const fs = require('fs');
@@ -72,49 +73,65 @@ async function cleanup(boardId) {
       .insert({ poa_id: poa.id, version_number: 1, status: 'active', created_by: userId }).select('id').single();
     if (pvErr) throw new Error('poa_versions: ' + pvErr.message);
 
-    async function seedPlanWithExecution(group, activityKey, execStatus, withAttachment) {
-      const { data: pa, error: paErr } = await admin.from('poa_activities')
-        .insert({ poa_version_id: poaVersion.id, activity_key: activityKey, frecuencia: 4, precio_unitario: 50000 }).select('id').single();
-      if (paErr) throw new Error('poa_activities: ' + paErr.message);
-      const { data: paz, error: pzErr } = await admin.from('poa_activity_zones')
-        .insert({ poa_activity_id: pa.id, zone_id: group.id, cantidad_contratada: 1000 }).select('id').single();
-      if (pzErr) throw new Error('poa_activity_zones: ' + pzErr.message);
+    const week = mondayISO();
 
-      const week = mondayISO();
+    // Un plan por sitio; una o mas ejecuciones (dias distintos de la MISMA
+    // semana) por plan — necesario para poblar la tira de dias de la vista
+    // Semana, no solo el conteo de "hoy".
+    async function seedSite(group, activityKeyPrefix, executions) {
       const { data: plan, error: planErr } = await admin.from('weekly_plans')
         .insert({ board_id: boardId, group_id: group.id, week_start: week, period_number: 1, status: 'in_progress', created_by: userId })
         .select('id').single();
       if (planErr) throw new Error('plan: ' + planErr.message);
 
-      const { data: item, error: itemErr } = await admin.from('weekly_plan_items')
-        .insert({ plan_id: plan.id, planned_sequence: 1, activity_key: activityKey, poa_activity_zone_id: paz.id, planned_rendimiento: 10, planned_frecuencia: 4, priority: 'preferred', planned_qty: 100, unit: 'm2', planned_jr: 2.5 })
-        .select('id').single();
-      if (itemErr) throw new Error('item: ' + itemErr.message);
+      for (let i = 0; i < executions.length; i++) {
+        const { date, status, withAttachment } = executions[i];
+        const activityKey = `${activityKeyPrefix}_${i}`;
+        const { data: pa, error: paErr } = await admin.from('poa_activities')
+          .insert({ poa_version_id: poaVersion.id, activity_key: activityKey, frecuencia: 4, precio_unitario: 50000 }).select('id').single();
+        if (paErr) throw new Error('poa_activities: ' + paErr.message);
+        const { data: paz, error: pzErr } = await admin.from('poa_activity_zones')
+          .insert({ poa_activity_id: pa.id, zone_id: group.id, cantidad_contratada: 1000 }).select('id').single();
+        if (pzErr) throw new Error('poa_activity_zones: ' + pzErr.message);
 
-      const today = isoDate(new Date());
-      const { data: exec, error: execErr } = await admin.from('weekly_plan_item_executions').insert({
-        plan_item_id: item.id, execution_date: today, worker_count: 2,
-        started_at: `${today}T07:00:00Z`, finished_at: `${today}T15:00:00Z`, executed_qty: 40, status: execStatus,
-        verified_by: execStatus === 'verified' ? userId : null, verified_at: execStatus === 'verified' ? new Date().toISOString() : null,
-        created_by: userId,
-      }).select('id').single();
-      if (execErr) throw new Error('exec: ' + execErr.message);
+        const { data: item, error: itemErr } = await admin.from('weekly_plan_items')
+          .insert({ plan_id: plan.id, planned_sequence: i + 1, activity_key: activityKey, poa_activity_zone_id: paz.id, planned_rendimiento: 10, planned_frecuencia: 4, priority: 'preferred', planned_qty: 100, unit: 'm2', planned_jr: 2.5 })
+          .select('id').single();
+        if (itemErr) throw new Error('item: ' + itemErr.message);
 
-      if (withAttachment) {
-        await admin.from('execution_attachments').insert({
-          execution_id: exec.id, file_name: 'evidencia.jpg', file_url: 'https://example.test/evidencia.jpg',
-          file_type: 'image/jpeg', uploaded_by: userId,
-        });
+        const { data: exec, error: execErr } = await admin.from('weekly_plan_item_executions').insert({
+          plan_item_id: item.id, execution_date: date, worker_count: 2,
+          started_at: `${date}T07:00:00Z`, finished_at: `${date}T15:00:00Z`, executed_qty: 40, status,
+          verified_by: status === 'verified' ? userId : null, verified_at: status === 'verified' ? new Date().toISOString() : null,
+          created_by: userId,
+        }).select('id').single();
+        if (execErr) throw new Error('exec: ' + execErr.message);
+
+        if (withAttachment) {
+          await admin.from('execution_attachments').insert({
+            execution_id: exec.id, file_name: 'evidencia.jpg', file_url: 'https://example.test/evidencia.jpg',
+            file_type: 'image/jpeg', uploaded_by: userId,
+          });
+        }
       }
       return plan.id;
     }
 
-    // Sitio Verde: 1 verified con evidencia -> 100% verde, listo para confirmar.
-    await seedPlanWithExecution(groupVerde, 'E2E_AGENDA_VERDE', 'verified', true);
-    // Sitio Rojo: 1 reported -> 0% rojo, pendiente de verificar, NO listo para confirmar.
-    await seedPlanWithExecution(groupRojo, 'E2E_AGENDA_ROJO', 'reported', false);
+    const monday = week;
+    const wednesday = isoDate(new Date(new Date(week + 'T00:00:00Z').getTime() + 2 * 86400000));
 
-    console.log(`SEED OK — board=${boardId}, "${groupVerdeTitle}" (verde/confirmable), "${groupRojoTitle}" (rojo/pendiente)`);
+    // Sitio Verde: verified lunes Y miercoles, ambos con evidencia -> 100%
+    // verde, listo para confirmar, y la tira de dias debe marcar 2 puntos.
+    await seedSite(groupVerde, 'E2E_AGENDA_VERDE', [
+      { date: monday, status: 'verified', withAttachment: true },
+      { date: wednesday, status: 'verified', withAttachment: true },
+    ]);
+    // Sitio Rojo: 1 reported el lunes -> 0% rojo, pendiente, NO listo para confirmar.
+    await seedSite(groupRojo, 'E2E_AGENDA_ROJO', [
+      { date: monday, status: 'reported', withAttachment: false },
+    ]);
+
+    console.log(`SEED OK — board=${boardId}, "${groupVerdeTitle}" (verde/confirmable, lun+mie) "${groupRojoTitle}" (rojo/pendiente, lun)`);
 
     // ── Navegador ──────────────────────────────────────────────────────────
     const consoleErrors = [];
@@ -162,6 +179,21 @@ async function cleanup(boardId) {
       console.log('SEMAFORO MUESTRA SITIO ROJO: ' + bodyTextUpper.includes(groupRojoTitle.toUpperCase()));
       console.log('INCIDENCIA "LISTO PARA CONFIRMAR" VISIBLE: ' + bodyTextUpper.includes('LISTO PARA CONFIRMAR'));
 
+      // ── Toggle Semana (Fase 2) ──────────────────────────────────────────
+      await page.locator('button:has-text("Semana")').click();
+      await page.waitForTimeout(2500);
+      await page.screenshot({ path: path.join(OUT, 'agenda-3-semana.png') });
+      const semanaText = (await page.$eval('body', (b) => b.innerText)).toUpperCase();
+      const semanaMuestraVerde = semanaText.includes(groupVerdeTitle.toUpperCase());
+      const semanaMuestraRojo = semanaText.includes(groupRojoTitle.toUpperCase());
+      const semanaMuestra100 = semanaText.includes('100%');
+      console.log('SEMANA MUESTRA SITIO VERDE: ' + semanaMuestraVerde);
+      console.log('SEMANA MUESTRA SITIO ROJO: ' + semanaMuestraRojo);
+      console.log('SEMANA MUESTRA 100% (verde, lun+mie verified): ' + semanaMuestra100);
+      // Volver a Hoy antes de continuar con el flujo de incidencias.
+      await page.locator('button:has-text("Hoy")').click();
+      await page.waitForTimeout(1500);
+
       // Clic en el enlace "Ir a Cronograma" de la incidencia del Sitio Verde
       // (busca la fila que contiene el nombre del sitio, luego el enlace dentro).
       const incidenciaRow = page.locator('li', { hasText: groupVerdeTitle });
@@ -180,6 +212,7 @@ async function cleanup(boardId) {
 
       const ok = consoleErrors.length === 0
         && bodyTextUpper.includes(groupVerdeTitle.toUpperCase()) && bodyTextUpper.includes(groupRojoTitle.toUpperCase())
+        && semanaMuestraVerde && semanaMuestraRojo && semanaMuestra100
         && cronogramaMatches
         && page.url().includes(`groupId=${groupVerdeId}`) && page.url().includes('view=planner');
       console.log('E2E AGENDA OPERATIVA: ' + (ok ? 'PASS' : 'FAIL'));

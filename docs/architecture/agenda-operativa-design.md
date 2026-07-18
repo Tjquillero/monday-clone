@@ -142,15 +142,15 @@ Decisión explícita del dueño del producto, con su razón registrada (no solo 
 - Agenda Operativa: vista Hoy, semáforo, evidencia pendiente, planes listos para confirmar, planes listos para cerrar, accesos rápidos. RPC `get_board_operational_agenda` verificada (17 aserciones) + E2E real en navegador (semáforo con datos reales, deep-link Agenda→Cronograma→`PlanLifecyclePanel` funcionando de punta a punta).
 - `ExecutionView` permanece disponible, marcado explícitamente como **Legacy** en su propia UI (banner "Vista en transición" + enlace a la Agenda beta) — un aviso visible indicando que será reemplazado, no un retiro silencioso ni una promesa sin fecha.
 
-**Fase 2 — Semana:**
-- Se agrega la vista Semana sobre el mismo modelo de datos (sección 7) y el mismo filtro de diseño (sección 6).
+**Fase 2 — Semana — COMPLETA (2026-07-17):**
+- Vista Semana construida sobre el mismo modelo de datos (sección 7) y el mismo filtro de diseño (sección 6): `get_board_operational_agenda_week`, semáforo semanal por sitio (`pct_verified_week`) y tira de 5 días (lunes-viernes) marcando `has_activity`. Toggle Hoy/Semana en la propia Agenda, sin selector de semanas anteriores (guardrail respetado). Verificada en tres capas: 9 aserciones pgTAP (`24_board_operational_agenda_week.sql`), verificación manual PL/pgSQL contra la base real, y E2E en navegador (`scripts/e2e/verify-agenda-operativa.cjs`, extendido) con captura de pantalla confirmando el semáforo y la tira de días con datos reales sembrados en dos días distintos de la semana.
 - Se valida explícitamente que la Agenda ya responde las seis "preguntas operativas" de la sección 6 — no se asume, se confirma una por una.
 - **Criterio de aceptación objetivo (matriz, no impresión subjetiva)** — reemplaza "comparar contra ExecutionView" por una verificación explícita, capacidad por capacidad:
 
   | Funcionalidad | ExecutionView | Agenda | Resultado |
   |---|---|---|---|
   | Estado operativo diario | ✅ | ✅ (Fase 1) | Cubierto |
-  | Estado semanal | ✅ | ⏳ (esta fase) | Pendiente — bloquea el retiro hasta cerrarse |
+  | Estado semanal | ✅ | ✅ (Fase 2) | Cubierto |
   | Semáforo | ✅ | ✅ (Fase 1) | Cubierto |
   | Evidencia pendiente | ❌ | ✅ (Fase 1) | Mejorado |
   | Planes listos para confirmar | ❌ | ✅ (Fase 1) | Mejorado |
