@@ -6,6 +6,7 @@ import WeekSelector from './WeekSelector';
 import PlanningTable from './PlanningTable';
 import CapacitySummary from './CapacitySummary';
 import PlanningWarnings from './PlanningWarnings';
+import PlanLifecyclePanel from './PlanLifecyclePanel';
 
 const STATUS_LABEL: Record<PlanStatus, string> = {
   draft:       'Borrador',
@@ -39,6 +40,14 @@ interface Props {
   onPublish:    () => void;
   isPublishing: boolean;
   saveError:    string | null;
+  // Confirmación / Cierre — continuación del ciclo de vida del plan.
+  onConfirm:     () => void;
+  isConfirming:  boolean;
+  confirmError:  Error | null;
+  onClose:       () => void;
+  isClosing:     boolean;
+  closeError:    Error | null;
+  onGoToCosts:   () => void;
   onPrevWeek: () => void;
   onNextWeek: () => void;
 }
@@ -47,6 +56,7 @@ export default function WeeklyPlannerView({
   plan, isLoading, isError, error,
   group, weekStart,
   savedPlan, onSave, isSaving, onPublish, isPublishing, saveError,
+  onConfirm, isConfirming, confirmError, onClose, isClosing, closeError, onGoToCosts,
   onPrevWeek, onNextWeek,
 }: Props) {
   const noGroupSelected  = !group;
@@ -127,6 +137,25 @@ export default function WeeklyPlannerView({
             )}
           </div>
         </div>
+      )}
+
+      {/* ── Confirmación / Cierre ───────────────────────────────── */}
+      {!isLoading && savedPlan && (
+        savedPlan.status === 'published' || savedPlan.status === 'in_progress'
+        || savedPlan.status === 'confirmed' || savedPlan.status === 'closed'
+      ) && (
+        <PlanLifecyclePanel
+          planId={savedPlan.id}
+          status={savedPlan.status}
+          periodNumber={plan?.week.number ?? selectorProps.periodNumber}
+          onConfirm={onConfirm}
+          isConfirming={isConfirming}
+          confirmError={confirmError}
+          onClose={onClose}
+          isClosing={isClosing}
+          closeError={closeError}
+          onGoToCosts={onGoToCosts}
+        />
       )}
 
       {/* ── Cargando ────────────────────────────────────────────── */}

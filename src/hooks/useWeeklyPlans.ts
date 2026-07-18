@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { offlineDB } from '@/lib/offlineDB';
 import { isNetworkError } from './useBoardData';
-import { WeeklyPlan, WeeklyPlanItem, WeeklyPlanItemExecution } from '@/types/scheduler';
+import { WeeklyPlan, WeeklyPlanItem, WeeklyPlanItemExecution, WeeklyPlanConfirmationSummary } from '@/types/scheduler';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Query keys
@@ -17,6 +17,7 @@ export const weeklyPlanKeys = {
   items:      (planId: string)               => ['weekly_plan_items', planId] as const,
   executions: (planItemId: string)           => ['weekly_plan_executions', planItemId] as const,
   publishedWeek: (weekStartISO: string)      => ['weekly_plans', 'published_week', weekStartISO] as const,
+  confirmationSummary: (planId: string)      => ['weekly_plan_confirmation_summary', planId] as const,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -271,6 +272,34 @@ export function useWeeklyPlanExecutions(planItemId: string | undefined) {
       }
     },
     enabled: !!planItemId,
+    staleTime: 15_000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useWeeklyPlanConfirmationSummary
+//
+// Superficie de Confirmación (Cronograma): consumidor puro de
+// get_weekly_plan_confirmation_summary(plan_id). El conteo por estado y la
+// resolución de activity_name viven en SQL (mismo criterio que el Gate 2 de
+// confirm_weekly_plan) — este hook no hace joins ni agregaciones, solo pide
+// la RPC y expone su única fila de respuesta.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function useWeeklyPlanConfirmationSummary(planId: string | undefined) {
+  return useQuery<WeeklyPlanConfirmationSummary>({
+    queryKey: weeklyPlanKeys.confirmationSummary(planId!),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_weekly_plan_confirmation_summary', {
+        p_plan_id: planId!,
+      });
+      if (error) throw error;
+      const row = (data ?? [])[0];
+      if (!row) throw new Error('No se pudo calcular el resumen de confirmación del plan.');
+      return row as WeeklyPlanConfirmationSummary;
+    },
+    enabled: !!planId,
     staleTime: 15_000,
     refetchOnWindowFocus: false,
   });

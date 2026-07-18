@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Group } from '@/types/monday';
 import { useWeeklyPlan } from '@/hooks/useWeeklyPlan';
 import { useWeeklyPlans } from '@/hooks/useWeeklyPlans';
@@ -25,8 +26,11 @@ function shiftWeek(date: Date, direction: -1 | 1): Date {
 }
 
 export default function WeeklyPlannerContainer({ boardId, selectedGroupId, groups }: Props) {
+  const router = useRouter();
   const [weekStart, setWeekStart] = useState<Date>(() => getMonday(new Date()));
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [confirmError, setConfirmError] = useState<Error | null>(null);
+  const [closeError, setCloseError] = useState<Error | null>(null);
 
   const group = useMemo(() => {
     if (!selectedGroupId || !groups) return undefined;
@@ -48,7 +52,7 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
   // Catálogo activo del POA (fuente contractual, ADR-0002) — cache hit, useWeeklyPlan ya lo fetcheó
   const { data: poaCatalog } = usePoaActiveCatalog(boardId);
 
-  const { createPlan, savePlanItems, publishPlan } = useWeeklyPlanMutations(boardId);
+  const { createPlan, savePlanItems, publishPlan, confirmPlan, closePlan } = useWeeklyPlanMutations(boardId);
 
   // Plan persistido para la semana activa
   const savedPlan = useMemo<WeeklyPlan | undefined>(
@@ -58,6 +62,8 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
 
   const isSaving    = createPlan.isPending || savePlanItems.isPending;
   const isPublishing = publishPlan.isPending;
+  const isConfirming = confirmPlan.isPending;
+  const isClosing    = closePlan.isPending;
 
   const handleSave = useCallback(async () => {
     if (!boardId || !group || !plan || !poaCatalog) return;
@@ -122,6 +128,34 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
     }
   }, [savedPlan, publishPlan, group]);
 
+  const handleConfirm = useCallback(async () => {
+    if (!savedPlan) return;
+    setConfirmError(null);
+    try {
+      await confirmPlan.mutateAsync({ planId: savedPlan.id, groupId: group?.id });
+    } catch (err) {
+      setConfirmError(err instanceof Error ? err : new Error('Error al confirmar el plan'));
+    }
+  }, [savedPlan, confirmPlan, group]);
+
+  const handleClose = useCallback(async () => {
+    if (!savedPlan) return;
+    setCloseError(null);
+    try {
+      await closePlan.mutateAsync({ planId: savedPlan.id, groupId: group?.id });
+    } catch (err) {
+      setCloseError(err instanceof Error ? err : new Error('Error al cerrar el plan'));
+    }
+  }, [savedPlan, closePlan, group]);
+
+  // Navega a Costos sin generar el acta automáticamente — cerrar un plan no
+  // implica que el usuario quiera emitirla de inmediato (puede cerrar varios
+  // planes antes de ir a esa pestaña).
+  const handleGoToCosts = useCallback(() => {
+    if (!boardId) return;
+    router.push(`/dashboard?boardId=${boardId}&view=financial`);
+  }, [boardId, router]);
+
   return (
     <WeeklyPlannerView
       plan={plan}
@@ -136,6 +170,13 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
       onPublish={handlePublish}
       isPublishing={isPublishing}
       saveError={saveError}
+      onConfirm={handleConfirm}
+      isConfirming={isConfirming}
+      confirmError={confirmError}
+      onClose={handleClose}
+      isClosing={isClosing}
+      closeError={closeError}
+      onGoToCosts={handleGoToCosts}
       onPrevWeek={() => setWeekStart(d => shiftWeek(d, -1))}
       onNextWeek={() => setWeekStart(d => shiftWeek(d, 1))}
     />

@@ -230,6 +230,28 @@ export interface WeeklyPlanItemExecution {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// WeeklyPlanConfirmationSummary — get_weekly_plan_confirmation_summary(plan_id)
+// Ref: supabase/migrations/20260820_weekly_plan_confirmation_summary.sql
+//
+// Resumen de solo lectura para la pantalla de Confirmación. El conteo y la
+// resolución de nombres viven en SQL (mismo criterio que el Gate 2 de
+// confirm_weekly_plan) — este tipo solo describe lo que la RPC ya calculó,
+// nunca se recalcula en el cliente.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface WeeklyPlanPendingExecution {
+  activity_name: string;
+  execution_date: string; // ISO date
+}
+
+export interface WeeklyPlanConfirmationSummary {
+  verified_count: number;
+  rejected_count: number;
+  pending_count: number;
+  pending_executions: WeeklyPlanPendingExecution[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Errores de dominio
 // ─────────────────────────────────────────────────────────────────────────────
 
