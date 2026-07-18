@@ -34,6 +34,25 @@ Este ADR existe para que, dentro de seis meses, nadie mire `daily_execution`, co
 | `src/lib/cleanupUtils.ts` (`cleanupLegacyPhotos`) | Utilidad de limpieza, no está cableada a ninguna UI | Herramienta manual, sin uso activo confirmado |
 | `scripts/seed_excel_categories.mjs` (~línea 110) | Inicializa `daily_execution: {}` al crear ítems | Solo inicializa el shape, no es un consumidor funcional |
 
+## Significado funcional de cada consumidor (no solo "¿lo usa?", sino "¿qué calcula y tiene reemplazo real?")
+
+Antes de aceptar la "Decisión propuesta" de abajo, se leyó el código real de cada consumidor vivo para responder, uno por uno: ¿qué calcula exactamente, y existe un dato equivalente en el modelo oficial?
+
+| Consumidor | Qué calcula (leído en el código) | ¿Reemplazo en el modelo oficial? | Estado |
+|---|---|---|---|
+| `ReportsView.tsx` (Reporte Ejecutivo) | Cantidad ejecutada + fotos, agregado por ítem × sitio | El dato equivalente ya existe y es **mejor**: `weekly_plan_item_executions.executed_qty` + `execution_attachments` (con `phase`, `file_hash`) | Migrable en teoría — bloqueado (ver más abajo) |
+| `FinancialWidget.tsx` | Presupuesto/ejecutado en $ + "eficiencia de rendimiento" (`executedQty ÷ díasTrabajados` vs. rendimiento objetivo) | El $ ejecutado ya es, literalmente, lo que calcula `generate_acta_draft` (`executed_qty × poa_activities.precio_unitario`) | Migrable en teoría — mismo bloqueo |
+| `SCurveWidget.tsx` | Curva $ planificado-vs-ejecutado en el tiempo, usando una columna `timeline` libre del ítem + las fechas de `daily_execution` | El "ejecutado" tiene equivalente; el "planificado" hoy es un rango de fechas libre por ítem — el Cronograma piensa en semanas (`week_start`), no en ese `timeline` | **No es un swap** — hay que redefinir qué significa "planificado" en este widget |
+| `useAutomations.ts` (`processExecutionUpdate`) | % de avance del **ítem genérico** para mover automáticamente su `status` (Not Started → Working on it → Done) | No es una lectura de dato, es una regla de negocio sobre el ítem tipo Monday — el equivalente conceptual sería un evento de dominio (plan `confirmed`/`closed`), no una simple sustitución de fuente | Revisar el **diseño** de la regla, no solo su fuente de datos |
+| `ItemModal.tsx` (tab "Ejecución", escritura) | Entrada manual de cantidad por día, por ítem | Sustituible por `JornadaForm` (Mis actividades) | Sustituible — mismo bloqueo |
+| `CalendarView.tsx` / `TacticalOperationsView.tsx` / `AssessmentView.tsx` | Vistas legacy — ninguna ruta las monta | N/A | Eliminar (código muerto confirmado, sin dependencia) |
+
+**El bloqueo real, encontrado al verificar el esquema, no supuesto:** la tabla `items` (`supabase/migrations/20240316_consolidated_schema.sql`) tiene únicamente `id, group_id, parent_id, name, description, values JSONB, position` — **ningún `activity_key` ni `poa_activity_zone_id`**. No hay, y nunca hubo, un vínculo estructural entre un `item` genérico del tablero y una actividad del POA/`weekly_plan_item`. Esto no es un accidente: la Fase 4 (Scheduling Engine, ADR-0002) construyó el Cronograma deliberadamente SIN depender de `items`.
+
+Consecuencia para el plan de migración: no basta con "leer de otra tabla" para los cuatro consumidores marcados "migrable en teoría" — antes hay que decidir **una** de dos rutas, y esa decisión es de negocio, no técnica:
+- **(a)** construir un puente item↔actividad POA (nuevo, no existe hoy), o
+- **(b)** rediseñar esos reportes/widgets para construirse enteramente sobre `weekly_plans`/`weekly_plan_item_executions`, abandonando `items` como fuente — mismo camino que ya tomó el Cronograma.
+
 ## Problema
 
 Existen dos fuentes de verdad para el mismo concepto de negocio ("¿qué se ejecutó y cuándo?"):
@@ -48,8 +67,9 @@ Esto contradice el principio que este mismo proyecto ha aplicado consistentement
 **No se elimina `daily_execution` ahora.** El orden propuesto:
 
 1. **Inventariar** (este documento ya lo hace) todos los consumidores, sin excepción.
-2. **Migrar uno por uno** cada consumidor vivo al modelo oficial, empezando por el de mayor alcance (`ItemModal.tsx`, por ser el más ampliamente reachable) y siguiendo por los de solo lectura (Reportes, widgets financieros, Automatizaciones) — cada migración es su propio incremento, con su propio contrato congelado antes de escribir código, mismo método que el resto del proyecto.
-3. **Solo cuando no quede ningún consumidor vivo**, se retira la columna/campo `daily_execution` y el código muerto asociado (`GanttView.tsx`, `TacticalOperationsView.tsx`, `CalendarView.tsx`, `AssessmentView.tsx` y sus `*ViewContainer`, si nada más los reactiva).
+2. **Decidir primero (a) o (b)** (sección anterior) — esta es la decisión de negocio que condiciona todo lo demás; migrar cualquier consumidor sin resolver esto sería adivinar la respuesta en código.
+3. **Migrar uno por uno** cada consumidor vivo, en un orden a definir una vez resuelto el punto 2 — cada migración es su propio incremento, con su propio contrato congelado antes de escribir código, mismo método que el resto del proyecto. La regla de `useAutomations.ts` necesita, además, decidir su rediseño como evento de dominio antes de tocar su código (no es una migración de fuente de datos simple).
+4. **Solo cuando no quede ningún consumidor vivo**, se retira la columna/campo `daily_execution` y el código muerto asociado (`GanttView.tsx`, `TacticalOperationsView.tsx`, `CalendarView.tsx`, `AssessmentView.tsx` y sus `*ViewContainer`, si nada más los reactiva).
 
 **Explícitamente fuera del alcance de ADR-0006 / Fase 3 de la Agenda Operativa** — ese retiro es del componente `ExecutionView.tsx`, no de este modelo de datos. No se resuelven en el mismo incremento.
 
@@ -72,4 +92,4 @@ Esto contradice el principio que este mismo proyecto ha aplicado consistentement
 
 ## Criterio para revisar esta decisión
 
-Este ADR pasa de "Propuesto" a "Aceptado" cuando el dueño del producto confirme el orden de migración (o proponga uno distinto) y se defina qué consumidor se migra primero. Se da por cumplido, y `daily_execution` se retira, cuando el inventario de la sección anterior quede en cero consumidores vivos — verificable repitiendo las mismas búsquedas que originaron este documento.
+Este ADR pasa de "Propuesto" a "Aceptado" cuando el dueño del producto elija entre la ruta (a) puente item↔actividad POA o (b) rediseñar los reportes/widgets sobre `weekly_plans` sin pasar por `items`, y se defina el orden de migración resultante. Se da por cumplido, y `daily_execution` se retira, cuando el inventario de consumidores quede en cero — verificable repitiendo las mismas búsquedas que originaron este documento.
