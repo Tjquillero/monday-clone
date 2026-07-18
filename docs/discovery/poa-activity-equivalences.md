@@ -67,6 +67,19 @@ Este documento cierra la fase de **descubrimiento**. El trabajo que sigue es de 
 - **Flujo A — confirmación de las 101 candidatas.** Es prácticamente una validación: para cada fila, terminar en `Confirmada` (con el código POA) o corregida. Al cerrar, esas filas pueblan `board_activity_standards` (bajo las reglas de ADR-0008).
 - **Flujo B — clasificación de las 43 sin equivalente**, antes de decidir nada caso por caso. Cada una debe terminar en una de estas categorías: (1) actividad eliminada del contrato 2026, (2) actividad absorbida por otra del POA, (3) actividad operativa interna que nunca existió en el POA, (4) error histórico/duplicado/dato legacy, (5) actividad contractual nueva que el matcher no detectó. Solo después se decide qué hacer con cada grupo.
 
+## Flujo A: EJECUTADO (2026-07-18)
+
+Las 101 filas se redujeron a **17 nombres de actividad distintos** (0 inconsistencias de código entre zonas — cada nombre siempre propuso el mismo código POA). De los 17:
+
+- **14 confirmados y poblados en `board_activity_standards`** (board-level, `group_id = NULL`, `source = 'poa_2026_legacy_confirmed'`): `1.09`, `1.10`, `1.11`, `1.15`, `2.06`–`2.14` (excepto `2.15`–`2.22`, no propuestas), `3.04`. Rendimiento consistente entre zonas en 13 de 14 — la única excepción (`3.04`, Lavado a presión de zonas duras: 3 zonas con rend=7000, 1 con rend=3000 en Centro Gastronómico) se resolvió usando el valor mayoritario (7000), sin investigar la causa de la zona atípica — decisión explícita del responsable del proceso, no un supuesto del sistema.
+- **3 nombres (RIEGO MANUAL — grama/árboles y palmas/arbustos y cubresuelos, 18 filas) se movieron a Flujo B.** Ya se había documentado que la hipótesis de consolidación en `2.16` no se confirmó como regla general (ver "Correcciones" arriba) — no correspondía confirmarlas en Flujo A con una confianza degradada del 60%.
+
+> **Nota ligada a `board_activity_standards.activity_key = '3.04'`** (la única excepción al principio de "un rendimiento por actividad" en este lote): 3 zonas (Sendero Santa Verónica, Miramar Sector El Faro, Playa del Country) reportan `rend=7000`; Centro Gastronómico reporta `rend=3000`. Se insertó `rendimiento=7000` por decisión explícita del responsable del proceso, tomada por mayoría (3 de 4) — **no se investigó** si Centro Gastronómico tiene una condición real distinta (superficie, equipo, tipo de piso) que justifique el valor menor. Si en el futuro se detecta una diferencia real de rendimiento por sitio para esta actividad, la vía correcta es una excepción de sitio (`board_activity_standards.group_id = <group de Centro Gastronómico>`), no reabrir esta decisión de contrato.
+
+**Hallazgo adicional durante la ejecución, resuelto antes de insertar:** existe `docs/MAINTENANCE_SCHEDULING_ENGINE_v1.md` (2026-06-28, "CONGELADO"), un documento de diseño anterior a ADR-0002 con una "Seed inicial (23 actividades)" que se solapa parcialmente con estas 14 (por nombre/rendimiento, usando una convención de `activity_key` en snake_case distinta a la adoptada — código POA). De 11 actividades comparables, 3 coincidieron en rendimiento exacto y 8 no (algunas con más de 70% de diferencia). Se decidió **no usar ese documento como fuente** — nunca se cargó a `board_activity_standards` real, y su convención de `activity_key` quedó superada por ADR-0002. El rendimiento usado es el de los items legacy reales (`items.values.rend`), no el del documento de diseño.
+
+**Flujo B queda ahora con 43 + 18 (riego) = 61 filas por clasificar** — las 43 originales de la sección 2, más las 18 filas de RIEGO MANUAL (3 nombres distintos) que se movieron aquí. Aún no se dedujo por nombre único dentro de las 43 originales; eso puede ahorrar trabajo de revisión en Flujo B tal como ocurrió en Flujo A.
+
 No se resuelven las 144 actividades juntas — son dos preguntas distintas con dos criterios de cierre distintos.
 
 ## 1. Actividades → candidatas a `board_activity_standards`
