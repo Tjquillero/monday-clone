@@ -96,4 +96,13 @@ Esto contradice el principio que este mismo proyecto ha aplicado consistentement
 
 ## Criterio para revisar esta decisión
 
-Este ADR pasa de "Propuesto" a "Aceptado" cuando el dueño del producto elija entre la ruta (a) puente item↔actividad POA o (b) rediseñar los reportes/widgets sobre `weekly_plans` sin pasar por `items`, y se defina el orden de migración resultante. Se da por cumplido, y `daily_execution` se retira, cuando el inventario de consumidores quede en cero — verificable repitiendo las mismas búsquedas que originaron este documento.
+Este ADR pasa de "Propuesto" a "Aceptado" cuando el dueño del producto elija entre la ruta (a) puente item↔actividad POA o (b) rediseñar los reportes/widgets sobre `weekly_plans` sin pasar por `items`, y se defina el orden de migración resultante.
+
+## Criterio de finalización del ADR
+
+Distinto del criterio anterior (que marca cuándo se *acepta* el plan): esto marca cuándo el ADR se da por *cumplido* y `daily_execution` puede retirarse. Condiciones objetivas, verificables repitiendo las mismas búsquedas que originaron este documento — no "se hicieron varios cambios", sino que las cuatro se cumplan a la vez:
+
+1. Ningún componente de producción lee `items.values.daily_execution`.
+2. Ningún componente de producción escribe `items.values.daily_execution`.
+3. Todos los reportes operativos leen exclusivamente del dominio oficial (`weekly_plans`, `weekly_plan_item_executions`, `execution_attachments`).
+4. El campo `daily_execution` puede marcarse como legado y retirarse en una migración posterior.
