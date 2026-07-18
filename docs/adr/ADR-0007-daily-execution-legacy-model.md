@@ -1,7 +1,7 @@
 # ADR-0007 — Retiro progresivo de `daily_execution` como fuente operativa
 
 ## Estado
-Propuesto — el problema y el inventario de consumidores están confirmados con evidencia; el plan de migración (sección "Decisión propuesta") todavía no está ejecutado ni aprobado como compromiso de calendario.
+Aceptado (2026-07-18) — el dueño del producto eligió la ruta **(b)**: reconstruir los reportes/widgets sobre `weekly_plans`/`weekly_plan_item_executions`/`execution_attachments`, abandonando `items` como fuente. El orden de migración queda pendiente de definir (ver "Bloqueo previo a cualquier migración" y "Decisión propuesta") — la ejecución todavía no empieza.
 
 ## Fecha
 2026-07-18
@@ -55,7 +55,13 @@ Consecuencia para el plan de migración: no basta con "leer de otra tabla" para 
 
 **Conclusión de la auditoría:** el problema no es una migración de consultas, sino una migración de modelo. Hasta que se decida explícitamente si los reportes continúan basándose en `items` o pasan a construirse directamente sobre el dominio operativo (`weekly_plans`), no debe iniciarse la sustitución de ningún consumidor individual.
 
-**Inclinación registrada — no es todavía una decisión formal:** visto en conjunto con la evolución del resto del proyecto (el POA como fuente contractual, las jornadas como fuente de ejecución, `execution_attachments` para evidencia, las actas derivadas de ejecuciones verificadas), la ruta (b) — abandonar `items` como fuente y reconstruir estos reportes sobre `weekly_plans` — es la que más se alinea con la dirección que el proyecto ya tomó en cada incremento reciente. Tender un puente hacia `items` (ruta a) reintroduciría un modelo paralelo justo cuando el proyecto ha estado eliminando duplicidades. Esta preferencia queda anotada como contexto para cuando se tome la decisión formal — no reemplaza el "Estado: Propuesto" de este documento ni autoriza a empezar la migración.
+**Decisión confirmada (2026-07-18):** ruta (b) — abandonar `items` como fuente y reconstruir estos reportes sobre `weekly_plans` — es la que más se alinea con la dirección que el proyecto ya tomó en cada incremento reciente (el POA como fuente contractual, las jornadas como fuente de ejecución, `execution_attachments` para evidencia, las actas derivadas de ejecuciones verificadas). Tender un puente hacia `items` (ruta a) habría reintroducido un modelo paralelo justo cuando el proyecto ha estado eliminando duplicidades.
+
+### Bloqueo previo a cualquier migración, encontrado al verificar datos reales (no supuesto)
+
+Antes de tocar código se consultó la base enlazada: de los boards existentes, **`Tablero Principal` es el único con datos reales (10 groups, 482 items) y NO tiene POA activo ni un solo `weekly_plan`** (`has_active_poa = false`, `weekly_plan_count = 0`). Los demás boards con POA activo y `weekly_plans` son fixtures de prueba sin items (`item_count = 0`, boards `Test Board ...` de sesiones anteriores).
+
+**Consecuencia dura:** migrar `FinancialWidget`/`SCurveWidget`/`ReportsView` para leer exclusivamente de `weekly_plans` HOY dejaría esas pantallas vacías o rotas para el único board que importa en producción — el motor de POA/Cronograma todavía no gobierna su operación. La ruta (b) sigue siendo la decisión correcta a largo plazo, pero **no puede ejecutarse todavía sin antes resolver este prerrequisito**: `Tablero Principal` necesita su POA cargado (las 220 actividades reales, ver `project_excel_spec` en memoria de sesión) y su operación fluyendo por Cronograma/weekly_plans, o la migración necesita diseñarse con una degradación explícita (ej. "sin datos del POA todavía" en vez de mostrar un dato equivocado) para boards sin POA activo — decisión que también debe congelarse antes de escribir código, no improvisarse.
 
 ## Problema
 
@@ -66,14 +72,15 @@ Existen dos fuentes de verdad para el mismo concepto de negocio ("¿qué se ejec
 
 Esto contradice el principio que este mismo proyecto ha aplicado consistentemente en cada incremento reciente (Confirmación/Cierre, Agenda Operativa, el propio ADR-0006): **una sola fuente de verdad por concepto de negocio.**
 
-## Decisión propuesta
+## Decisión
 
-**No se elimina `daily_execution` ahora.** El orden propuesto:
+**No se elimina `daily_execution` ahora.** El plan:
 
-1. **Inventariar** (este documento ya lo hace) todos los consumidores, sin excepción.
-2. **Decidir primero (a) o (b)** (sección anterior) — esta es la decisión de negocio que condiciona todo lo demás; migrar cualquier consumidor sin resolver esto sería adivinar la respuesta en código.
-3. **Migrar uno por uno** cada consumidor vivo, en un orden a definir una vez resuelto el punto 2 — cada migración es su propio incremento, con su propio contrato congelado antes de escribir código, mismo método que el resto del proyecto. La regla de `useAutomations.ts` necesita, además, decidir su rediseño como evento de dominio antes de tocar su código (no es una migración de fuente de datos simple).
-4. **Solo cuando no quede ningún consumidor vivo**, se retira la columna/campo `daily_execution` y el código muerto asociado (`GanttView.tsx`, `TacticalOperationsView.tsx`, `CalendarView.tsx`, `AssessmentView.tsx` y sus `*ViewContainer`, si nada más los reactiva).
+1. ~~Inventariar todos los consumidores, sin excepción.~~ Hecho (sección de arriba).
+2. ~~Decidir (a) o (b).~~ Hecho — ruta (b).
+3. **Resolver el bloqueo de `Tablero Principal`** (sección "Bloqueo previo a cualquier migración") antes de migrar cualquier consumidor de lectura — es un prerrequisito de datos, no de código.
+4. **Migrar uno por uno** cada consumidor vivo, en un orden a definir una vez resuelto el punto 3 — cada migración es su propio incremento, con su propio contrato congelado antes de escribir código, mismo método que el resto del proyecto. La regla de `useAutomations.ts` necesita, además, decidir su rediseño como evento de dominio antes de tocar su código (no es una migración de fuente de datos simple).
+5. **Solo cuando no quede ningún consumidor vivo**, se retira la columna/campo `daily_execution` y el código muerto asociado (`GanttView.tsx`, `TacticalOperationsView.tsx`, `CalendarView.tsx`, `AssessmentView.tsx` y sus `*ViewContainer`, si nada más los reactiva).
 
 **Explícitamente fuera del alcance de ADR-0006 / Fase 3 de la Agenda Operativa** — ese retiro es del componente `ExecutionView.tsx`, no de este modelo de datos. No se resuelven en el mismo incremento.
 
@@ -96,7 +103,7 @@ Esto contradice el principio que este mismo proyecto ha aplicado consistentement
 
 ## Criterio para revisar esta decisión
 
-Este ADR pasa de "Propuesto" a "Aceptado" cuando el dueño del producto elija entre la ruta (a) puente item↔actividad POA o (b) rediseñar los reportes/widgets sobre `weekly_plans` sin pasar por `items`, y se defina el orden de migración resultante.
+Cumplido (2026-07-18): el dueño del producto eligió la ruta (b). Si en el futuro aparece evidencia de que (b) no es viable (por ejemplo, que cargar el POA completo de `Tablero Principal` resulta inviable por alguna razón no prevista aquí), este ADR se corrige explícitamente reabriendo la ruta (a) — no se reinterpreta en el código.
 
 ## Criterio de finalización del ADR
 
