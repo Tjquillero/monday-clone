@@ -36,6 +36,8 @@ Por script:
 | `seed-poa-import-integration.cjs` | Usuario E2E creado |
 | `verify-poa-import-integration.cjs` | Usuario E2E creado, seed de `seed-poa-import-integration.cjs` **y** el Excel real del POA |
 | `verify-poa-import-commit4.cjs` | Usuario E2E creado, seed de `seed-poa-import.cjs` **y** el Excel real del POA |
+| `seed-poa-import-full-flow.cjs` | Usuario E2E creado |
+| `verify-poa-import-success.cjs` | Usuario E2E creado, seed de `seed-poa-import-full-flow.cjs` **y** `fixtures/poa-subset-19.xlsx` |
 
 Ejecutar `drive-jornada.cjs` sin sembrar el plan falla con timeout esperando
 un plan que no existe — sembrar primero.
@@ -101,6 +103,21 @@ node .claude/skills/verify-nav/scripts/e2e-user.cjs --cleanup  # 5. limpieza del
   `importPoaService`, porque llegar a `success` real requeriría un catálogo
   y zonas resueltas que este seed deliberadamente no siembra). Screenshots
   `poa-import-c4-*.png` en `<tmp>/mantenix-e2e/`.
+- **`seed-poa-import-full-flow.cjs`** — siembra un board con las 9 zonas
+  reales del POA, `poa_zone_mappings` 9/9 resueltos, y `board_activity_standards`
+  con las 19 actividades ya confirmadas con evidencia real en Tablero
+  Principal (`docs/discovery/poa-activity-equivalences.md`) — mismos
+  `activity_key`/`rendimiento`/`category`/`unit`, `source='e2e-full-flow-seed'`.
+- **`verify-poa-import-success.cjs`** — primer E2E que prueba el camino
+  `success` real del importador (ningún script anterior lo hacía — ver nota
+  en `verify-poa-import-commit4.cjs`). Sube `fixtures/poa-subset-19.xlsx`
+  (subconjunto real de 19 filas del Excel oficial, mismo contenido, generado
+  filtrando por los 19 `activity_key` ya confirmados) y confirma
+  "Importación exitosa" con los conteos correctos. **Hallazgo de esta
+  verificación:** el Cronograma no genera plan para ninguna de las 19
+  actividades importadas — causa raíz ajena al importador, ver
+  `activity_scope_mappings` en la memoria del proyecto / tarea de
+  seguimiento.
 
 ## Qué limpia realmente `--cleanup`
 
