@@ -9,7 +9,7 @@
 
 La importación del POA 2026 completo sobre Tablero Principal está bloqueada porque `board_activity_standards` (el catálogo técnico — código, nombre, unidad y **rendimiento** de cada actividad) solo tiene 19 de las 107 actividades del archivo. Las 19 ya confirmadas se construyeron con evidencia real: se cruzaron contra el historial operativo del propio Tablero Principal (177 registros de ejecución del sistema anterior) y se verificaron por cantidad ejecutada antes de aceptar cada una — ninguna se inventó.
 
-Para las 88 restantes **no existe ese historial operativo** — nunca se registró una ejecución de estas actividades en el sistema, así que no hay ningún rendimiento real del cual partir. El sistema no puede inventar un número — necesita el valor real de quien opera el contrato.
+Para las 88 restantes **no existe ese historial operativo.** No se asumió esto — se verificó explícitamente: se comparó cada una de las 88 contra los 177 registros del sistema anterior, buscando coincidencias por nombre y por cantidad, igual que se hizo para las 19 ya confirmadas. Resultado: 57 (las que no tienen cantidad contratada esta versión, Sección B) no tienen ninguna coincidencia — nunca se ejecutaron, nunca se trackearon. De las 31 contratadas (Sección A), solo 3 (`2.20`, `2.21`, `2.22` — variantes "muro vertical" de actividades ya confirmadas) tienen una coincidencia de texto fuerte, pero corresponden a una condición física distinta (superficie vertical vs. nivel de suelo) que no se puede asumir equivalente sin confirmación — se incluyen con el rendimiento de referencia horizontal como contexto, no como respuesta. Ninguna de las 88 tiene un rendimiento real del cual partir. El sistema no puede inventar un número — necesita el valor real de quien opera el contrato.
 
 **Esto no es un error del software.** El sistema se niega a construir el catálogo técnico con rendimientos supuestos, igual que antes se negó a inventar una regla de frecuencia. La pregunta no es "¿por qué el importador no deja pasar el archivo?" — es "¿cuál es el rendimiento real de estas 88 actividades?".
 
@@ -58,6 +58,8 @@ Estas actividades **sí tienen cantidad contratada** en al menos una zona esta v
 | `3.14` | SUMINISTRO DE PERSONAL E INSUMOS PARA MANTENIMIENTO PREVENTIVO DE PLANTA ELÉCTRICA GH619CSX POWER, INCLUYE CAMBIO DE ACEITE Y FILTROS | Und |
 
 **Para cada una, indicar el rendimiento esperado** (unidades por jornal, según la unidad de la tabla).
+
+**Nota de contexto para `2.2`, `2.21`, `2.22` (variantes "muro vertical"):** el cronograma operativo ya tiene un rendimiento confirmado para la misma familia de actividad a nivel de suelo — poda de arbustos: 1200 UN/jornal; fungicidas/insecticidas arbustos: 2000 M2/jornal; fertilizantes arbustos: 2500 M2/jornal. Se comparte como referencia únicamente — trabajar en muro vertical es una condición física distinta (más lenta, más difícil de alcanzar) y no se asume que el rendimiento sea el mismo. Indicar el valor real para la variante vertical, no confirmar el de suelo.
 
 ## Sección B — Actividades del catálogo técnico sin cantidad contratada esta versión (57)
 
