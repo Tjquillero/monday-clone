@@ -1,27 +1,23 @@
-# Decisión requerida: rendimiento técnico para 88 actividades del POA 2026
+# Decisión requerida: rendimiento técnico para 31 actividades contratadas del POA 2026
 
 **Para:** administrador y responsable del proceso (dueño del contrato)
 **De:** equipo de desarrollo de Mantenix
-**Fecha:** 2026-07-18
+**Fecha:** 2026-07-18 (revisado el mismo día — ver "Revisión" al final)
 **Evidencia completa:** `docs/discovery/poa-activity-equivalences.md` (19 actividades ya confirmadas con evidencia real), `docs/adr/ADR-0008-board-activity-standards-origin.md` (reglas de construcción del catálogo)
 
 ## Contexto
 
-La importación del POA 2026 completo sobre Tablero Principal está bloqueada porque `board_activity_standards` (el catálogo técnico — código, nombre, unidad y **rendimiento** de cada actividad) solo tiene 19 de las 107 actividades del archivo. Las 19 ya confirmadas se construyeron con evidencia real: se cruzaron contra el historial operativo del propio Tablero Principal (177 registros de ejecución del sistema anterior) y se verificaron por cantidad ejecutada antes de aceptar cada una — ninguna se inventó.
+La importación del POA 2026 completo sobre Tablero Principal está bloqueada porque `board_activity_standards` (el catálogo técnico — código, nombre, unidad y **rendimiento** de cada actividad) solo tiene 19 de las 50 actividades **contratadas** esta versión. Las 19 ya confirmadas se construyeron con evidencia real: se cruzaron contra el historial operativo del propio Tablero Principal (177 registros de ejecución del sistema anterior) y se verificaron por cantidad ejecutada antes de aceptar cada una — ninguna se inventó.
 
-Para las 88 restantes **no existe ese historial operativo.** No se asumió esto — se verificó explícitamente: se comparó cada una de las 88 contra los 177 registros del sistema anterior, buscando coincidencias por nombre y por cantidad, igual que se hizo para las 19 ya confirmadas. Resultado: 57 (las que no tienen cantidad contratada esta versión, Sección B) no tienen ninguna coincidencia — nunca se ejecutaron, nunca se trackearon. De las 31 contratadas (Sección A), solo 3 (`2.20`, `2.21`, `2.22` — variantes "muro vertical" de actividades ya confirmadas) tienen una coincidencia de texto fuerte, pero corresponden a una condición física distinta (superficie vertical vs. nivel de suelo) que no se puede asumir equivalente sin confirmación — se incluyen con el rendimiento de referencia horizontal como contexto, no como respuesta. Ninguna de las 88 tiene un rendimiento real del cual partir. El sistema no puede inventar un número — necesita el valor real de quien opera el contrato.
+Para las 31 restantes **no existe ese historial operativo.** No se asumió esto — se verificó explícitamente dos veces: primero comparando por nombre y por cantidad contra los 177 registros del sistema anterior (mismo método que las 19 ya confirmadas), y después comparando exhaustivamente las 31 contra los mismos 177 registros, código por código. Resultado: ninguna tiene una coincidencia real utilizable. Solo 3 (`2.2`, `2.21`, `2.22` — variantes "muro vertical" de actividades ya confirmadas) tienen una coincidencia de texto fuerte, pero corresponden a una condición física distinta (superficie vertical vs. nivel de suelo) que no se puede asumir equivalente sin confirmación — se incluyen con el rendimiento de referencia horizontal como contexto, no como respuesta. Ninguna de las 31 tiene un rendimiento real del cual partir. El sistema no puede inventar un número — necesita el valor real de quien opera el contrato.
 
-**Esto no es un error del software.** El sistema se niega a construir el catálogo técnico con rendimientos supuestos, igual que antes se negó a inventar una regla de frecuencia. La pregunta no es "¿por qué el importador no deja pasar el archivo?" — es "¿cuál es el rendimiento real de estas 88 actividades?".
+**Esto no es un error del software.** El sistema se niega a construir el catálogo técnico con rendimientos supuestos, igual que antes se negó a inventar una regla de frecuencia. La pregunta no es "¿por qué el importador no deja pasar el archivo?" — es "¿cuál es el rendimiento real de estas 31 actividades?".
 
 **La investigación técnica se considera concluida.** El bloqueo restante corresponde exclusivamente a la ausencia de rendimientos operativos validados para las actividades indicadas — no hay ninguna pieza técnica adicional por resolver antes de continuar.
 
-## Por qué son dos secciones, no una sola lista
+## Las 31 actividades contratadas sin rendimiento
 
-El modelo del sistema separa el **Catálogo Técnico** (identidad permanente de cada actividad — existe independientemente de si se contrata o no en una versión particular del POA) del **Catálogo Contractual** (lo que efectivamente se contrató esta versión). Esa distinción determina la urgencia real de cada grupo:
-
-## Sección A — Actividades contratadas en el POA 2026 vigente (31)
-
-Estas actividades **sí tienen cantidad contratada** en al menos una zona esta versión — bloquean directamente la importación del POA y, con ella, la planificación semanal (Cronograma) de este contrato. **Son las prioritarias.**
+Todas **sí tienen cantidad contratada** en al menos una zona esta versión — bloquean directamente la importación del POA y, con ella, la planificación semanal (Cronograma) de este contrato.
 
 | Código | Descripción | Unidad |
 |---|---|---|
@@ -61,83 +57,20 @@ Estas actividades **sí tienen cantidad contratada** en al menos una zona esta v
 
 **Nota de contexto para `2.2`, `2.21`, `2.22` (variantes "muro vertical"):** el cronograma operativo ya tiene un rendimiento confirmado para la misma familia de actividad a nivel de suelo — poda de arbustos: 1200 UN/jornal; fungicidas/insecticidas arbustos: 2000 M2/jornal; fertilizantes arbustos: 2500 M2/jornal. Se comparte como referencia únicamente — trabajar en muro vertical es una condición física distinta (más lenta, más difícil de alcanzar) y no se asume que el rendimiento sea el mismo. Indicar el valor real para la variante vertical, no confirmar el de suelo.
 
-## Sección B — Actividades del catálogo técnico sin cantidad contratada esta versión (57)
-
-Estas actividades pertenecen al catálogo técnico del contrato (aparecen en el Excel oficial) pero tienen cantidad = 0 en las 9 zonas de esta versión — no se van a programar ni ejecutar en 2026. **No bloquean la operación de este año**, pero sí bloquean la importación completa del archivo, porque el sistema exige que toda actividad que aparezca en el POA tenga una identidad técnica completa (incluyendo rendimiento), sin importar si esta versión la contrató — así se preserva el catálogo para cuando una versión futura sí las contrate.
-
-Si para alguna de estas no hay un rendimiento conocido o esperado, indicarlo así — es una respuesta válida. Qué hacer con esos casos puntuales es una decisión posterior, no parte de esta solicitud.
-
-| Código | Descripción | Unidad |
-|---|---|---|
-| `1.02` | APOYO LOGISTICO EN EL DESARROLLO DE EVENTOS  Y/O TEMPORADAS. | M2 |
-| `4.01` | ORNAMENTACION Y JARDINERIA - SIEMBRA DE OLIVO NEGRO. NC.  BUCIDAS BUCERAS | ARBOLADA (10 UND) |
-| `4.02` | ORNAMENTACION Y JARDINERIA - SIEMBRA DE PEREGRINA. NC.  JATROPHA INTEGERRIMA | ARBOLADA (10 UND) |
-| `4.03` | ORNAMENTACION Y JARDINERIA - SIEMBRA DE SAN JOAQUIN. NC.  CORDIA SEBESTENA | ARBOLADA (10 UND) |
-| `4.04` | ORNAMENTACION Y JARDINERIA - SIEMBRA DE TULIPAN AFRICANO. NC.  SPATHODEA CAMPANULATA | ARBOLADA (10 UND) |
-| `4.05` | ORNAMENTACION Y JARDINERIA - SIEMBRA DE PASTOFUENTE AFRICANO. NC.  PENNISETUM SETACEUM | M2 |
-| `4.06` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE EUPHORBIA MILII (TU Y YO) H PROM 20CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.07` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE DURANTA REPENS (DURANTA GOLD) H PROM 20CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.08` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE HELICONIA PSITTACORUM (AVE DEL PARAISO) H PROM 30CM, INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.09` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE IXORA COCCINEA NORA GRANT (CORAL PATILLA) H PROM 40CM , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.10` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE CHEFFLERA ARBORICOLA TRINETTE (CHEFLERA SENSACIÓN) H PROM 40CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.11` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE TRADESCANTIA PALLIDA PURPUREA (BARQUITO MORADO) H PROM 20CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.12` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE PHILODENDRO LEMONADE (FILODENDRO LIMÓN) H PROM 30CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.13` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE EPIPREMNUM AUREUM (MIAMI) H PROM 20CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.14` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE DIANELLA TASMANICA  (DIANELLA) H PROM 30CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.15` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE CONOCARPUS ERECTUS (MANGLE VERDE), H PROM 30CM NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.16` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE ALTERNANTHERA BETTZICKIANNA ( DURANTA ROJA ) H PROM 25CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.17` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE BOUGAINVILLIA GLABRA -SPECTABILIS - VARIEGATA (TRINITARIA MORADA, TRINITARIA SURTIDA, TRINITARIA JUANITA) H PROM 40CM,  NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.18` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE TRADESCANTIA SPATHACEA (CINTA MORADA) H PROM 20CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.19` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE AGAVE BORDE AMARILLO (AGAVE) H PROM 40CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.20` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE COCCOLOVA UVIFERA (UVA DE PLAYA) H PROM 30CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.21` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE CARISSA MACROCARPA (CARISSA) H PROM 20CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.22` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE ASPARAGUS DESINFLORUS SPRENGERI (ESMERALDA CASTILLO) H PROM 25CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.23` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE ASPARAGUS MEYERII (ESPARRAGO) H PROM 20CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.24` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE PHILODENDRON CONGO (FILODENDRO CONGO) H PROM 35CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.25` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE WEDELIA TRILOBATA (WEDELIA AMARILLA) H PROM 20CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.26` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE MONSTERA DELICIOSA (BALAZO)H PROM 45CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.27` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE CONOCARPUS ERECTUS SERICEUS (MANGLE PLATEADO) H PROM 30CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.28` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE CORDYLINE TERMINALIS (CAÑA DE LA INDIA) H PROM 45CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.29` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE SANSEVIERA TRIFACIATA LAURENTII (LENGUA DE SUEGRA) H PROM 40CM,  NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.30` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE PENNISETUM RUBRUM (PASTO MORADO)H PROM 40CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.31` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE PENNISETUM ALBA (PASTO VERDE) H PROM 40CM, NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.32` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE M2 GRAMA EN TAPETE TIPO ZOYSIA NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | M2 |
-| `4.33` | SUMINISTRO E INSTALACIÓN DE PIEDRA DECORATIVA MIXTA ESPESOR DE LA CAPA DE 5 CM | M2 |
-| `4.34` | SUMINISTRO, APLICACIÓN Y CONFORMACIÓN DE TIERRA NEGRA PARA SIEMBRA | M3 |
-| `4.35` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE  ALISTONIA SCHOLARIS (ALISTONIA) 3-5M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-| `4.36` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE  ALBIZIA LEBBECK (ALGARROBO BLANCO) 3-5M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-| `4.37` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE  DELONIX REGIA (ARBOL ACACIA ROJO) 3-5M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-| `4.38` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE  TABEBUIA IMPRETIGINOSA (ROBLE MORADO) 3-4M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-| `4.39` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE  CONOCARPUS ERECTUS TALLO LIBRE (MANGLE VERDE ARBOL) 3-4M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-| `4.40` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE  COCCOLOVA UVIFERA TALLO LIBRE (UVA DE PLAYA ARBOL) 3-4M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-| `4.41` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE  PLUMERIA RUBRA (ARBOL FLORON) 3-4M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-| `4.42` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE  COCOS NUCIFERA (PALMA DE COCO) 5-7M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-| `4.43` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE  COCOS NUCIFERA (PALMA DE COCO) 8-10M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-| `4.44` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE  DYPSIS DECARYII (PALMA TRIANGULO) 4-6M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-| `4.45` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE  WODYETIA BIFURCARTA (PALMA COLA DE ZORRO) 6-7M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-| `4.46` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE  WODYETIA BIFURCARTA (PALMA COLA DE ZORRO) 7-8M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-| `4.47` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE  PHOENIX DACTYLIFERA (PALMA DATIL) 6-7M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-| `4.48` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE  PHOENIX DACTYLIFERA (PALMA DATIL) 7-8M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-| `4.49` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE  WASHINGTONIA ROBUSTA (PALMA WASHINGTONIA) 3-6M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-| `4.50` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE  WASHINGTONIA ROBUSTA (PALMA WASHINGTONIA) 8-9M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-| `4.51` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE  COCCOTHRINAX DOBLE (COCOTRINAS DOBLE) 3-4M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-| `4.52` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE  COCCOTHRINAX SENCILLA (COCOTRINAS SENCILLA) 3-4M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-| `4.53` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE  ACCOELORRAPHE WRIGHTII (PALMA PAUROTIS) 4-5M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-| `4.54` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE  CARPENTARIA ACUMINATA DOBLE (PALMA CARPENTARIA) 3-6M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-| `4.55` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE   ROYSTENEA REGIA  (PALMA REAL) 6-8M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-| `4.56` | SUMINISTRO, TRANSPORTE Y SIEMBRA DE  ROYSTENEA REGIA (PALMA REAL) 9-10M , NO INCLUYE EXCAVACIÓN NI SUMINISTRO Y CONFORMACIÓN DE TIERRA NEGRA. | ARBOLADA (10 UND) |
-
 ## Impacto de no responder
 
-Mientras la Sección A no esté completa, no se puede importar el POA 2026 completo — ni siquiera parcialmente (el importador es todo-o-nada, ADR-0004). La Sección B puede tratarse con más calma, pero también bloquea mientras no haya, al menos, una decisión explícita sobre qué hacer con cada caso (rendimiento real, o exclusión documentada de esta importación).
+Mientras estas 31 no estén completas, no se puede importar el POA 2026 completo — ni siquiera parcialmente (el importador es todo-o-nada, ADR-0004).
 
 ## Qué pasa después de la respuesta
 
-1. Se puebla `board_activity_standards` con los rendimientos confirmados de la Sección A, mismo proceso auditable que las 19 ya cargadas (`source` distinto, trazable a esta solicitud).
-2. Para la Sección B, se aplican las respuestas recibidas o se documentan las exclusiones acordadas.
-3. Se importa el POA 2026 completo sobre Tablero Principal.
-4. Se genera el Cronograma (`weekly_plans`) y se valida el ciclo operativo completo con datos reales.
+1. Se puebla `board_activity_standards` con los rendimientos confirmados, mismo proceso auditable que las 19 ya cargadas (`source` distinto, trazable a esta solicitud).
+2. Se importa el POA 2026 completo sobre Tablero Principal.
+3. Se genera el Cronograma (`weekly_plans`) y se valida el ciclo operativo completo con datos reales.
 
-## Nota de arquitectura (no bloquea esta decisión, se deja registrada para evitar confusión futura)
+## Revisión (2026-07-18, mismo día): las 57 actividades no contratadas ya NO forman parte de esta solicitud
 
-El documento de diseño original del importador (`docs/architecture/poa-excel-import-design.md`, Sección 4, estado "Propuesto") preveía que el importador poblara automáticamente categoría, descripción y unidad en `board_activity_standards` durante la carga del Excel. La implementación final no lo hace — trata `board_activity_standards` como un catálogo que debe existir de antemano, no como una salida del proceso de importación. Esta diferencia **no resuelve el bloqueo actual**: el rendimiento nunca estuvo en el Excel (no es una columna del archivo), así que aunque el importador poblara automáticamente categoría/nombre/unidad, igual haría falta esta misma solicitud para el rendimiento. Se deja anotado para que, en el futuro, nadie interprete esta brecha como la causa del problema — no lo es.
+La versión original de este documento pedía rendimiento para 88 actividades (31 contratadas + 57 sin cantidad contratada esta versión, principalmente `4.xx` — obra puntual de siembra/jardinería). Se revisó esa premisa antes de enviarla: `board_activity_standards` alimenta el motor de **jornales recurrentes** para planificación semanal — una actividad sin cantidad contratada esta versión (56 de las 57 son siembra puntual, no mantenimiento periódico; la única excepción, `1.02`, es logística de eventos, pero tampoco está contratada esta versión) no se va a programar, así que no tiene sentido exigir su rendimiento antes de tiempo.
+
+Se corrigió el validador (`src/lib/poaImport/validate.ts`) para que una actividad sin cantidad contratada no necesite existir en `board_activity_standards` — verificado con 310/310 pruebas en verde y una prueba nueva que congela la regla. El bloqueo real de la importación se redujo de 88 a **31** actividades — verificado directamente contra el estado real de Tablero Principal, no solo en teoría.
+
+Si una versión futura del POA llega a contratar alguna de esas 57 actividades, su rendimiento se pedirá entonces — no antes.

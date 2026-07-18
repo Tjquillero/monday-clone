@@ -319,6 +319,32 @@ describe('validateParsedPoa — actividades sin ninguna zona con cantidad contra
     expect(result.noContratadas.some((n) => n.activityKey === '1.01')).toBe(false);
   });
 
+  it('una actividad sin cantidad contratada NO exige estar en board_activity_standards (2026-07-18)', () => {
+    // Congela la regla: zonas.length === 0 se chequea ANTES que
+    // knownActivityKeys en validateActivity(). Board_activity_standards
+    // alimenta el motor de jornales recurrentes — una actividad de obra
+    // puntual (ej. "4.01", siembra) sin cantidad contratada esta versión no
+    // debería bloquear la importación completa solo por no tener todavía un
+    // rendimiento de planificación que no hace falta para nada.
+    const full = realParseResult();
+    const excluded = new Set([...RESOLVED_CODES, '3.14']);
+    const partial: ParseResult = {
+      ...full,
+      actividades: full.actividades.filter((a) => !excluded.has(a.activityKey)),
+    };
+    // knownActivityKeys deliberadamente NO incluye "4.01" — simula un
+    // catálogo técnico que nunca cargó rendimiento para esta actividad.
+    const knownActivityKeys = new Set(
+      partial.actividades.map((a) => a.activityKey).filter((k) => k !== '4.01'),
+    );
+    const result = validateParsedPoa(partial, { zoneMappings: fullyMappedZones(), knownActivityKeys });
+
+    expect(result.valid).toBe(true);
+    expect(result.errors.some((e) => e.code === 'activity_key_inexistente' && e.activityKey === '4.01')).toBe(false);
+    expect(result.noContratadas.some((n) => n.activityKey === '4.01')).toBe(true);
+    expect(result.activities.some((a) => a.activityKey === '4.01')).toBe(false);
+  });
+
   it('las 57 actividades reales sin cobertura quedan en noContratadas incluso cuando el archivo completo es inválido (no depende de todo o nada)', () => {
     // noContratadas es informativo, no bloqueante — a diferencia de
     // `activities`, debe seguir poblado aunque el resto del archivo tenga

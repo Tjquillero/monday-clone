@@ -31,6 +31,13 @@
 // contratado de esta versión. Se reporta en `noContratadas` (informativo, no
 // bloqueante), no como error.
 //
+// Ampliación (2026-07-18): una actividad sin cantidad contratada TAMPOCO
+// necesita existir en `board_activity_standards` para esta importación —
+// ese catálogo alimenta el motor de jornales recurrentes, no tiene sentido
+// exigirlo para obra puntual (ej. siembra) que nunca se va a planificar
+// semanalmente mientras no esté contratada. `validateActivity()` chequea
+// `zonas.length === 0` ANTES que `knownActivityKeys` a propósito.
+//
 // Las 14 actividades del POA 2026 con FREC. inconsistente entre zonas
 // (docs/discovery/poa-frequency-per-zone.md) quedaron RESUELTAS
 // (2026-07-18) por decisión del administrador y responsable del proceso,
@@ -220,6 +227,30 @@ function validateActivity(
   context: ValidatePoaImportContext,
   errors: ImportValidationError[],
 ): ValidateActivityOutcome {
+  // Actividad del catálogo técnico sin cantidad contratada en ninguna zona:
+  // no pertenece al catálogo contractual de esta versión del POA (Regla de
+  // negocio: poa_activities representa lo CONTRATADO, no el catálogo
+  // completo — ver docs/domain/poa-domain.md, "Catálogo Contractual" vs.
+  // "Catálogo Técnico"). No es un error — se reporta como informativo y no
+  // se valida ni unidad, ni precio, ni frecuencia, ni catálogo técnico,
+  // porque no hay nada que persistir para ella en esta versión.
+  //
+  // Este chequeo corre ANTES que `knownActivityKeys` a propósito (2026-07-18):
+  // `board_activity_standards` alimenta el motor de jornales recurrentes
+  // (rendimiento por actividad para planificación semanal) — una actividad
+  // sin cantidad contratada esta versión no se va a programar, así que
+  // exigirle una entrada en ese catálogo antes de tiempo bloquearía la
+  // importación completa (ADR-0004, todo o nada) por rendimientos que hoy
+  // no hacen falta para nada. Ejemplo real: 56 de 107 actividades del POA
+  // 2026 son obra puntual de siembra/jardinería (categoría "4.xx"), nunca
+  // contratadas en esta versión — no tiene sentido pedir su rendimiento de
+  // planificación recurrente antes de que exista una versión que las
+  // contrate. El orden anterior (activity_key_inexistente primero) las
+  // bloqueaba igual que a una actividad contratada real, sin necesidad.
+  if (act.zonas.length === 0) {
+    return { validated: null, noContratada: { activityKey: act.activityKey, excelRow: act.excelRow } };
+  }
+
   if (!context.knownActivityKeys.has(act.activityKey)) {
     errors.push({
       code: 'activity_key_inexistente',
@@ -228,17 +259,6 @@ function validateActivity(
       excelRow: act.excelRow,
     });
     return { validated: null, noContratada: null };
-  }
-
-  // Actividad del catálogo técnico sin cantidad contratada en ninguna zona:
-  // no pertenece al catálogo contractual de esta versión del POA (Regla de
-  // negocio: poa_activities representa lo CONTRATADO, no el catálogo
-  // completo — ver docs/domain/poa-domain.md, "Catálogo Contractual" vs.
-  // "Catálogo Técnico"). No es un error — se reporta como informativo y no
-  // se valida ni unidad, ni precio, ni frecuencia, porque no hay nada que
-  // persistir para ella en esta versión.
-  if (act.zonas.length === 0) {
-    return { validated: null, noContratada: { activityKey: act.activityKey, excelRow: act.excelRow } };
   }
 
   let hasFieldError = false;
