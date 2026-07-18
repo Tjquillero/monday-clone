@@ -1,6 +1,6 @@
 # Diseño: Agenda Operativa
 
-**Estado: Propuesto — usuarios, ubicación, alcance y MVP ya confirmados por el dueño del producto (2026-07-17); queda un punto abierto (sección 10). Diseño previo a implementación, no construido todavía.**
+**Estado: Propuesto — usuarios, ubicación, alcance, MVP y roadmap de retiro ya confirmados por el dueño del producto (2026-07-17). Diseño previo a implementación, no construido todavía.**
 
 Continuación de [ADR-0006](../adr/ADR-0006-execution-engine-consolidation.md), que congeló la condición de retiro de `ExecutionView.tsx`: existe hasta que esta agenda cubra lo que hoy solo `ExecutionView` ofrece (semáforo de cumplimiento, vista Hoy/Semana). Este documento responde las preguntas de negocio antes de escribir código — no es un ADR (no reemplaza una decisión de arquitectura existente) ni un documento de dominio (menciona tablas). Sigue el mismo formato que `execution-certification-design.md`.
 
@@ -98,10 +98,27 @@ Parte del MVP, no un extra: cada elemento que señale algo accionable (un sitio 
 3. Un supervisor puede identificar el sitio más atrasado del día en un vistazo, sin abrir ningún otro módulo.
 4. Cada indicador del MVP (sección 8) se justifica contra al menos una pregunta de la sección 6 — si no, no entra al alcance.
 
-## 11. Condición para retirar `ExecutionView` — punto pendiente de confirmar
+## 11. Condición para retirar `ExecutionView` — CONFIRMADO: lectura literal de ADR-0006, sin modificarlo
 
-ADR-0006 fija el mínimo para retirar `ExecutionView.tsx` en **semáforo de cumplimiento + vista Hoy/Semana**. El MVP recién confirmado (sección 8) es **Hoy únicamente** — la vista Semana queda para v2.
+ADR-0006 fija el mínimo para retirar `ExecutionView.tsx` en **semáforo de cumplimiento + vista Hoy/Semana**. El MVP confirmado (sección 8) es **Hoy únicamente** — por lo tanto, terminar el MVP **no** dispara el swap del ribbon (sección 3) ni el retiro de `ExecutionView`.
 
-Esto deja una tensión sin resolver, no decidida silenciosamente en este documento: ¿el MVP (solo Hoy) ya es suficiente para reemplazar `ExecutionView` en el ribbon (sección 3), dejando la vista Semana como una mejora incremental sobre el reemplazo ya hecho? ¿O `ExecutionView` permanece en el ribbon hasta que la vista Semana también exista, tal como fijó ADR-0006 literalmente?
+Decisión explícita del dueño del producto, con su razón registrada (no solo el resultado): ADR-0006 **no se modifica ahora** para ajustarlo al MVP. El ADR define el estado final de la arquitectura (cuándo `ExecutionView` deja de tener motivo de existir); este documento define el plan para llegar ahí. Mezclar ambos —adaptar el ADR a cada hito intermedio— dejaría, dentro de unos meses, la duda de si `ExecutionView` debía seguir existiendo o si la Agenda simplemente nunca se terminó. La vista Hoy es un **hito intermedio**, no el reemplazo definitivo.
 
-Mientras no se responda, se asume la lectura literal de ADR-0006 (semáforo + Hoy **y** Semana) — el swap del ribbon (sección 3) no ocurre al cerrar el MVP de la sección 8, sino cuando también exista la vista Semana. Si el dueño del producto prefiere la lectura incremental (swap con Hoy solo), ADR-0006 debe corregirse explícitamente en su sección "Criterio para revisar esta decisión" — no reinterpretarse aquí.
+`ExecutionView.tsx` permanece en el ribbon durante la Fase 1 y la Fase 2 (sección 12) — visible, funcional, pero marcado como legacy en la propia UI (ver Fase 1 abajo) para que quien lo abra sepa que está en transición, no que fue olvidado.
+
+**Sobre el estado del ADR:** no hace falta un estado nuevo fuera de los cuatro que ya define `docs/adr/README.md` (Propuesto/Aceptado/Reemplazado/Obsoleto). ADR-0006 permanece **Aceptado** durante todo el roadmap — ya es la lectura correcta hoy (rige la decisión vigente) y sigue siéndolo en la Fase 3, cuando la decisión se cumple: un ADR aceptado no cambia de estado por haberse implementado, solo cuando una decisión posterior lo reemplaza u obsoletiza. Si al llegar a la Fase 3 se prefiere dejar constancia explícita de que ya se ejecutó, se agrega una nota de actualización fechada dentro del propio ADR-0006 (mismo patrón que ya usa `ADR-0003`), no un estado nuevo en la taxonomía del proyecto.
+
+## 12. Roadmap de retiro — CONFIRMADO
+
+**Fase 1 — MVP (este documento, secciones 8 y 9):**
+- Agenda Operativa: vista Hoy, semáforo, evidencia pendiente, planes listos para confirmar, planes listos para cerrar, accesos rápidos.
+- `ExecutionView` permanece disponible, marcado explícitamente como **Legacy** en su propia UI — un aviso visible indicando que será reemplazado, no un retiro silencioso ni una promesa sin fecha.
+
+**Fase 2 — Semana:**
+- Se agrega la vista Semana sobre el mismo modelo de datos (sección 7) y el mismo filtro de diseño (sección 6).
+- Se valida explícitamente que la Agenda ya responde las seis "preguntas operativas" de la sección 6 — no se asume, se confirma una por una.
+- Se compara contra `ExecutionView` para confirmar que no queda ninguna capacidad útil fuera (repetir el inventario funcional de la auditoría original, no solo revisar el código nuevo).
+
+**Fase 3 — Retiro:**
+- Solo cuando la Fase 2 esté validada: se retira `ExecutionView.tsx` del ribbon, se elimina su código (`execution/*`, `DailyAgendaPanel.tsx`, `PersonnelPicker.tsx` si nada más lo usa) y la documentación asociada.
+- ADR-0006 se actualiza con una nota fechada confirmando el cumplimiento (ver sección 11) — no se reemplaza ni se marca "Obsoleto": la decisión sigue siendo válida, ya se ejecutó.
