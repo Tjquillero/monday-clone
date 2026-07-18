@@ -138,15 +138,30 @@ Decisión explícita del dueño del producto, con su razón registrada (no solo 
 
 ## 12. Roadmap de retiro — CONFIRMADO
 
-**Fase 1 — MVP (este documento, secciones 8 y 9):**
-- Agenda Operativa: vista Hoy, semáforo, evidencia pendiente, planes listos para confirmar, planes listos para cerrar, accesos rápidos.
-- `ExecutionView` permanece disponible, marcado explícitamente como **Legacy** en su propia UI — un aviso visible indicando que será reemplazado, no un retiro silencioso ni una promesa sin fecha.
+**Fase 1 — MVP — COMPLETA (2026-07-17, commits `15917f1`/`b05ee24`/`1303c25`, pusheados):**
+- Agenda Operativa: vista Hoy, semáforo, evidencia pendiente, planes listos para confirmar, planes listos para cerrar, accesos rápidos. RPC `get_board_operational_agenda` verificada (17 aserciones) + E2E real en navegador (semáforo con datos reales, deep-link Agenda→Cronograma→`PlanLifecyclePanel` funcionando de punta a punta).
+- `ExecutionView` permanece disponible, marcado explícitamente como **Legacy** en su propia UI (banner "Vista en transición" + enlace a la Agenda beta) — un aviso visible indicando que será reemplazado, no un retiro silencioso ni una promesa sin fecha.
 
 **Fase 2 — Semana:**
 - Se agrega la vista Semana sobre el mismo modelo de datos (sección 7) y el mismo filtro de diseño (sección 6).
 - Se valida explícitamente que la Agenda ya responde las seis "preguntas operativas" de la sección 6 — no se asume, se confirma una por una.
-- Se compara contra `ExecutionView` para confirmar que no queda ninguna capacidad útil fuera (repetir el inventario funcional de la auditoría original, no solo revisar el código nuevo).
+- **Criterio de aceptación objetivo (matriz, no impresión subjetiva)** — reemplaza "comparar contra ExecutionView" por una verificación explícita, capacidad por capacidad:
+
+  | Funcionalidad | ExecutionView | Agenda | Resultado |
+  |---|---|---|---|
+  | Estado del día | ✅ | ✅ (Fase 1) | Cubierto |
+  | Semáforo operativo | ✅ | ✅ (Fase 1) | Cubierto |
+  | Evidencia pendiente | ❌ | ✅ (Fase 1) | Mejorado |
+  | Planes listos para confirmar | ❌ | ✅ (Fase 1) | Mejorado |
+  | Planes listos para cerrar | ❌ | ✅ (Fase 1) | Mejorado |
+  | Navegación al flujo real (deep-links) | ❌ | ✅ (Fase 1) | Mejorado |
+  | Vista semanal | ✅ | ⏳ (esta fase) | Pendiente — bloquea el retiro hasta cerrarse |
+
+  **Fila retirada de la matriz original del usuario, a propósito:** "IA / Evidencia" — ambigua entre "evidencia pendiente" (ya cubierta arriba, sin IA) y una futura sección de observaciones del copiloto. La sección 8 ya excluyó explícitamente "Alertas IA" del alcance de la Agenda (por enfoque, no por límite técnico) — incluir esta fila en el criterio de aceptación reabriría esa decisión sin que nadie la haya pedido de nuevo. Si en el futuro se agrega una capa de IA a la Agenda, se evalúa aparte, con su propio contrato — no como parte del criterio de retiro de `ExecutionView`.
+
+- **Guardrail de alcance para toda la Fase 2 (principio explícito del dueño del producto):** la Agenda responde una sola pregunta — *"¿qué debo atender hoy?"*. No se agregan gráficos, tendencias, comparativos mensuales ni KPIs históricos dentro de la propia Agenda; cualquier análisis más profundo abre el módulo especializado correspondiente (Cronograma, Costos, Reportes). Este guardrail es el mismo filtro de la sección 6, reafirmado para que la vista Semana no se convierta en un "superdashboard" — el riesgo concreto es que la Agenda termine compitiendo con Cronograma/Costos en vez de enrutar hacia ellos.
 
 **Fase 3 — Retiro:**
-- Solo cuando la Fase 2 esté validada: se retira `ExecutionView.tsx` del ribbon, se elimina su código (`execution/*`, `DailyAgendaPanel.tsx`, `PersonnelPicker.tsx` si nada más lo usa) y la documentación asociada.
+- **Auditoría de uso real, ANTES de borrar código** (paso nuevo, evita reabrir el módulo una semana después): confirmar que ningún flujo operativo depende todavía de `ExecutionView` — enlaces desde otros módulos hacia `?view=execution`, marcadores/accesos guardados por usuarios reales, permisos específicos atados a esa vista, documentación o manuales que la mencionen, scripts E2E (`scripts/e2e/*.cjs`) y pruebas automatizadas (`*.test.tsx`) que la ejerciten.
+- Solo cuando la Fase 2 esté validada Y la auditoría de uso real no encuentre dependencias: se retira `ExecutionView.tsx` del ribbon, se elimina su código (`execution/*`, `DailyAgendaPanel.tsx`, `PersonnelPicker.tsx` si nada más lo usa) y la documentación asociada.
 - ADR-0006 se actualiza con una nota fechada confirmando el cumplimiento (ver sección 11) — no se reemplaza ni se marca "Obsoleto": la decisión sigue siendo válida, ya se ejecutó.
