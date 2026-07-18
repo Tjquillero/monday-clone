@@ -53,6 +53,10 @@ Consecuencia para el plan de migración: no basta con "leer de otra tabla" para 
 - **(a)** construir un puente item↔actividad POA (nuevo, no existe hoy), o
 - **(b)** rediseñar esos reportes/widgets para construirse enteramente sobre `weekly_plans`/`weekly_plan_item_executions`, abandonando `items` como fuente — mismo camino que ya tomó el Cronograma.
 
+**Conclusión de la auditoría:** el problema no es una migración de consultas, sino una migración de modelo. Hasta que se decida explícitamente si los reportes continúan basándose en `items` o pasan a construirse directamente sobre el dominio operativo (`weekly_plans`), no debe iniciarse la sustitución de ningún consumidor individual.
+
+**Inclinación registrada — no es todavía una decisión formal:** visto en conjunto con la evolución del resto del proyecto (el POA como fuente contractual, las jornadas como fuente de ejecución, `execution_attachments` para evidencia, las actas derivadas de ejecuciones verificadas), la ruta (b) — abandonar `items` como fuente y reconstruir estos reportes sobre `weekly_plans` — es la que más se alinea con la dirección que el proyecto ya tomó en cada incremento reciente. Tender un puente hacia `items` (ruta a) reintroduciría un modelo paralelo justo cuando el proyecto ha estado eliminando duplicidades. Esta preferencia queda anotada como contexto para cuando se tome la decisión formal — no reemplaza el "Estado: Propuesto" de este documento ni autoriza a empezar la migración.
+
 ## Problema
 
 Existen dos fuentes de verdad para el mismo concepto de negocio ("¿qué se ejecutó y cuándo?"):
