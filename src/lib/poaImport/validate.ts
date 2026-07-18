@@ -31,6 +31,31 @@
 // contratado de esta versión. Se reporta en `noContratadas` (informativo, no
 // bloqueante), no como error.
 //
+// Las 14 actividades del POA 2026 con FREC. inconsistente entre zonas
+// (docs/discovery/poa-frequency-per-zone.md) quedaron RESUELTAS
+// (2026-07-18) por decisión del administrador y responsable del proceso,
+// dueño funcional del contrato — ver RESOLVED_FRECUENCIA_OVERRIDES más
+// abajo. Ya no pasan por resolveFrecuencia(): su valor de `frecuencia` es
+// fijo, sin importar lo que traiga cada celda del Excel. Dos categorías,
+// no una sola regla (ADR-0002, enmienda 2026-07-18):
+//   - Actividades por intensidad (`1.12`, `1.13`, `1.15`): la columna FREC.
+//     no representa una periodicidad temporal — es un parámetro operativo
+//     (m³ recolectados, número de pasadas de máquina) que varía por zona
+//     por naturaleza, no por ambigüedad de captura. Se persiste
+//     `frecuencia = null`. Esto no es una simplificación: es exactamente
+//     el mecanismo que el administrador del proceso pidió ("el scheduler
+//     debe interpretar estos casos como no periódicos") — `frecuencia
+//     = null` ya hace que weeklyPlanner.ts excluya la actividad del
+//     cálculo de jornales semanales (precedente ADR-0005 para `3.14`), sin
+//     necesidad de un mecanismo nuevo. El valor operativo real (m³,
+//     pasadas) no se persiste todavía — no hay columna del dominio que lo
+//     represente por zona.
+//   - Actividades periódicas (`2.04`-`2.09`, `2.10`/`2.11`/`2.14`, `3.1`,
+//     `3.04`): sí son periodicidad contractual — se fija una única
+//     frecuencia por actividad (Regla 18 sin cambios), expresada en la
+//     unidad que ya usa el motor de planificación (ocurrencias por cada 25
+//     días laborales, ver schedulerMath.ts: WORKING_DAYS_MONTH = 25).
+//
 // "Todo o nada" (ADR-0004): si valid === false, `activities` queda vacío. No
 // existe una persistencia parcial del archivo completo — pero eso no impide
 // que esta función reporte TODOS los errores encontrados de una vez, no solo
@@ -56,6 +81,35 @@ export interface ValidatePoaImportContext {
 }
 
 const FREC_EPSILON = 1e-6;
+
+/**
+ * Reglas definitivas para las 14 actividades de
+ * docs/discovery/poa-frequency-per-zone.md, confirmadas por el
+ * administrador y responsable del proceso (2026-07-18). Reemplazan
+ * cualquier valor de FREC. que traiga el Excel para esa actividad — no se
+ * concilia con lo capturado, se aplica la regla del contrato.
+ *
+ * `null` = Grupo A: FREC. es un parámetro operativo, no periodicidad
+ * (ver comentario de cabecera del archivo). Los demás valores están en la
+ * unidad del motor de planificación: ocurrencias por cada 25 días
+ * laborales (25 / días_entre_ejecuciones — schedulerMath.ts).
+ */
+const RESOLVED_FRECUENCIA_OVERRIDES: ReadonlyMap<string, number | null> = new Map([
+  ['1.12', null],
+  ['1.13', null],
+  ['1.15', null],
+  ['2.04', 25 / 50],
+  ['2.05', 25 / 50],
+  ['2.06', 25 / 50],
+  ['2.07', 25 / 50],
+  ['2.08', 25 / 50],
+  ['2.09', 25 / 50],
+  ['2.10', 25 / 75],
+  ['2.11', 25 / 75],
+  ['2.14', 25 / 75],
+  ['3.1', 25 / 90],
+  ['3.04', 25 / 30],
+]);
 
 type FrecuenciaResolution =
   | { estado: 'resuelta'; valor: number | null }
@@ -100,6 +154,23 @@ function resolveFrecuencia(frecuenciasPorZona: ZoneFrecuenciaRaw[]): FrecuenciaR
     return { estado: 'resuelta', valor: primero };
   }
   return { estado: 'pending_business_rule', valoresPorZona: frecuenciasPorZona, motivo: 'different_values' };
+}
+
+/**
+ * Punto de entrada real usado por validateActivity(): si la actividad tiene
+ * una regla definitiva confirmada (RESOLVED_FRECUENCIA_OVERRIDES), se aplica
+ * directamente y NUNCA se llega a 'pending_business_rule' para ella, sin
+ * importar lo que traiga el Excel. El resto del catálogo sigue el camino de
+ * siempre (resolveFrecuencia).
+ */
+function resolveFrecuenciaConOverride(
+  activityKey: string,
+  frecuenciasPorZona: ZoneFrecuenciaRaw[],
+): FrecuenciaResolution {
+  if (RESOLVED_FRECUENCIA_OVERRIDES.has(activityKey)) {
+    return { estado: 'resuelta', valor: RESOLVED_FRECUENCIA_OVERRIDES.get(activityKey) ?? null };
+  }
+  return resolveFrecuencia(frecuenciasPorZona);
 }
 
 function validateZoneMappings(
@@ -192,7 +263,7 @@ function validateActivity(
     hasFieldError = true;
   }
 
-  const frecResult = resolveFrecuencia(act.frecuenciasPorZona);
+  const frecResult = resolveFrecuenciaConOverride(act.activityKey, act.frecuenciasPorZona);
 
   if (frecResult.estado === 'pending_business_rule') {
     const mensajePorMotivo: Record<FrecuenciaPendienteMotivo, string> = {

@@ -1,5 +1,7 @@
 # Decisión requerida para importar el POA 2026
 
+**RESUELTO (2026-07-18).** El administrador y responsable del proceso respondió las tres preguntas de este documento. Ver `docs/discovery/poa-frequency-per-zone.md` (sección "RESUELTO") para las reglas confirmadas y `docs/adr/ADR-0002-schedule-contractual-source.md` (enmienda 2026-07-18) para la aclaración de rol de la frecuencia. Este documento se conserva como registro de la pregunta original planteada, no se reescribe.
+
 **Para:** dueño del proceso / responsable del contrato (mantiene el POA oficial)
 **De:** equipo de desarrollo de Mantenix
 **Fecha:** 2026-07-18

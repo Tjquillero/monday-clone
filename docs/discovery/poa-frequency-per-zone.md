@@ -4,6 +4,26 @@
 
 **Actualización (2026-07-11):** [`ADR-0005`](../adr/ADR-0005-poa-frecuencia-ausente.md) resolvió el subconjunto de este discovery donde `FREC.` está **completamente vacío** para una actividad (`3.14`) — se persiste `frecuencia = null`, sin bloquear. La pregunta de fondo de este documento (actividades con `FREC.` real que no concuerda entre zonas — el Grupo A/B/C/D de abajo, más `3.1`, que combina un valor vacío con valores reales que tampoco concuerdan entre sí) **sigue abierta**. Este documento no se reescribe; el resto de su contenido conserva su valor como evidencia de investigación original.
 
+**RESUELTO (2026-07-18) — decisión del administrador y responsable del proceso, dueño funcional del contrato.** Las 14 actividades quedan resueltas en dos categorías, no una sola regla:
+
+| Actividad | Categoría | Regla confirmada |
+|---|---|---|
+| `1.12` | Parámetro operativo, no periodicidad | `FREC.` representa m³ de desechos orgánicos recolectados por zona — no es una frecuencia temporal |
+| `1.13` | Parámetro operativo, no periodicidad | `FREC.` representa m³ de desechos inorgánicos recolectados por zona — no es una frecuencia temporal |
+| `1.15` | Parámetro operativo, no periodicidad | `FREC.` representa el número de pasadas de la máquina (Barber/oxigenación mecánica) por zona — no es una frecuencia temporal |
+| `2.04`–`2.09` | Frecuencia contractual (Grupo B) | Cada 50 días |
+| `2.10`, `2.11`, `2.14` | Frecuencia contractual (Grupo C) | Cada 75 días |
+| `3.1` | Frecuencia contractual (Grupo D) | Cada 3 meses (incluye la fila con `FREC.` vacío en Mercado La Sazón — la regla general la cubre) |
+| `3.04` | Frecuencia contractual | Cada 1 mes (30 días) — cierra el caso marcado como "ambiguo" en el hallazgo original (sección "Por qué no se resuelve aquí" más abajo): no es pasadas, es periodicidad real |
+
+**Corrección conceptual importante, para que no se reinterprete mal dentro de unos meses:** `1.12`/`1.13`/`1.15` **no se describen como "sin frecuencia"** — tienen un valor real en la columna `FREC.` del Excel, pero ese valor no representa una periodicidad (nunca es "cada X días"). Es un parámetro operativo de otra naturaleza (volumen recolectado, número de pasadas). Persistir ese número como si fuera `frecuencia` sería tan incorrecto como no persistir nada. Alcance de esta resolución: estas 3 actividades se importan con `poa_activities.frecuencia = NULL` (mismo estado ya válido desde ADR-0005) — el valor operativo de `FREC.` (m³/pasadas) queda **fuera de alcance de este incremento**, no se persiste todavía en ninguna tabla; es un dato real que hoy no tiene una columna del dominio que lo represente correctamente.
+
+**Nota sobre el mecanismo de "no periódica":** el administrador del proceso pidió explícitamente que, para las actividades por intensidad (`1.12`/`1.13`/`1.15`), "el scheduler debe interpretar esos casos especiales como actividades no periódicas". Eso es exactamente lo que ya hace `frecuencia = NULL` — `src/lib/weeklyPlanner.ts` ya excluye del cálculo de jornales semanales cualquier actividad con `frecuencia` nula (precedente sentado por ADR-0005 para `3.14`). No hizo falta ningún mecanismo nuevo ni un cambio de esquema: el comportamiento pedido ya existe y ya está probado, `NULL` es simplemente la señal que lo activa.
+
+Para `2.04`–`2.11`, `2.14`, `3.1` y `3.04`: la regla confirmada **sustituye** el valor que traiga cada celda de `FREC.` del Excel, sin importar si concuerda entre zonas o no — Regla 18 (`poa-domain.md`) sigue vigente sin cambios: una única frecuencia por actividad, independiente de la zona.
+
+Ver [`ADR-0002`](../adr/ADR-0002-schedule-contractual-source.md) (enmienda 2026-07-18) para la aclaración de que la frecuencia es un parámetro de planificación, no un dato de certificación/facturación — motivo por el cual el administrador del proceso pudo resolver esta ambigüedad directamente, sin depender de la lógica de facturación ya construida.
+
 ## Fecha
 2026-07-09
 
@@ -154,9 +174,12 @@ Para el Grupo B (las 9 actividades de Mantenimiento de Zonas Verdes) y el Grupo 
 
 Cambiar el esquema ahora (mover `frecuencia` de `poa_activities` a `poa_activity_zones`) afectaría ADR-0002, la Regla 18, la migración ya implementada y el código que ya asume frecuencia única por actividad — un costo alto para una hipótesis todavía no confirmada. Asumir que el Excel está mal y rechazarlo en el importador tiene el mismo problema en la dirección contraria: descartaría el documento contractual vigente basándose únicamente en el modelo.
 
-## Pregunta abierta (requiere decisión del dueño del proceso)
-**Para las actividades del Grupo B (`2.04`–`2.11`, `2.14` — Mantenimiento de Zonas Verdes, unidad `-MES`, `FREC.` fraccionario) y el Grupo D (`3.1`): ¿la frecuencia contractual pertenece a la Actividad del POA, o al par Actividad×Zona?**
+## Pregunta abierta — RESUELTA (2026-07-18)
 
-El Grupo A (`1.12`, `1.13`, `1.15`) queda fuera de esta pregunta: si el dueño del proceso confirma la lectura de "pasadas/intensidad de ejecución" para esas 3, no hay contradicción con la Regla 18 y no requieren seguimiento adicional aquí — aunque conviene que la confirmación sea explícita, no asumida, ya que "pasadas" tampoco está documentado hoy en `poa-domain.md` como un atributo de la Actividad del POA (no está claro en qué tabla del esquema actual viviría ese parámetro de intensidad si no es `frecuencia`).
+~~Para las actividades del Grupo B (`2.04`–`2.11`, `2.14` — Mantenimiento de Zonas Verdes, unidad `-MES`, `FREC.` fraccionario) y el Grupo D (`3.1`): ¿la frecuencia contractual pertenece a la Actividad del POA, o al par Actividad×Zona?`~~
 
-La respuesta sobre el Grupo B/D determina si la Regla 18 y el esquema de ADR-0002 se mantienen tal cual, o si se revisan mediante un nuevo ADR. Bloquea TC-01 y TC-08 de [`poa-excel-import-test-matrix.md`](../architecture/poa-excel-import-test-matrix.md) únicamente para esas 10 actividades; el resto de la matriz no depende de esta respuesta y puede avanzar.
+**Respuesta del administrador y responsable del proceso:** la frecuencia pertenece a la Actividad del POA (no al par Actividad×Zona) — Regla 18 se mantiene sin cambios de esquema. Los valores dispares que aparecían por zona en el Excel para estas 10 actividades no reflejan una frecuencia distinta por zona; la frecuencia contractual real es única por actividad, según la tabla de la sección "RESUELTO" arriba (Grupo B = 50 días, Grupo C = 75 días, Grupo D = 3 meses) y **sustituye** los valores del Excel.
+
+El Grupo A (`1.12`, `1.13`, `1.15`) también quedó resuelto, pero con una respuesta distinta a la hipótesis original de "pasadas/intensidad de ejecución": son parámetros operativos reales (m³ recolectados, número de pasadas), confirmados explícitamente, no asumidos — ver tabla "RESUELTO" arriba para el detalle y el alcance (el valor operativo en sí no se persiste todavía; `frecuencia` queda en `NULL`).
+
+No se revisa ADR-0002 en su esquema (Regla 18 y la ubicación de `frecuencia` en `poa_activities` se mantienen) — sí se enmienda con una aclaración de rol (ver `ADR-0002`, sección de enmienda 2026-07-18). TC-01 y TC-08 de [`poa-excel-import-test-matrix.md`](../architecture/poa-excel-import-test-matrix.md) quedan desbloqueados.

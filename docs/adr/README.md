@@ -20,7 +20,8 @@ Este directorio registra las decisiones de arquitectura del proyecto: **por qué
 | [ADR-0004](./ADR-0004-poa-zone-catalog.md) | Catálogo de Zonas del POA y Mapeo Persistente con el Board | Aceptado |
 | [ADR-0005](./ADR-0005-poa-frecuencia-ausente.md) | Frecuencia Ausente como Estado de Negocio Válido | Aceptado |
 | [ADR-0006](./ADR-0006-execution-engine-consolidation.md) | Consolidación del Motor de Ejecución — `ExecutionView` deja de ser el motor operativo | Aceptado |
-| [ADR-0007](./ADR-0007-daily-execution-legacy-model.md) | Retiro progresivo de `daily_execution` como fuente operativa | Propuesto |
+| [ADR-0007](./ADR-0007-daily-execution-legacy-model.md) | Retiro progresivo de `daily_execution` como fuente operativa | Aceptado |
+| [ADR-0008](./ADR-0008-board-activity-standards-origin.md) | Origen y Reglas de Construcción de `board_activity_standards` | Aceptado |
 
 ## Estados
 

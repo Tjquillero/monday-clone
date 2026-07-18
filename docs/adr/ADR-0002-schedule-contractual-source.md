@@ -6,6 +6,8 @@ Aceptado
 ## Fecha
 2026-07-05
 
+**Enmienda (2026-07-18):** ver sección "Enmienda — Rol de la frecuencia" al final. No cambia el esquema ni ninguna decisión de esta página — aclara que `frecuencia` es un parámetro de planificación, no un dato de certificación/facturación.
+
 ## Contexto
 `docs/domain/poa-domain.md` (Congelado v1) establece que el Cronograma siempre nace de una versión específica y aprobada del POA (Regla 2), y que la separación entre Catálogo Técnico y Catálogo Contractual es estricta: rendimientos y tiempos estándar pertenecen al catálogo técnico; precio, frecuencia y cantidad contratada pertenecen exclusivamente a la versión del POA (Regla 17, Regla 18, sección "Separación de Catálogo y Contrato").
 
@@ -52,3 +54,15 @@ Transición:
 
 ## Criterio para revisar esta decisión
 Si en el futuro aparece un consumidor externo (API pública, integración de terceros) que dependa del nombre o la forma actual de `board_activity_standards`, se debe emitir un ADR nuevo que reevalúe la opción de vista de compatibilidad — no reabrir este ADR.
+
+## Enmienda (2026-07-18) — Rol de la frecuencia
+
+**Origen:** al resolver `docs/discovery/poa-frequency-per-zone.md` (14 actividades del POA 2026 con `FREC.` inconsistente entre zonas), el administrador y responsable del proceso — dueño funcional del contrato — señaló que la frecuencia no es un dato que la operación use para certificar ni facturar: la factura (Acta) se genera contra cantidades ejecutadas y verificadas, nunca contra la frecuencia planificada.
+
+**Verificado antes de aceptar la aclaración, no solo de palabra:** `generate_acta_draft` (`supabase/migrations/20260728_generate_acta_draft.sql`) no referencia `frecuencia` en ninguna parte de su cálculo — certifica exclusivamente `precio_unitario × executed_qty` de ejecuciones `verified`. La observación es exacta para el código tal como existe hoy.
+
+**Aclaración de rol, sin cambio de esquema:** `frecuencia` permanece en `poa_activities` — se sigue cargando desde la versión del POA, y `weekly_plan_items.planned_frecuencia` se sigue copiando de ahí al planificar, sin ningún cambio de código. Lo que se aclara es su **rol**: es un parámetro que usa el Scheduling Engine para sugerir el plan semanal (cuántos jornales por semana hacen falta) — no un dato de certificación o facturación. La Regla 18 de `poa-domain.md` ("una única frecuencia por actividad, independiente de la zona") se mantiene sin cambios; esta enmienda no la contradice, solo precisa para qué se usa ese valor una vez capturado.
+
+**Consecuencia práctica:** esto es lo que permitió resolver las 14 actividades de `poa-frequency-per-zone.md` sin esperar una validación adicional de la lógica de facturación (que de todas formas no la usa) — la decisión sobre el valor correcto de `frecuencia` para cada actividad es una decisión de planificación operativa, dentro de la autoridad del administrador del proceso, no una decisión que además deba conciliarse con reglas de certificación ya construidas.
+
+**No se reabre esta enmienda si en el futuro `frecuencia` empieza a usarse en algún cálculo de facturación** — eso sí exigiría un ADR nuevo, porque cambiaría la premisa verificada arriba (que hoy no la usa).
