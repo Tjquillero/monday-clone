@@ -5,14 +5,18 @@ import {
   ClipboardCheck, AlertTriangle, Camera, CheckCircle2, Lock,
   ArrowRight, ShieldCheck, DollarSign, Circle,
 } from 'lucide-react';
-import { BoardOperationalAgenda, AgendaSemaphoreColor } from '@/types/scheduler';
+import { BoardOperationalAgenda, BoardOperationalAgendaWeek } from '@/types/scheduler';
+import { SEMAPHORE_STYLE } from './semaphoreStyle';
+import AgendaSemanaBlock from './AgendaSemanaBlock';
 
-// Vista pura de la Agenda Operativa (ADR-0006, Fase 1 — vista Hoy).
-// Cuatro bloques, calcados del boceto congelado en
-// docs/architecture/agenda-operativa-design.md: Hoy / Semáforo / Acciones /
-// Incidencias — cada uno trazable 1:1 a una columna de
-// get_board_operational_agenda. Estrictamente de solo lectura: todo lo que
-// hace un botón aquí es navegar, nunca mutar.
+// Vista pura de la Agenda Operativa (ADR-0006). Fase 1 (Hoy) + Fase 2
+// (Semana, detrás de un toggle — mismo patrón de dos botones ya usado en
+// WeeklyPlannerView/ExecutionView, sin reintroducir DailyAgendaPanel).
+// Acciones/Incidencias no son temporales (estado actual del board) y quedan
+// siempre visibles, sin importar la pestaña activa. Estrictamente de solo
+// lectura: todo lo que hace un botón aquí es navegar, nunca mutar.
+
+export type AgendaTab = 'hoy' | 'semana';
 
 interface Props {
   boardId: string;
@@ -20,15 +24,18 @@ interface Props {
   isError: boolean;
   error: Error | null;
   agenda: BoardOperationalAgenda | undefined;
+  activeTab: AgendaTab;
+  onTabChange: (tab: AgendaTab) => void;
+  weekAgenda: BoardOperationalAgendaWeek | undefined;
+  weekIsLoading: boolean;
+  weekIsError: boolean;
+  weekError: Error | null;
 }
 
-const SEMAPHORE_STYLE: Record<AgendaSemaphoreColor, string> = {
-  green: 'text-[#10B981] fill-[#10B981]',
-  amber: 'text-amber-400 fill-amber-400',
-  red:   'text-red-400 fill-red-400',
-};
-
-export default function AgendaOperativaView({ boardId, isLoading, isError, error, agenda }: Props) {
+export default function AgendaOperativaView({
+  boardId, isLoading, isError, error, agenda,
+  activeTab, onTabChange, weekAgenda, weekIsLoading, weekIsError, weekError,
+}: Props) {
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center h-full">
@@ -57,44 +64,72 @@ export default function AgendaOperativaView({ boardId, isLoading, isError, error
 
   return (
     <div className="h-full overflow-auto custom-scrollbar p-4 md:p-6 space-y-4">
-      <div>
-        <h2 className="text-xs font-black uppercase tracking-widest text-white">Agenda Operativa</h2>
-        <p className="text-[10px] text-slate-500 mt-0.5 uppercase tracking-widest">Hoy — beta, vista Semana en preparación</p>
-      </div>
-
-      {/* ── Bloque Hoy ──────────────────────────────────────────── */}
-      <div className="industrial-card rounded-xl border border-[var(--border-color)] p-4">
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Hoy</p>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <StatCard icon={<ClipboardCheck className="w-3.5 h-3.5 text-[#3B7EF8]" />} label="Reportadas hoy" value={agenda.reported_today_count} />
-          <StatCard icon={<CheckCircle2 className="w-3.5 h-3.5 text-[#10B981]" />} label="Verificadas hoy" value={agenda.verified_today_count} tone={agenda.verified_today_count > 0 ? 'ok' : 'neutral'} />
-          <StatCard icon={<ShieldCheck className="w-3.5 h-3.5 text-amber-400" />} label="Pendientes de verificar" value={agenda.pending_verification_count} tone={agenda.pending_verification_count > 0 ? 'warn' : 'neutral'} />
-          <StatCard icon={<Camera className="w-3.5 h-3.5 text-red-400" />} label="Sin evidencia" value={agenda.missing_evidence_count} tone={agenda.missing_evidence_count > 0 ? 'danger' : 'neutral'} />
-          <StatCard icon={<Lock className="w-3.5 h-3.5 text-[#3B7EF8]" />} label="Listos (confirmar/cerrar)" value={agenda.ready_to_confirm.length + agenda.ready_to_close.length} tone={agenda.ready_to_confirm.length + agenda.ready_to_close.length > 0 ? 'ok' : 'neutral'} />
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xs font-black uppercase tracking-widest text-white">Agenda Operativa</h2>
+          <p className="text-[10px] text-slate-500 mt-0.5 uppercase tracking-widest">¿Qué debo atender hoy?</p>
+        </div>
+        <div className="flex bg-slate-500/5 p-1 rounded-xl border border-[var(--border-color)]">
+          <button
+            onClick={() => onTabChange('hoy')}
+            className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'hoy' ? 'bg-[#3B7EF8] text-white shadow-lg shadow-[#3B7EF8]/20' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            Hoy
+          </button>
+          <button
+            onClick={() => onTabChange('semana')}
+            className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'semana' ? 'bg-[#3B7EF8] text-white shadow-lg shadow-[#3B7EF8]/20' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            Semana
+          </button>
         </div>
       </div>
 
-      {/* ── Bloque Semáforo ─────────────────────────────────────── */}
-      <div className="industrial-card rounded-xl border border-[var(--border-color)] p-4">
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Semáforo — semana vigente</p>
-        {agenda.site_semaphore.length === 0 ? (
-          <p className="text-xs text-slate-500">Ningún sitio tiene un plan activo esta semana.</p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {agenda.site_semaphore.map((s) => (
-              <Link
-                key={s.plan_id}
-                href={cronogramaHref(s.group_id)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--border-color)] hover:border-[#3B7EF8]/40 bg-black/10 transition-all"
-              >
-                <Circle className={`w-2.5 h-2.5 ${SEMAPHORE_STYLE[s.semaphore]}`} />
-                <span className="text-[10px] font-bold text-white uppercase tracking-tight">{s.group_title}</span>
-                <span className="text-[9px] font-mono text-slate-500">{s.pct_verified}%</span>
-              </Link>
-            ))}
+      {activeTab === 'hoy' ? (
+        <>
+          {/* ── Bloque Hoy ──────────────────────────────────────── */}
+          <div className="industrial-card rounded-xl border border-[var(--border-color)] p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Hoy</p>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <StatCard icon={<ClipboardCheck className="w-3.5 h-3.5 text-[#3B7EF8]" />} label="Reportadas hoy" value={agenda.reported_today_count} />
+              <StatCard icon={<CheckCircle2 className="w-3.5 h-3.5 text-[#10B981]" />} label="Verificadas hoy" value={agenda.verified_today_count} tone={agenda.verified_today_count > 0 ? 'ok' : 'neutral'} />
+              <StatCard icon={<ShieldCheck className="w-3.5 h-3.5 text-amber-400" />} label="Pendientes de verificar" value={agenda.pending_verification_count} tone={agenda.pending_verification_count > 0 ? 'warn' : 'neutral'} />
+              <StatCard icon={<Camera className="w-3.5 h-3.5 text-red-400" />} label="Sin evidencia" value={agenda.missing_evidence_count} tone={agenda.missing_evidence_count > 0 ? 'danger' : 'neutral'} />
+              <StatCard icon={<Lock className="w-3.5 h-3.5 text-[#3B7EF8]" />} label="Listos (confirmar/cerrar)" value={agenda.ready_to_confirm.length + agenda.ready_to_close.length} tone={agenda.ready_to_confirm.length + agenda.ready_to_close.length > 0 ? 'ok' : 'neutral'} />
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* ── Bloque Semáforo (hoy) ───────────────────────────── */}
+          <div className="industrial-card rounded-xl border border-[var(--border-color)] p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Semáforo — semana vigente</p>
+            {agenda.site_semaphore.length === 0 ? (
+              <p className="text-xs text-slate-500">Ningún sitio tiene un plan activo esta semana.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {agenda.site_semaphore.map((s) => (
+                  <Link
+                    key={s.plan_id}
+                    href={cronogramaHref(s.group_id)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--border-color)] hover:border-[#3B7EF8]/40 bg-black/10 transition-all"
+                  >
+                    <Circle className={`w-2.5 h-2.5 ${SEMAPHORE_STYLE[s.semaphore]}`} />
+                    <span className="text-[10px] font-bold text-white uppercase tracking-tight">{s.group_title}</span>
+                    <span className="text-[9px] font-mono text-slate-500">{s.pct_verified}%</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <AgendaSemanaBlock
+          boardId={boardId}
+          isLoading={weekIsLoading}
+          isError={weekIsError}
+          error={weekError}
+          week={weekAgenda}
+        />
+      )}
 
       {/* ── Bloque Acciones ─────────────────────────────────────── */}
       <div className="industrial-card rounded-xl border border-[var(--border-color)] p-4">

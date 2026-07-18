@@ -289,6 +289,37 @@ export interface BoardOperationalAgenda {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BoardOperationalAgendaWeek — get_board_operational_agenda_week(board_id, date)
+// Ref: supabase/migrations/20260822_board_operational_agenda_week.sql
+//
+// Resumen de solo lectura para la Agenda Operativa (vista Semana, Fase 2).
+// Semana vigente = lunes a viernes (mismo contrato de getWeekBounds() en
+// weeklyPlanner.ts) — nunca 7 días. El semáforo es a nivel de semana
+// completa; el detalle por día solo indica si hubo actividad o no.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AgendaWeekDay {
+  date: string; // ISO date
+  has_activity: boolean;
+}
+
+export interface AgendaSiteWeek {
+  group_id: string;
+  group_title: string;
+  plan_id: string;
+  plan_status: PlanStatus;
+  pct_verified_week: number;
+  semaphore: AgendaSemaphoreColor;
+  days: AgendaWeekDay[];
+}
+
+export interface BoardOperationalAgendaWeek {
+  week_start: string; // ISO date, lunes
+  week_end: string;   // ISO date, viernes
+  site_weeks: AgendaSiteWeek[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Errores de dominio
 // ─────────────────────────────────────────────────────────────────────────────
 
