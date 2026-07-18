@@ -87,9 +87,37 @@ Primera entrega, vista **Hoy** únicamente (decisión explícita: incremental, n
 
 **Diferido a v2, sobre el mismo modelo de datos, una vez validado el uso de la vista Hoy:** vista Semana y vista Mes (% verificado agregado, días sin trabajo, semáforo de 7 días).
 
+**Excluido del MVP a propósito, no por límite técnico: "Alertas IA".** Decisión explícita del dueño del producto — el motivo no es técnico, es de enfoque. Si el copiloto aparece desde el día uno, la pantalla deja de sentirse como un tablero operativo y pasa a sentirse como "el módulo de IA", deshaciendo el trabajo ya hecho de separar con cuidado lo determinístico de lo sugerido por el modelo (mismo principio que gobernó toda la Fase 5 del copiloto — ver `project_ai_copiloto_v2_vision` en memoria de sesión). Una vez la Agenda esté consolidada y en uso, una sección de observaciones inteligentes puede añadirse como una **capa adicional** sobre la vista ya probada — nunca como el centro de la experiencia desde el arranque.
+
+### Boceto de referencia de la vista Hoy (no es contrato visual, solo estructura de contenido)
+
+```
+AGENDA OPERATIVA
+──────────────────────────────────────────
+🟢 Hoy
+✔ Jornadas reportadas
+✔ Pendientes de verificar
+✔ Sin evidencia
+✔ Listas para confirmar
+✔ Listas para cerrar
+──────────────────────────────────────────
+Semáforo (por sitio del board)
+🟢 Playa   🟡 Puerto   🔴 Manglares
+──────────────────────────────────────────
+Acciones
+[ Revisar pendientes ] [ Verificar ] [ Confirmar ] [ Cerrar ] [ Ir al Acta ]
+──────────────────────────────────────────
+Incidencias
+• 2 jornadas sin fotos
+• 1 plan listo para cerrar
+• 3 verificaciones pendientes
+```
+
+Cuatro bloques, cada uno trazable 1:1 a un KPI de la tabla de arriba o a un acceso rápido (sección 9) — ninguno introduce un dato que no esté ya en la sección 7 (Fuentes de datos) o la sección 8. "Incidencias" no es un KPI nuevo: es la MISMA información de los tres bloques anteriores, redactada como lista accionable en vez de número — una forma de presentación, no una fuente de datos adicional.
+
 ## 9. Accesos rápidos
 
-Parte del MVP, no un extra: cada elemento que señale algo accionable (un sitio atrasado, una jornada sin evidencia, un plan listo para confirmar) enlaza directamente a la pantalla donde se actúa — Verificación, el panel de Confirmación/Cierre dentro de Cronograma, o Costos. La Agenda es el punto de partida, nunca el lugar donde se ejecuta la acción (consistente con el Objetivo, sección 1, y con que este diseño es estrictamente de solo lectura).
+Parte del MVP, no un extra: cada elemento que señale algo accionable (un sitio atrasado, una jornada sin evidencia, un plan listo para confirmar) enlaza directamente a la pantalla donde se actúa — Verificación, el panel de Confirmación/Cierre dentro de Cronograma, o Costos. La Agenda es el punto de partida, nunca el lugar donde se ejecuta la acción (consistente con el Objetivo, sección 1, y con que este diseño es estrictamente de solo lectura). El bloque "Acciones" del boceto de arriba es la materialización literal de este principio: cada botón navega, ninguno muta datos desde la propia Agenda.
 
 ## 10. Criterios de aceptación
 
