@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
     Users,
     Layers,
@@ -9,6 +10,7 @@ import {
     Wand2,
     Info,
     ArrowRight,
+    Sparkles,
 } from 'lucide-react';
 import { Item } from '@/types/monday';
 import { ExecutionViewProps } from './execution/types';
@@ -32,6 +34,9 @@ export default function ExecutionView({
   groups, columns, onAddItem, onUpdateItem, onUpdateItemValue, 
   onUpdateItemValues, onDeleteItem, isRestricted, onCreateTemplate, activityTemplates 
 }: ExecutionViewProps) {
+  const searchParams = useSearchParams();
+  const currentBoardId = searchParams?.get('boardId');
+  const agendaHref = currentBoardId ? `/dashboard?boardId=${currentBoardId}&view=agenda` : '/dashboard?view=agenda';
   const [view, setView] = useState<'table' | 'map'>('table');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activePrompt, setActivePrompt] = useState<{ groupId: string, item: any } | null>(null);
@@ -162,6 +167,9 @@ export default function ExecutionView({
             </Link>
             <Link href="/verification" className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 transition-colors">
               Ir a Verificación <ArrowRight className="w-3 h-3" />
+            </Link>
+            <Link href={agendaHref} className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#3B7EF8] hover:text-[#5B93F9] transition-colors">
+              <Sparkles className="w-3 h-3" /> Probar la Agenda Operativa (beta) <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
         </div>

@@ -29,6 +29,7 @@ import KanbanViewContainer from '@/components/views/KanbanViewContainer';
 import ReportsViewContainer from '@/components/views/ReportsViewContainer';
 
 import WeeklyPlannerContainer from '@/components/views/WeeklyPlannerContainer';
+import AgendaOperativaContainer from '@/components/views/AgendaOperativaContainer';
 
 import MantenixMap from '@/components/MantenixMap';
 import ItemModal from '@/components/modals/ItemModal';
@@ -91,6 +92,16 @@ function DashboardContent() {
     const viewParam = searchParams ? searchParams.get('view') : null;
     if (viewParam && (VALID_VIEW_PARAMS as readonly string[]).includes(viewParam)) {
       setCurrentView(viewParam as BoardViewId);
+    }
+  }, [searchParams]);
+
+  // Deep-link opcional de sitio (ej. desde la Agenda Operativa -> Cronograma
+  // con el sitio ya seleccionado). Solo aplica al montar/cambiar la URL; no
+  // reemplaza el selector de ubicación, que sigue siendo estado local.
+  useEffect(() => {
+    const groupIdParam = searchParams ? searchParams.get('groupId') : null;
+    if (groupIdParam) {
+      setSelectedGroupId(groupIdParam);
     }
   }, [searchParams]);
 
@@ -261,6 +272,7 @@ function DashboardContent() {
             {currentView === 'reports' && <div className="h-full overflow-auto custom-scrollbar"><ReportsViewContainer boardId={board?.id} /></div>}
             {currentView === 'notifications' && <div className="h-full overflow-auto custom-scrollbar"><NotificationsView /></div>}
             {currentView === 'planner' && <WeeklyPlannerContainer boardId={board?.id} selectedGroupId={selectedGroupId} groups={groups} />}
+            {currentView === 'agenda' && <AgendaOperativaContainer boardId={board?.id} />}
           </motion.div>
         </AnimatePresence>
       </main>

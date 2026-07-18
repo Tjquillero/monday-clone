@@ -42,8 +42,15 @@ import {
 } from 'lucide-react';
 
 /** Vistas internas del tablero. Algunas (dashboards, kanban, reports,
- *  notifications) no tienen pestaña en el ribbon pero siguen siendo
- *  accesibles por URL o accesos secundarios. */
+ *  notifications, agenda) no tienen pestaña en el ribbon pero siguen siendo
+ *  accesibles por URL o accesos secundarios.
+ *
+ *  'agenda' — Agenda Operativa (ADR-0006, Fase 1/2 del roadmap en
+ *  docs/architecture/agenda-operativa-design.md). Deep-link deliberado sin
+ *  pestaña: ExecutionView sigue viva en "Ejecución" hasta que la Agenda
+ *  cubra semáforo + Hoy + Semana (criterio literal de ADR-0006, sin
+ *  modificar). En la Fase 3 se promueve reemplazando el destino de
+ *  'execution' — no antes, y no silenciosamente. */
 export type BoardViewId =
   | 'board'
   | 'execution'
@@ -53,7 +60,8 @@ export type BoardViewId =
   | 'dashboards'
   | 'kanban'
   | 'reports'
-  | 'notifications';
+  | 'notifications'
+  | 'agenda';
 
 export interface BoardTab {
   id: BoardViewId;
@@ -73,7 +81,7 @@ export const BOARD_TABS: readonly BoardTab[] = [
 /** Valores aceptados en el query param `?view=` del dashboard. */
 export const VALID_VIEW_PARAMS: readonly BoardViewId[] = [
   'board', 'execution', 'map', 'financial', 'planner',
-  'dashboards', 'kanban', 'reports', 'notifications',
+  'dashboards', 'kanban', 'reports', 'notifications', 'agenda',
 ] as const;
 
 export interface SidebarItem {

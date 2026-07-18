@@ -252,6 +252,43 @@ export interface WeeklyPlanConfirmationSummary {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BoardOperationalAgenda — get_board_operational_agenda(board_id, date)
+// Ref: supabase/migrations/20260821_board_operational_agenda.sql
+//
+// Resumen de solo lectura para la Agenda Operativa (vista Hoy, ADR-0006 /
+// docs/architecture/agenda-operativa-design.md). Todo lo calcula la RPC —
+// este tipo solo describe la forma de la respuesta, nunca se recalcula ni
+// se reagrega en el cliente.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AgendaPlanRef {
+  plan_id: string;
+  group_id: string;
+  group_title: string;
+}
+
+export type AgendaSemaphoreColor = 'green' | 'amber' | 'red';
+
+export interface AgendaSiteSemaphore {
+  group_id: string;
+  group_title: string;
+  plan_id: string;
+  plan_status: PlanStatus;
+  pct_verified: number;
+  semaphore: AgendaSemaphoreColor;
+}
+
+export interface BoardOperationalAgenda {
+  reported_today_count: number;
+  verified_today_count: number;
+  pending_verification_count: number;
+  missing_evidence_count: number;
+  ready_to_confirm: AgendaPlanRef[];
+  ready_to_close: AgendaPlanRef[];
+  site_semaphore: AgendaSiteSemaphore[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Errores de dominio
 // ─────────────────────────────────────────────────────────────────────────────
 
