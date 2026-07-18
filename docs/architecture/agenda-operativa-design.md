@@ -149,15 +149,16 @@ Decisión explícita del dueño del producto, con su razón registrada (no solo 
 
   | Funcionalidad | ExecutionView | Agenda | Resultado |
   |---|---|---|---|
-  | Estado del día | ✅ | ✅ (Fase 1) | Cubierto |
-  | Semáforo operativo | ✅ | ✅ (Fase 1) | Cubierto |
+  | Estado operativo diario | ✅ | ✅ (Fase 1) | Cubierto |
+  | Estado semanal | ✅ | ⏳ (esta fase) | Pendiente — bloquea el retiro hasta cerrarse |
+  | Semáforo | ✅ | ✅ (Fase 1) | Cubierto |
   | Evidencia pendiente | ❌ | ✅ (Fase 1) | Mejorado |
   | Planes listos para confirmar | ❌ | ✅ (Fase 1) | Mejorado |
   | Planes listos para cerrar | ❌ | ✅ (Fase 1) | Mejorado |
-  | Navegación al flujo real (deep-links) | ❌ | ✅ (Fase 1) | Mejorado |
-  | Vista semanal | ✅ | ⏳ (esta fase) | Pendiente — bloquea el retiro hasta cerrarse |
+  | Navegación al flujo correcto (deep-links) | ❌ | ✅ (Fase 1) | Mejorado |
+  | KPIs operativos (reportadas/verificadas/pendientes) | ❌ | ✅ (Fase 1) | Mejorado |
 
-  **Fila retirada de la matriz original del usuario, a propósito:** "IA / Evidencia" — ambigua entre "evidencia pendiente" (ya cubierta arriba, sin IA) y una futura sección de observaciones del copiloto. La sección 8 ya excluyó explícitamente "Alertas IA" del alcance de la Agenda (por enfoque, no por límite técnico) — incluir esta fila en el criterio de aceptación reabriría esa decisión sin que nadie la haya pedido de nuevo. Si en el futuro se agrega una capa de IA a la Agenda, se evalúa aparte, con su propio contrato — no como parte del criterio de retiro de `ExecutionView`.
+  **Deliberadamente solo funciones operativas — ninguna capacidad de IA en esta matriz, ni siquiera mencionada.** El criterio de retiro de `ExecutionView` depende exclusivamente de si la Agenda cubre las necesidades operativas que hoy obligan a abrirlo, no de si integra el copiloto. Las capacidades de IA (Gemini, evaluación de evidencia, duplicados, observaciones) pertenecen a **otro eje de evolución del producto** (ver `docs/AI_COPILOT_V2_VISION.md`) — ya viven en sus módulos correspondientes y no forman parte de esta comparación. Si algún día se decide integrarlas a la Agenda, es una Fase posterior con su propio contrato y su propio criterio de aceptación — nunca mezclada con el retiro del módulo legacy.
 
 - **Guardrail de alcance para toda la Fase 2 (principio explícito del dueño del producto):** la Agenda responde una sola pregunta — *"¿qué debo atender hoy?"*. No se agregan gráficos, tendencias, comparativos mensuales ni KPIs históricos dentro de la propia Agenda; cualquier análisis más profundo abre el módulo especializado correspondiente (Cronograma, Costos, Reportes). Este guardrail es el mismo filtro de la sección 6, reafirmado para que la vista Semana no se convierta en un "superdashboard" — el riesgo concreto es que la Agenda termine compitiendo con Cronograma/Costos en vez de enrutar hacia ellos.
 
