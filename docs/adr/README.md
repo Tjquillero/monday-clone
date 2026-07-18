@@ -19,6 +19,7 @@ Este directorio registra las decisiones de arquitectura del proyecto: **por qué
 | [ADR-0003](./ADR-0003-billing-source.md) | Fuente y Mecanismo de Generación del Acta | Aceptado (con 2 puntos pendientes de confirmación) |
 | [ADR-0004](./ADR-0004-poa-zone-catalog.md) | Catálogo de Zonas del POA y Mapeo Persistente con el Board | Aceptado |
 | [ADR-0005](./ADR-0005-poa-frecuencia-ausente.md) | Frecuencia Ausente como Estado de Negocio Válido | Aceptado |
+| [ADR-0006](./ADR-0006-execution-engine-consolidation.md) | Consolidación del Motor de Ejecución — `ExecutionView` deja de ser el motor operativo | Aceptado |
 
 ## Estados
 
