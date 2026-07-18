@@ -163,6 +163,16 @@ Decisión explícita del dueño del producto, con su razón registrada (no solo 
 - **Guardrail de alcance para toda la Fase 2 (principio explícito del dueño del producto):** la Agenda responde una sola pregunta — *"¿qué debo atender hoy?"*. No se agregan gráficos, tendencias, comparativos mensuales ni KPIs históricos dentro de la propia Agenda; cualquier análisis más profundo abre el módulo especializado correspondiente (Cronograma, Costos, Reportes). Este guardrail es el mismo filtro de la sección 6, reafirmado para que la vista Semana no se convierta en un "superdashboard" — el riesgo concreto es que la Agenda termine compitiendo con Cronograma/Costos en vez de enrutar hacia ellos.
 
 **Fase 3 — Retiro:**
-- **Auditoría de uso real, ANTES de borrar código** (paso nuevo, evita reabrir el módulo una semana después): confirmar que ningún flujo operativo depende todavía de `ExecutionView` — enlaces desde otros módulos hacia `?view=execution`, marcadores/accesos guardados por usuarios reales, permisos específicos atados a esa vista, documentación o manuales que la mencionen, scripts E2E (`scripts/e2e/*.cjs`) y pruebas automatizadas (`*.test.tsx`) que la ejerciten.
-- Solo cuando la Fase 2 esté validada Y la auditoría de uso real no encuentre dependencias: se retira `ExecutionView.tsx` del ribbon, se elimina su código (`execution/*`, `DailyAgendaPanel.tsx`, `PersonnelPicker.tsx` si nada más lo usa) y la documentación asociada.
-- ADR-0006 se actualiza con una nota fechada confirmando el cumplimiento (ver sección 11) — no se reemplaza ni se marca "Obsoleto": la decisión sigue siendo válida, ya se ejecutó.
+
+**Auditoría de uso real — COMPLETA (2026-07-18).** Resultado: retirar `ExecutionView.tsx` sigue siendo seguro (matriz 8/8, sin funcionalidad exclusiva, sin pérdida de permisos), pero apareció una dependencia real que no estaba en el radar y **dos pendientes concretos** que hay que resolver en esta misma fase, no después:
+
+- [ ] **Redirigir/eliminar el enlace legacy en `ProfessionalLayout.tsx`** (línea ~71: entrada hardcodeada del sidebar de workspace, `{ id: 'b2', name: 'Mantenimiento General', path: '/dashboard?view=execution' }`). `ProfessionalLayout` es el layout real de `/dashboard`, `/verification`, `/my-work`, `/projects`, `/okrs` — este enlace SÍ se renderiza hoy. Sin corregirlo, el retiro deja un botón real apuntando a una ruta muerta.
+- [ ] **Actualizar `viewContainers.boardId.test.ts`** para quitar la entrada de `ExecutionViewContainer` (prueba estructuralmente todos los `*ViewContainer`, incluido este).
+- [ ] Eliminar `ExecutionView.tsx`, `execution/ExecutionRow.tsx`, `execution/CommonCells.tsx`, `execution/utils.ts`, `DailyAgendaPanel.tsx` y `ExecutionRow.test.tsx`.
+- [ ] **`PersonnelPicker.tsx` NO se elimina** — la auditoría encontró que también lo usa `BoardView.tsx`/`CellRenderer.tsx` (columna de personas de la Tabla, el tablero principal). Corrige la suposición original de esta sección (ver ADR-0006), que asumía que era exclusivo de `ExecutionView`.
+
+**Fuera de alcance, a propósito — no se resuelve como parte de esta fase:** `items.values.daily_execution` (el JSONB legacy) permanece. La auditoría encontró que sigue vivo fuera de `ExecutionView` — lo escribe también `ItemModal.tsx` (su propia pestaña "Ejecución", reachable desde cualquier ítem) y lo leen Reportes, widgets financieros y el motor de automatizaciones. Es un segundo modelo de dominio completo, no un detalle de `ExecutionView` — su retiro se trata aparte, en **ADR-0007**. Ampliar esta Fase 3 para intentar resolverlo también es exactamente el error que este párrafo existe para evitar.
+
+Solo cuando la Fase 2 esté validada Y los dos pendientes de arriba estén resueltos: se retira `ExecutionView.tsx` del ribbon y se elimina su código.
+
+ADR-0006 se actualiza con una nota fechada confirmando el cumplimiento (ver sección 11) — no se reemplaza ni se marca "Obsoleto": la decisión sigue siendo válida, ya se ejecutó.
