@@ -1,11 +1,14 @@
 import React, { useState, useMemo } from 'react';
-import { 
-    Users, 
-    Layers, 
-    TrendingUp, 
+import Link from 'next/link';
+import {
+    Users,
+    Layers,
+    TrendingUp,
     LayoutDashboard,
     Maximize2,
-    Wand2
+    Wand2,
+    Info,
+    ArrowRight,
 } from 'lucide-react';
 import { Item } from '@/types/monday';
 import { ExecutionViewProps } from './execution/types';
@@ -142,6 +145,28 @@ export default function ExecutionView({
 
   return (
     <div className={`flex flex-col h-full bg-[var(--bg-primary)] overflow-hidden font-sans transition-all duration-500 ${isFullScreen ? 'fixed inset-0 z-[9999] bg-slate-950 p-4' : 'relative'}`}>
+      {/* Vista en transición — ADR-0006 / docs/architecture/agenda-operativa-design.md.
+          Último cambio funcional que recibe este módulo antes de su retiro: a
+          partir de aquí, cualquier inversión va a la Agenda Operativa. */}
+      <div className="flex items-start gap-3 px-6 py-3 mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 shrink-0">
+        <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-black text-amber-300 uppercase tracking-widest">Vista en transición</p>
+          <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+            Esta pantalla pertenece al flujo anterior de ejecución y se mantiene temporalmente mientras se completa la nueva Agenda Operativa.
+            Para registrar jornadas, cargar evidencia y realizar verificaciones, utilice <span className="text-slate-300 font-semibold">Mis actividades</span> y <span className="text-slate-300 font-semibold">Verificación</span>.
+          </p>
+          <div className="flex items-center gap-4 mt-2">
+            <Link href="/my-work" className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 transition-colors">
+              Ir a Mis actividades <ArrowRight className="w-3 h-3" />
+            </Link>
+            <Link href="/verification" className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 transition-colors">
+              Ir a Verificación <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between px-8 py-4 bg-white/5 border-b border-[var(--border-color)] backdrop-blur-xl shrink-0 rounded-t-2xl">
           <div className="flex items-center gap-6">
             <div className="flex bg-slate-500/5 p-1 rounded-xl border border-[var(--border-color)]">
