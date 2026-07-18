@@ -82,6 +82,48 @@ Las 101 filas se redujeron a **17 nombres de actividad distintos** (0 inconsiste
 
 No se resuelven las 144 actividades juntas — son dos preguntas distintas con dos criterios de cierre distintos.
 
+## Flujo B: EJECUTADO (parcial, 2026-07-18)
+
+Las 61 filas se redujeron a **11 nombres distintos** (mismo ahorro que en Flujo A). Se buscó evidencia por palabra clave contra el texto completo del POA (no solo contra las 50 actividades ya contratadas) antes de clasificar cada uno, y se verificó por cantidad contratada antes de aceptar cualquier candidato.
+
+**Categorías finales usadas** (refinadas durante la ejecución, separando "absorbida" — consolidación real de varias actividades legacy en una — de "el matcher no detectó" — correspondencia 1:1 real que el texto no encontró por vocabulario distinto):
+1. Absorbida por otra actividad del POA (consolidación muchos→uno)
+2. Eliminada del contrato 2026
+3. Actividad operativa interna / de cronograma, fuera del alcance del POA
+4. Placeholder / dato de prueba / legacy
+5. Actividad contractual real que el matcher no detectó (correspondencia 1:1)
+
+### Categoría 5 — confirmadas e insertadas en `board_activity_standards` (5 filas)
+
+| Item legacy | `activity_key` | rendimiento | Evidencia |
+|---|---|---|---|
+| `LIMPIEZA GENERAL DE MARMOL` | `3.06` PULIDO Y ENCERADO DE PISOS DE MÁRMOL | 300 | 2/2 zonas coinciden exacto en cantidad. Rendimiento con empate real entre 2 sitios contratados (Plaza Puerto Colombia=600, Centro Gastronómico=300, Salinas del Rey=600 pero `cant=0` no cuenta) — se usó el valor del sitio con volumen real alto (Centro Gastronómico), no una mayoría (no la había). |
+| `OXIGENACIÓN DE ARENA CON TRACTOR Y RASTRA` | `1.14` NIVELACIÓN MECÁNICA DE PLAYAS | 18000 | **Corrección durante la revisión:** `1.14` no dice "oxigenación" — dice "nivelación mecánica de playas". La hipótesis inicial ("es un duplicado de `1.15`") se descartó por evidencia, no por suposición: `1.14` y `1.15` comparten la cantidad contratada exacta en cada zona (mismo M2 de playa) pero tienen `frecuencia` distinta por zona (1.14 siempre 1; 1.15 varía 1-6) — son dos servicios reales sobre la misma superficie, no un duplicado. El item legacy que ya se confirmó como `1.15` en Flujo A tiene un nombre casi textual al POA; este otro (más informal, de campo) quedó asignado a `1.14` por descarte + coincidencia parcial de cantidad (2/4 exacta, resto cercana). |
+| `LIMPIEZA GENERAL ZONAS DURAS` | `3.03` ASEO Y LIMPIEZA DE ZONAS DURAS | 10000 | 4/6 zonas exacto; Plaza Puerto Colombia 2% distinto, Centro Gastronómico bastante distinto (posible mezcla con otra actividad en ese sitio, no investigado a fondo) |
+| `ACOPIO Y LIMPIEZA MANUAL CON PERSONAL` | `1.01` LIMPIEZA MANUAL DE INFRAESTRUCTURA COSTERA | 3000 | 3/4 exacto; Manglares exactamente el doble (30000 vs 15000 contratado) — posible duplicación de dato en el legacy, no error de mapeo, sin investigar más |
+| `DESMALEZADO` | `2.01` CONTROL DE MALEZAS MECÁNICA DE ARBUSTOS Y CUBRESUELOS | 600 | 4/6 exacto; Miramar y Plaza Puerto Colombia no coinciden |
+
+Con esto, `board_activity_standards` para Tablero Principal tiene **19 filas vigentes** (14 de Flujo A + 5 de Flujo B), todas `source='poa_2026_legacy_confirmed'`.
+
+### Categoría 3 — operativa interna/cronograma, fuera del POA (no se inserta)
+
+- **`PLATEO`** — confirmado por conocimiento de negocio del responsable del proceso (no hay ninguna mención en el texto del POA; existía en un catálogo anterior — `MAINTENANCE_SCHEDULING_ENGINE_v1.md`, rend=160 — pero eso no significa que fue "eliminada del contrato", sino que nunca perteneció al universo contractual del POA en sí).
+- **`LIMPIEZA GENERAL`** — 0/4 coincidencias con su mejor candidato (`1.01`), magnitudes 3-10x distintas en las 4 zonas comparadas. Sin candidato real en el texto completo del POA. Aparece en las 7 zonas con el mismo `rend=7500` — parece una categoría de seguimiento operativo interno, no una actividad contractual.
+
+### Categoría 4 — placeholder / dato legacy (no se inserta, candidato a limpieza)
+
+- **`Nueva Actividad`** (x2, en Playa del Country) — sin `rend`/`frec`/`cant`, nombre por defecto de un item nunca completado. No es una actividad real; se recomienda evaluar su eliminación del board (fuera de alcance de este documento).
+
+### RIEGO MANUAL — RESUELTO (2026-07-18): excepción conocida, fuera de `board_activity_standards` por ahora
+
+**Hallazgo posterior al intento de consolidación en `2.16`:** operativamente existen tres actividades de riego reales (grama/árboles/arbustos), cada una con rendimiento distinto — confirmado por conocimiento de negocio. Pero el modelo de dominio congelado **no tiene dónde representar eso**: `poa-domain.md` define la identidad técnica del Catálogo Técnico por el mismo **código** que usa el Catálogo Contractual (glosario, "Catálogo Técnico"), y `resolveValidationContext.ts` valida `board_activity_standards.activity_key` directamente contra los códigos del POA — no existe hoy ningún mecanismo M:1 (varias actividades operativas certificando contra un mismo código contractual), a diferencia de `activity_scope_mappings` que sí existe pero para un problema distinto (`activity_key`↔`scope_key`).
+
+**Verificación de si es un caso aislado o un patrón repetido** (antes de decidir si esto amerita un ADR nuevo): de las 25 actividades legacy distintas revisadas entre Flujo A y Flujo B, las familias con las mismas 3 variantes por tipo de vegetación (grama/árboles/arbustos) — CONTROL FITOSANITARIO, FERTILIZACIÓN, PODA — **sí tienen partición 1:1 exacta en el POA** (`2.06`/`2.07`/`2.08`; `2.09`/`2.10`/`2.11`; `2.12`/`2.13`/`2.14`). RIEGO MANUAL es la única familia donde el POA consolidó las 3 variantes en un solo código (`2.16`). **No se encontró un segundo caso.**
+
+**Decisión:** con un solo caso conocido, no se justifica reabrir `poa-domain.md`/`schedule-domain.md` (dominio recién congelado) para resolver una excepción aislada. RIEGO MANUAL queda documentado como **limitación conocida del modelo actual** — no se inserta en `board_activity_standards`, no bloquea la importación del resto del POA (no es una de las 220 actividades técnicas que participan en la regla todo-o-nada de ADR-0004). Si en el futuro aparece un segundo caso con el mismo patrón (ej. "poda alta/poda baja", "lavado manual/mecánico" certificando contra un mismo código), la pregunta deja de ser sobre RIEGO MANUAL específicamente y pasa a ser una pregunta de arquitectura general — *¿puede una actividad contractual tener varios estándares operativos?* — que sí ameritaría su propio ADR.
+
+**Flujo B queda cerrado en los 11 nombres**: 5 insertados en `board_activity_standards`, 2 clasificados fuera de alcance del POA (`PLATEO`, `LIMPIEZA GENERAL`), 1 placeholder a limpiar (`Nueva Actividad`), y RIEGO MANUAL (3 nombres) documentado como excepción conocida, sin insertar.
+
 ## 1. Actividades → candidatas a `board_activity_standards`
 
 101 filas totales = 25 (Alta) + 58 (Media) + 18 adicionales (las 3 variantes de `RIEGO MANUAL` × 6 zonas) que **no se repiten aquí** — su candidato (`2.16`) y su confianza degradada (60%, tras la verificación que NO confirmó la hipótesis) ya están documentados fila por fila en "Correcciones" arriba, para no duplicar la misma evidencia dos veces.
