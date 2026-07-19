@@ -2,10 +2,13 @@
 -- Tests: get_board_operational_agenda(board_id, date)
 --
 -- CONTRATO: supabase/migrations/20260821_board_operational_agenda.sql
+--       (fix semana vigente en fin de semana: 20260829_fix_board_operational_
+--       agenda_weekend_week.sql, tarea #64)
 -- Resumen de solo lectura para la Agenda Operativa (vista Hoy): conteos del
 -- dia, planes listos para confirmar/cerrar (mismos gates de
 -- confirm_weekly_plan/close_weekly_plan) y semaforo de cumplimiento por sitio
--- de la semana vigente (lunes-viernes).
+-- de la semana vigente (lunes-viernes, calculada como la semana ISO que
+-- contiene a p_date, no como un rango que exige que p_date caiga dentro).
 --
 -- Fecha de referencia fija (p_date explicito) para que los tests no dependan
 -- del reloj real: TEST_DATE = 2026-09-14 (lunes).
@@ -27,7 +30,7 @@ SELECT set_config(
 
 BEGIN;
 
-SELECT plan(17);
+SELECT plan(21);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Fixtures (prefijo ec0e0000...0023 / 5ca1ab1e...23NN). TEST_DATE = lunes de
@@ -325,6 +328,42 @@ SELECT throws_like(
 
 SET LOCAL ROLE postgres;
 SELECT set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Fix tarea #64 (2026-07-19): la "semana vigente" ya no depende de que
+-- p_date caiga literalmente lunes-viernes. Mismas fixtures G5/G6/G7/G8
+-- (semana 2026-09-14), consultadas con p_date en sabado/domingo de esa
+-- misma semana ISO — el semaforo no debe desaparecer.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT is(
+  (SELECT elem->>'semaphore' FROM jsonb_array_elements(
+     (SELECT site_semaphore FROM public.get_board_operational_agenda('ec0e0000-0000-0000-0000-000000000023', '2026-09-19'))
+   ) elem WHERE elem->>'group_title' = 'Sitio Verde 80'),
+  'green',
+  'Test 18: p_date=sabado (misma semana ISO) — Sitio Verde 80 sigue en verde, el semaforo no desaparece ✓'
+);
+SELECT is(
+  (SELECT elem->>'semaphore' FROM jsonb_array_elements(
+     (SELECT site_semaphore FROM public.get_board_operational_agenda('ec0e0000-0000-0000-0000-000000000023', '2026-09-19'))
+   ) elem WHERE elem->>'group_title' = 'Sitio Ambar 50'),
+  'amber',
+  'Test 19: p_date=sabado (misma semana ISO) — Sitio Ambar 50 sigue en ambar ✓'
+);
+SELECT is(
+  (SELECT elem->>'semaphore' FROM jsonb_array_elements(
+     (SELECT site_semaphore FROM public.get_board_operational_agenda('ec0e0000-0000-0000-0000-000000000023', '2026-09-20'))
+   ) elem WHERE elem->>'group_title' = 'Sitio Rojo 25'),
+  'red',
+  'Test 20: p_date=domingo (misma semana ISO) — Sitio Rojo 25 sigue en rojo ✓'
+);
+SELECT is(
+  (SELECT COUNT(*)::INT FROM jsonb_array_elements(
+     (SELECT site_semaphore FROM public.get_board_operational_agenda('ec0e0000-0000-0000-0000-000000000023', '2026-09-19'))
+   ) elem WHERE elem->>'group_title' = 'Sitio Semana Pasada'),
+  0,
+  'Test 21: p_date=sabado — Sitio Semana Pasada sigue excluido (semana distinta, el fix no lo reintroduce) ✓'
+);
 
 SELECT * FROM finish();
 ROLLBACK;
