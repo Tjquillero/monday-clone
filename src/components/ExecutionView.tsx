@@ -161,6 +161,9 @@ export default function ExecutionView({
             Esta pantalla pertenece al flujo anterior de ejecución y se mantiene temporalmente mientras se completa la nueva Agenda Operativa.
             Para registrar jornadas, cargar evidencia y realizar verificaciones, utilice <span className="text-slate-300 font-semibold">Mis actividades</span> y <span className="text-slate-300 font-semibold">Verificación</span>.
           </p>
+          <p className="text-xs text-amber-400/90 mt-1.5 leading-relaxed font-semibold">
+            Los números de esta grilla (REND, JOR.REQ) vienen de un modelo de datos aparte (<code className="bg-black/40 px-1 rounded font-mono text-[10px]">items.values.daily_execution</code>) y no reflejan el Scheduler que usan el Cronograma y Costos Operativos — no son comparables entre sí.
+          </p>
           <div className="flex items-center gap-4 mt-2">
             <Link href="/my-work" className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 transition-colors">
               Ir a Mis actividades <ArrowRight className="w-3 h-3" />
