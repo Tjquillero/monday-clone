@@ -397,6 +397,44 @@ export class MissingEvidenceError extends Error {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MissingTechnicalConfigError — confirm_weekly_plan, gate de configuración técnica
+// Ref: docs/architecture/poa-technical-catalog-decoupling.md,
+//      supabase/migrations/20260827_confirm_weekly_plan_technical_config_gate.sql
+//
+// El RPC rechaza con ERRCODE='MTCFG' + DETAIL en JSON cuando el board tiene
+// actividades contratadas sin catálogo técnico al momento de confirmar —
+// chequeo EN VIVO, nunca una bandera guardada en el plan (ver Decisión de
+// negocio 2026-07-19: el Cronograma se genera de forma parcial, pero
+// confirmar exige el catálogo completo). Mismo patrón que
+// MissingEvidenceError: la UI distingue este caso sin comparar texto y
+// muestra exactamente qué actividades faltan.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const MISSING_TECHNICAL_CONFIG_ERRCODE = 'MTCFG';
+
+export class MissingTechnicalConfigError extends Error {
+  readonly activities: MissingActivityStandard[];
+
+  constructor(message: string, activities: MissingActivityStandard[]) {
+    super(message);
+    this.name = 'MissingTechnicalConfigError';
+    this.activities = activities;
+  }
+
+  /** Construye la excepción a partir del error crudo de supabase.rpc(); null si no aplica. */
+  static fromSupabaseError(error: { code?: string; message?: string; details?: string | null } | null): MissingTechnicalConfigError | null {
+    if (!error || error.code !== MISSING_TECHNICAL_CONFIG_ERRCODE) return null;
+    let activities: MissingActivityStandard[] = [];
+    try {
+      activities = error.details ? JSON.parse(error.details) : [];
+    } catch {
+      activities = [];
+    }
+    return new MissingTechnicalConfigError(error.message ?? 'Faltan actividades por configurar en el Catálogo Técnico.', activities);
+  }
+}
+
 export class ActivityStandardNotFound extends Error {
   readonly boardId: string;
   readonly groupId: string | null;

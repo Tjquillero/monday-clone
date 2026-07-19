@@ -65,7 +65,12 @@ export default function WeeklyPlannerView({
   const hasMissingStandards = missingStandards.length > 0;
   const hasNoActivities     = !!plan && plan.activities.length === 0;
   const showTable           = !!plan && plan.activities.length > 0;
-  const isBlockingState     = noGroupSelected || isError || hasMissingStandards || hasNoActivities;
+  // Generación parcial: el aviso de configuración pendiente ya no reemplaza
+  // la tabla, se muestra junto a ella (ver useWeeklyPlan.ts). "Sin
+  // estándares configurados" solo aplica cuando la ausencia de actividades
+  // no se explica ya por ese aviso, para no duplicar el mensaje.
+  const isBlockingState = noGroupSelected || isError || (hasNoActivities && !hasMissingStandards);
+  const showWarnings    = isBlockingState || hasMissingStandards;
 
   const canSave    = showTable && (!savedPlan || savedPlan.status === 'draft');
   const canPublish = !!savedPlan && savedPlan.status === 'draft';
@@ -105,10 +110,12 @@ export default function WeeklyPlannerView({
           {/* Badge de estado */}
           {savedPlan ? (
             <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border ${STATUS_STYLE[savedPlan.status]}`}>
-              {STATUS_LABEL[savedPlan.status]}
+              {STATUS_LABEL[savedPlan.status]}{hasMissingStandards ? ' · Parcial' : ''}
             </span>
           ) : (
-            <span className="text-[9px] text-slate-600 uppercase tracking-widest">Sin guardar</span>
+            <span className="text-[9px] text-slate-600 uppercase tracking-widest">
+              Sin guardar{hasMissingStandards ? ' · Parcial' : ''}
+            </span>
           )}
 
           {/* Acciones + error inline */}
@@ -151,6 +158,7 @@ export default function WeeklyPlannerView({
           planId={savedPlan.id}
           status={savedPlan.status}
           periodNumber={plan?.week.number ?? selectorProps.periodNumber}
+          missingStandards={missingStandards}
           onConfirm={onConfirm}
           isConfirming={isConfirming}
           confirmError={confirmError}
@@ -174,12 +182,12 @@ export default function WeeklyPlannerView({
       {/* ── Contenido ───────────────────────────────────────────── */}
       {!isLoading && (
         <div className="flex-1 flex flex-col gap-4 min-h-0">
-          {isBlockingState && (
+          {showWarnings && (
             <PlanningWarnings
               boardId={boardId}
               error={isError ? error : null}
               noGroupSelected={noGroupSelected}
-              hasNoActivities={hasNoActivities}
+              hasNoActivities={hasNoActivities && !hasMissingStandards}
               missingStandards={missingStandards}
             />
           )}

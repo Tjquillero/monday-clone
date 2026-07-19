@@ -4,9 +4,13 @@ import Link from 'next/link';
 import { AlertTriangle, MapPin, Database, Info, ShieldAlert, Wrench } from 'lucide-react';
 import { SchedulerMigrationMissingError, MissingActivityStandard } from '@/types/scheduler';
 
-// Estados bloqueantes — reemplazan la tabla cuando no hay datos que mostrar.
-// La advertencia de infactibilidad (plan existe pero supera capacidad) no
-// es bloqueante y se maneja en WeeklyPlannerView directamente sobre la tabla.
+// Casos que reemplazan la tabla cuando no hay NADA que mostrar (sin sitio,
+// error, catálogo completamente vacío) — excepto missingStandards, que es
+// informativo y se muestra junto a la tabla cuando el plan es parcial (ver
+// WeeklyPlannerView: showWarnings ya no es mutuamente excluyente con
+// showTable). La advertencia de infactibilidad (plan existe pero supera
+// capacidad) tampoco es bloqueante y se maneja en WeeklyPlannerView
+// directamente sobre la tabla.
 
 interface Props {
   boardId: string | undefined;
@@ -28,17 +32,18 @@ export default function PlanningWarnings({ boardId, error, noGroupSelected, hasN
     );
   }
 
-  // Separación de fases (docs/architecture/poa-technical-catalog-decoupling.md):
-  // el contrato puede estar importado con actividades sin rendimiento
-  // configurado todavía — el Cronograma bloquea aquí, explícitamente, en vez
-  // de generar un plan parcial que omita trabajo real en silencio.
+  // Generación parcial (2026-07-19, ver docs/architecture/
+  // poa-technical-catalog-decoupling.md): el Cronograma SÍ se genera con las
+  // actividades que ya tienen catálogo técnico — este banner es informativo,
+  // se muestra junto a la tabla, no en su lugar. El bloqueo real (Confirmar/
+  // Cerrar/Acta) vive en confirm_weekly_plan() (ERRCODE MTCFG), nunca aquí.
   if (missingStandards.length > 0) {
     return (
       <Banner icon={<ShieldAlert className="w-8 h-8 text-red-400" />} color="red">
-        <p className="font-black text-sm text-white">No es posible generar el cronograma</p>
+        <p className="font-black text-sm text-white">Cronograma parcial</p>
         <p className="text-slate-400 text-xs mt-1">
           Faltan {missingStandards.length} actividad{missingStandards.length === 1 ? '' : 'es'} sin configuración
-          técnica. Configure primero su rendimiento en el catálogo técnico:
+          técnica — no se incluyen en el plan de abajo y bloquean Confirmar hasta completarse:
         </p>
         <ul className="mt-2 space-y-0.5">
           {missingStandards.map((a) => (

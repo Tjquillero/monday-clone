@@ -30,14 +30,18 @@ import { usePoaActiveCatalog, useActivePoaVersionId } from './usePoaActivities';
 // vigente en el POA para esta zona (Regla 13, poa-domain.md: origen exclusivo
 // de actividades) — no se planifica algo que no está en el contrato activo.
 //
-// Separación de fases (2026-07-18, ver
-// docs/architecture/poa-technical-catalog-decoupling.md): si existe al
-// menos una actividad contratada sin catálogo técnico todavía
-// (missingStandards), el hook NO construye ningún plan — ni siquiera parcial
-// con las que sí tienen catálogo. Un plan "casi completo" que omite trabajo
-// real en silencio es más peligroso que un bloqueo explícito: el consumidor
-// debe mostrar exactamente qué falta, nunca generar semanas incompletas sin
-// avisar.
+// Generación parcial (2026-07-19, decisión de negocio que reemplaza el
+// bloqueo total del 2026-07-18): si existen actividades contratadas sin
+// catálogo técnico (missingStandards), el hook SÍ construye el plan con las
+// que sí tienen catálogo — el merge ya las excluye naturalmente (nunca
+// entran a `standards`, que viene de board_activity_standards). El
+// consumidor debe mostrar `missingStandards` como advertencia informativa
+// junto al plan (nunca en su lugar) y marcar el plan como parcial en la UI.
+// El bloqueo real ya no vive aquí: se movió a confirm_weekly_plan() (ERRCODE
+// MTCFG), que es donde corresponde certificar cumplimiento contractual —
+// "parcial" es un estado derivado en vivo del catálogo técnico, nunca una
+// bandera guardada en el plan, así que completar el catálogo después de
+// generar el plan permite confirmarlo sin recrearlo.
 //
 // El hook no conoce nada de componentes visuales.
 // El resultado es idempotente: la misma (boardId, group, weekStart) siempre
@@ -47,8 +51,9 @@ import { usePoaActiveCatalog, useActivePoaVersionId } from './usePoaActivities';
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface UseWeeklyPlanResult {
+  /** No vacío implica un plan PARCIAL — construido solo con las actividades que sí tienen catálogo técnico (ver missingStandards). */
   plan: WeeklyPlanningContext | null;
-  /** Actividades contratadas sin catálogo técnico — no vacío implica plan === null (bloqueo explícito, no un plan parcial). */
+  /** Actividades contratadas sin catálogo técnico — informativo, nunca vacía el plan. El bloqueo real vive en confirm_weekly_plan(). */
   missingStandards: MissingActivityStandard[];
   isLoading: boolean;
   isError: boolean;
@@ -125,10 +130,11 @@ export function useWeeklyPlan(
   // El plan se deriva de los datos ya cacheados — no necesita su propio useQuery
   const plan = useMemo<WeeklyPlanningContext | null>(() => {
     if (!standards || !poaCatalog || !scopeMappings || analysisRow === undefined || !group) return null;
-    // Bloqueo explícito, no plan parcial (ver comentario de cabecera): con
-    // actividades contratadas sin catálogo técnico, no se construye ningún
-    // WeeklyPlanningContext — el consumidor debe mostrar missingStandards.
-    if (missingStandards === undefined || missingStandards.length > 0) return null;
+    // Generación parcial (ver comentario de cabecera): ya no se bloquea el
+    // plan completo por actividades sin catálogo técnico — solo se espera a
+    // que missingStandards termine de cargar (undefined = todavía cargando),
+    // nunca a que esté vacía.
+    if (missingStandards === undefined) return null;
 
     // Merge Catálogo Técnico + Actividad del POA (frecuencia/precio) por
     // activity_key, filtrando por cobertura vigente en esta zona.

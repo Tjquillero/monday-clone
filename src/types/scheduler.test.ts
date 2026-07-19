@@ -1,4 +1,4 @@
-import { MissingEvidenceError, MISSING_EVIDENCE_ERRCODE } from './scheduler';
+import { MissingEvidenceError, MISSING_EVIDENCE_ERRCODE, MissingTechnicalConfigError, MISSING_TECHNICAL_CONFIG_ERRCODE } from './scheduler';
 
 describe('MissingEvidenceError.fromSupabaseError', () => {
   it('construye la excepción cuando code === MEVID, parseando DETAIL', () => {
@@ -42,5 +42,44 @@ describe('MissingEvidenceError.fromSupabaseError', () => {
   it('usa un mensaje por defecto si message viene vacío', () => {
     const err = MissingEvidenceError.fromSupabaseError({ code: MISSING_EVIDENCE_ERRCODE });
     expect(err!.message).toBe('Faltan evidencias fotográficas.');
+  });
+});
+
+describe('MissingTechnicalConfigError.fromSupabaseError', () => {
+  it('construye la excepción cuando code === MTCFG, parseando DETAIL', () => {
+    const raw = {
+      code: MISSING_TECHNICAL_CONFIG_ERRCODE,
+      message: 'No es posible confirmar el plan porque faltan 2 actividad(es) contratada(s) por configurar en el Catálogo Técnico.',
+      details: JSON.stringify([
+        { activity_key: '2.04', description: 'Herbicida grama', unit: 'M2-MES' },
+        { activity_key: '2.05', description: 'Herbicida árboles', unit: 'UND-MES' },
+      ]),
+    };
+
+    const err = MissingTechnicalConfigError.fromSupabaseError(raw);
+
+    expect(err).not.toBeNull();
+    expect(err).toBeInstanceOf(MissingTechnicalConfigError);
+    expect(err!.activities).toHaveLength(2);
+    expect(err!.activities[0].activity_key).toBe('2.04');
+  });
+
+  it('devuelve null para cualquier otro código de error (ej. MEVID, para no confundir los dos gates)', () => {
+    const err = MissingTechnicalConfigError.fromSupabaseError({ code: MISSING_EVIDENCE_ERRCODE, message: 'x', details: null });
+    expect(err).toBeNull();
+  });
+
+  it('devuelve null cuando error es null', () => {
+    expect(MissingTechnicalConfigError.fromSupabaseError(null)).toBeNull();
+  });
+
+  it('no revienta si DETAIL no es JSON válido — activities queda vacío', () => {
+    const err = MissingTechnicalConfigError.fromSupabaseError({
+      code: MISSING_TECHNICAL_CONFIG_ERRCODE,
+      message: 'Faltan actividades.',
+      details: 'no es json',
+    });
+    expect(err).not.toBeNull();
+    expect(err!.activities).toEqual([]);
   });
 });

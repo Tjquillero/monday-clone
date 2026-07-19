@@ -122,6 +122,19 @@ BEGIN
   ON CONFLICT (poa_version_id, activity_key) DO UPDATE SET frecuencia = EXCLUDED.frecuencia
   RETURNING id INTO v_activity_id;
 
+  -- Catálogo técnico del fixture: sin esto, confirm_weekly_plan() rechazaría
+  -- TODOS los tests de este archivo con ERRCODE=MTCFG (gate de configuración
+  -- técnica, 20260827) — no está relacionado con lo que este archivo prueba
+  -- (transiciones de estado), así que se satisface aquí de una vez. Idempotente:
+  -- solo inserta si no existe ya una fila vigente para este board+actividad
+  -- (insertar dos veces el mismo día viola chk_bas_effective_dates).
+  INSERT INTO public.board_activity_standards (board_id, activity_key, name, category, unit, rendimiento)
+  SELECT p_board_id, p_activity_key, p_activity_key, 'ZONA VERDE', 'und', 100
+  WHERE NOT EXISTS (
+    SELECT 1 FROM public.board_activity_standards
+    WHERE board_id = p_board_id AND activity_key = p_activity_key AND effective_to IS NULL
+  );
+
   INSERT INTO public.poa_activity_zones (poa_activity_id, zone_id, cantidad_contratada)
   VALUES (v_activity_id, p_zone_id, p_cantidad_contratada)
   ON CONFLICT (poa_activity_id, zone_id) DO UPDATE SET cantidad_contratada = EXCLUDED.cantidad_contratada

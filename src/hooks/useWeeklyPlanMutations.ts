@@ -7,7 +7,7 @@ import { isNetworkError } from './useBoardData';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   WeeklyPlan, WeeklyPlanItem, WeeklyPlanItemExecution,
-  ActivityPriority, MissingEvidenceError,
+  ActivityPriority, MissingEvidenceError, MissingTechnicalConfigError,
 } from '@/types/scheduler';
 import { weeklyPlanKeys } from './useWeeklyPlans';
 
@@ -159,7 +159,11 @@ export function useWeeklyPlanMutations(boardId: string | undefined) {
   const confirmPlan = useMutation<void, Error, { planId: string; groupId?: string }>({
     mutationFn: async ({ planId }) => {
       const { error } = await supabase.rpc('confirm_weekly_plan', { p_plan_id: planId });
-      if (error) throw MissingEvidenceError.fromSupabaseError(error) ?? error;
+      if (error) {
+        throw MissingTechnicalConfigError.fromSupabaseError(error)
+          ?? MissingEvidenceError.fromSupabaseError(error)
+          ?? error;
+      }
     },
     onSuccess: (_, { planId, groupId }) => {
       invalidatePlan(planId, groupId);

@@ -1,7 +1,7 @@
 'use client';
 
-import { CheckCircle2, AlertTriangle, XCircle, RefreshCw, ArrowRight } from 'lucide-react';
-import { PlanStatus, MissingEvidenceError } from '@/types/scheduler';
+import { CheckCircle2, AlertTriangle, XCircle, RefreshCw, ArrowRight, Wrench } from 'lucide-react';
+import { PlanStatus, MissingEvidenceError, MissingTechnicalConfigError, MissingActivityStandard } from '@/types/scheduler';
 import { useWeeklyPlanConfirmationSummary } from '@/hooks/useWeeklyPlans';
 
 // Panel de Confirmación / Cierre / Cerrado — continuación del ciclo de vida
@@ -20,6 +20,8 @@ interface Props {
   planId: string;
   status: PlanStatus;
   periodNumber: number;
+  /** Actividades contratadas sin catálogo técnico — ya obtenidas por useWeeklyPlan, se reutilizan aquí (nunca se vuelve a consultar). */
+  missingStandards: MissingActivityStandard[];
   onConfirm: () => void;
   isConfirming: boolean;
   confirmError: Error | null;
@@ -30,7 +32,7 @@ interface Props {
 }
 
 export default function PlanLifecyclePanel({
-  planId, status, periodNumber,
+  planId, status, periodNumber, missingStandards,
   onConfirm, isConfirming, confirmError,
   onClose, isClosing, closeError,
   onGoToCosts,
@@ -40,6 +42,7 @@ export default function PlanLifecyclePanel({
       <ConfirmationPanel
         planId={planId}
         periodNumber={periodNumber}
+        missingStandards={missingStandards}
         onConfirm={onConfirm}
         isConfirming={isConfirming}
         confirmError={confirmError}
@@ -61,21 +64,24 @@ export default function PlanLifecyclePanel({
 // ── Confirmación ────────────────────────────────────────────────────────────
 
 function ConfirmationPanel({
-  planId, periodNumber, onConfirm, isConfirming, confirmError,
+  planId, periodNumber, missingStandards, onConfirm, isConfirming, confirmError,
 }: {
   planId: string;
   periodNumber: number;
+  missingStandards: MissingActivityStandard[];
   onConfirm: () => void;
   isConfirming: boolean;
   confirmError: Error | null;
 }) {
   const { data: summary, isLoading, refetch, isFetching } = useWeeklyPlanConfirmationSummary(planId);
 
+  const missingTechConfig = confirmError instanceof MissingTechnicalConfigError ? confirmError : null;
   const missingEvidence = confirmError instanceof MissingEvidenceError ? confirmError : null;
-  const otherError = confirmError && !missingEvidence ? confirmError : null;
+  const otherError = confirmError && !missingTechConfig && !missingEvidence ? confirmError : null;
 
+  const hasMissingStandards = missingStandards.length > 0;
   const pendingCount = summary?.pending_count ?? 0;
-  const canConfirm = !isLoading && pendingCount === 0;
+  const canConfirm = !isLoading && pendingCount === 0 && !hasMissingStandards;
 
   return (
     <div className="industrial-card rounded-xl border border-[var(--border-color)] p-4 space-y-3">
@@ -124,6 +130,25 @@ function ConfirmationPanel({
         </>
       ) : null}
 
+      {/* Proactivo: usa missingStandards ya obtenido por useWeeklyPlan (nunca
+          se vuelve a consultar) — se muestra ANTES de intentar confirmar, no
+          solo como reacción al error del RPC. Si por alguna razón el RPC
+          rechazó con MTCFG sin que esta prop lo reflejara (dato stale), se
+          usa como respaldo. */}
+      {(hasMissingStandards || missingTechConfig) && (
+        <div className="p-3 rounded-lg border border-red-500/30 bg-red-500/10 space-y-1.5">
+          <p className="text-xs font-black text-red-400 flex items-center gap-1.5">
+            <Wrench className="w-3.5 h-3.5" /> No se puede confirmar: faltan actividades por configurar en el Catálogo Técnico
+          </p>
+          <ul className="space-y-1">
+            {(hasMissingStandards ? missingStandards : missingTechConfig?.activities ?? []).map((a) => (
+              <li key={a.activity_key} className="text-xs text-red-200/90">
+                • <span className="font-black">{a.activity_key}</span> — {a.description} ({a.unit})
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {missingEvidence && (
         <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 space-y-1.5">
           <p className="text-xs font-black text-amber-400">Faltan evidencias fotográficas en estas jornadas:</p>
