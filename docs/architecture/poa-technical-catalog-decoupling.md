@@ -89,15 +89,29 @@ $$;
 
 Un solo lugar de verdad para "¿qué le falta a este board?" — ni el Scheduler ni la pantalla de importación reimplementan el cruce.
 
-## Decisión 3 — el Scheduler bloquea por completo, no genera planes parciales
+## Decisión 3 — SUPERSEDIDA (2026-07-19): el Scheduler genera planes parciales, no bloquea por completo
 
-Importar un contrato puede quedar técnicamente incompleto. Ejecutar el algoritmo de planificación no: un plan parcial (algunas actividades sí, otras desaparecidas sin explicación) es más difícil de detectar que un bloqueo explícito — el usuario vería semanas "completas" que en realidad omiten trabajo real, sin ninguna señal.
+Esta decisión se tomó antes de que existiera una pantalla dedicada del Catálogo Técnico (Pendientes/Configurado, banner explícito, contador). El riesgo que la justificaba — un plan parcial indistinguible de uno completo, omitiendo trabajo real en silencio — ya no aplica: hoy existen señales explícitas e imposibles de ignorar en la UI. Bloquear el Cronograma completo por 31 de 50 actividades pendientes dejó de ser proporcional.
 
-`useWeeklyPlan.ts` llama a `get_missing_board_activity_standards(boardId, activePoaVersionId)` antes de construir el contexto de planificación:
-- `missing.length > 0` → el hook devuelve un estado explícito de bloqueo (no un `WeeklyPlanningContext` parcial) con la lista completa (`activity_key`, `description`, `unit`) para que la UI muestre exactamente qué falta.
-- `missing.length === 0` → sigue el flujo actual (`buildWeeklyPlanningContext`) sin cambios.
+**Modelo vigente:** `useWeeklyPlan.ts` construye el plan con las actividades que sí tienen `board_activity_standards` (el merge las excluye naturalmente si no existen — nunca hace falta un chequeo aparte) y expone `missingStandards` como advertencia informativa junto al plan, nunca en su lugar. El bloqueo real de negocio se movió a `confirm_weekly_plan()` (`ERRCODE = 'MTCFG'`): certificar cumplimiento contractual exige el catálogo completo, generar un borrador de trabajo no. "Parcial" es un estado derivado en cada lectura (comparación en vivo contra `get_missing_board_activity_standards`), nunca una bandera persistida en el plan — completar el catálogo después de generar el plan permite confirmarlo sin recrearlo.
 
-Mensaje de UI (banner en `WeeklyPlannerContainer`/`PlanningWarnings.tsx`): *"No es posible generar el cronograma. Faltan N actividades sin configuración técnica: [lista]. Configure primero sus rendimientos en el catálogo técnico."*
+Mensaje de UI (`PlanningWarnings.tsx`): banner "Cronograma parcial" listando las actividades sin configurar, mostrado junto a la tabla de actividades sí planificadas (nunca reemplazándola). `PlanLifecyclePanel` deshabilita "Confirmar" proactivamente mientras `missingStandards` no esté vacío, reflejando lo que el RPC exigiría de todos modos.
+
+## Decisión 4 — actividades que no requieren rendimiento (`requiere_rendimiento`, 2026-07-19)
+
+"Falta configurar" y "no aplica" son dos hechos distintos que el modelo original confundía: `board_activity_standards` solo sabía representar "existe con rendimiento" o "no existe fila" — no había forma de registrar que una actividad, por su naturaleza (reactiva, por evento, por volumen retirado, por condición de campo), nunca va a tener un rendimiento técnico único y no debería seguir apareciendo como pendiente indefinidamente.
+
+Mismo principio que ADR-0005 ya aplicó a `frecuencia` (`poa_activities.frecuencia IS NULL` = "actividad contratada sin programación periódica", excluida explícitamente en `weeklyPlanner.ts:126-132` antes de construir `PlanningActivity`) — esta decisión completa la simetría que faltaba para `rendimiento`.
+
+**Modelo:** columna nueva `requiere_rendimiento BOOLEAN NOT NULL DEFAULT true`, `rendimiento` pasa a nullable. Es un booleano, no un enum de estados: una vez que "pendiente" queda fuera de la columna (ver abajo), lo que distingue no es una fase de un flujo con transiciones — es una característica permanente de la actividad ("¿esta actividad se planifica por rendimiento, sí o no?"), del mismo tipo que `category`. La ambigüedad clásica de un booleano ("¿`false` es decisión deliberada, error de captura, o campo sin revisar?") no aplica aquí porque el tercer caso (sin revisar) nunca llega a existir como fila — para que exista una fila con `requiere_rendimiento = false`, alguien ya tuvo que decidirlo explícitamente (Regla 2 de ADR-0008: ninguna equivalencia se persiste sin confirmación humana). El estado "pendiente" sigue sin persistirse como valor de columna: se representa, sin ambigüedad, por la ausencia de fila (`get_missing_board_activity_standards` sigue usando `NOT EXISTS`, sin cambios).
+
+**Impacto:**
+- `get_missing_board_activity_standards`: sin cambios de código — en cuanto existe una fila (`requiere_rendimiento` true o false), la actividad deja de ser "pendiente".
+- `weeklyPlanner.ts`: mismo patrón que `frecuencia === null` — `if (!s.requiere_rendimiento) continue;` antes de construir el `PlanningActivity`. No entra al plan con "0 jornales" (eso confundiría el caso con un error de captura); simplemente no participa del modelo de capacidad semanal.
+- Catálogo Técnico (modal "Configurar"): gana una segunda acción explícita, "Marcar como No aplica", junto al campo numérico de rendimiento.
+- `confirm_weekly_plan`/gate MTCFG: sin cambios — sigue dependiendo de `get_missing_board_activity_standards`.
+
+**Tarea #39 replanteada:** ya no es "esperar respuesta externa sobre rendimientos" — la clasificación de las 31 actividades (requieren rendimiento vs. no aplica) es una decisión que el responsable del proceso (el propio usuario del sistema) ya puede tomar directamente en el Catálogo Técnico, sin dependencia externa pendiente.
 
 ## Import ya no conoce nada del Scheduler
 

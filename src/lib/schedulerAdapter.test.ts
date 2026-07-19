@@ -15,6 +15,7 @@ function std(overrides: Partial<ActivityStandardWithFrecuencia> = {}): ActivityS
     category: 'ZONA VERDE',
     unit: 'm2/dia',
     rendimiento: 100,
+    requiere_rendimiento: true,
     frecuencia: 25,
     priority: 'preferred',
     version: 1,
@@ -148,6 +149,14 @@ describe('buildActivityMappings', () => {
 
     it('ambas listas vacías → resultado vacío', () => {
       expect(buildActivityMappings([], [])).toEqual({});
+    });
+
+    it('requiere_rendimiento=false no aparece aunque tenga mapeo (Decisión 4)', () => {
+      const result = buildActivityMappings(
+        [std({ activity_key: 'plateo', requiere_rendimiento: false, rendimiento: null })],
+        [map('plateo', 'arbustos')],
+      );
+      expect(result).toEqual({});
     });
   });
 

@@ -20,7 +20,10 @@ export interface ActivityStandard {
   name: string;
   category: ActivityCategory;
   unit: string;
-  rendimiento: number;
+  /** null solo cuando requiere_rendimiento es false (Decisión 4, poa-technical-catalog-decoupling.md). */
+  rendimiento: number | null;
+  /** false = decisión deliberada de que esta actividad no se planifica por rendimiento (reactiva/por evento/por condición de campo). No es un booleano ambiguo: solo existe fila tras una decisión explícita, nunca representa "sin revisar". */
+  requiere_rendimiento: boolean;
   priority: ActivityPriority;
   version: number;
   effective_from: string;    // ISO date string (DATE en PG)

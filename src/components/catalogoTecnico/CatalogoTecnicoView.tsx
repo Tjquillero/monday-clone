@@ -32,6 +32,7 @@ interface EditTarget {
   unit: string;
   category: ActivityCategory;
   rendimiento: number | '';
+  requiereRendimiento: boolean;
 }
 
 export interface CatalogoTecnicoViewProps {
@@ -41,7 +42,7 @@ export interface CatalogoTecnicoViewProps {
   isLoading: boolean;
   isError: boolean;
   error: Error | null;
-  onSave: (target: { activityKey: string; description: string; unit: string; category: ActivityCategory; rendimiento: number }) => Promise<boolean>;
+  onSave: (target: { activityKey: string; description: string; unit: string; category: ActivityCategory; rendimiento: number | null; requiereRendimiento: boolean }) => Promise<boolean>;
   isSaving: boolean;
   saveError: string | null;
 }
@@ -69,6 +70,7 @@ export default function CatalogoTecnicoView({
       unit: p.unit,
       category: suggestCategory(p.activity_key),
       rendimiento: '',
+      requiereRendimiento: true,
     });
   };
 
@@ -78,18 +80,25 @@ export default function CatalogoTecnicoView({
       description: s.name,
       unit: s.unit,
       category: s.category,
-      rendimiento: s.rendimiento,
+      rendimiento: s.rendimiento ?? '',
+      requiereRendimiento: s.requiere_rendimiento,
     });
   };
 
+  const canSubmit = !!editTarget && (
+    !editTarget.requiereRendimiento ||
+    (editTarget.rendimiento !== '' && editTarget.rendimiento > 0)
+  );
+
   const handleSubmit = async () => {
-    if (!editTarget || editTarget.rendimiento === '' || editTarget.rendimiento <= 0) return;
+    if (!editTarget || !canSubmit) return;
     const ok = await onSave({
       activityKey: editTarget.activityKey,
       description: editTarget.description,
       unit: editTarget.unit,
       category: editTarget.category,
-      rendimiento: editTarget.rendimiento,
+      rendimiento: editTarget.requiereRendimiento ? (editTarget.rendimiento as number) : null,
+      requiereRendimiento: editTarget.requiereRendimiento,
     });
     if (ok) setEditTarget(null);
   };
@@ -226,11 +235,21 @@ export default function CatalogoTecnicoView({
                     <td className="p-3 text-slate-300">{s.name}</td>
                     <td className="p-3 text-slate-400">{s.category}</td>
                     <td className="p-3 text-slate-400">{s.unit}</td>
-                    <td className="p-3 text-slate-300">{s.rendimiento.toLocaleString()}</td>
+                    <td className="p-3 text-slate-300">
+                      {s.requiere_rendimiento ? (s.rendimiento as number).toLocaleString() : (
+                        <span className="text-slate-500 italic">No aplica</span>
+                      )}
+                    </td>
                     <td className="p-3">
-                      <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border border-emerald-500/40 text-emerald-400">
-                        Configurado
-                      </span>
+                      {s.requiere_rendimiento ? (
+                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border border-emerald-500/40 text-emerald-400">
+                          Configurado
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border border-slate-500/40 text-slate-400">
+                          No aplica
+                        </span>
+                      )}
                     </td>
                     <td className="p-3 text-right">
                       <button
@@ -280,18 +299,33 @@ export default function CatalogoTecnicoView({
                   ))}
                 </select>
               </Field>
-              <Field label={`Rendimiento (${editTarget.unit} por jornal)`}>
+              <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
                 <input
-                  type="number"
-                  min={0}
-                  step="any"
-                  value={editTarget.rendimiento}
-                  onChange={(e) => setEditTarget({ ...editTarget, rendimiento: e.target.value === '' ? '' : Number(e.target.value) })}
-                  placeholder="Ej. 500"
-                  autoFocus
-                  className="w-full px-3 py-2 text-sm rounded-lg bg-slate-500/5 border border-[var(--border-color)] text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-[#3B7EF8]/50"
+                  type="checkbox"
+                  checked={!editTarget.requiereRendimiento}
+                  onChange={(e) => setEditTarget({
+                    ...editTarget,
+                    requiereRendimiento: !e.target.checked,
+                    rendimiento: e.target.checked ? '' : editTarget.rendimiento,
+                  })}
+                  className="w-3.5 h-3.5"
                 />
-              </Field>
+                No aplica rendimiento (actividad reactiva, por evento o por condición de campo)
+              </label>
+              {editTarget.requiereRendimiento && (
+                <Field label={`Rendimiento (${editTarget.unit} por jornal)`}>
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={editTarget.rendimiento}
+                    onChange={(e) => setEditTarget({ ...editTarget, rendimiento: e.target.value === '' ? '' : Number(e.target.value) })}
+                    placeholder="Ej. 500"
+                    autoFocus
+                    className="w-full px-3 py-2 text-sm rounded-lg bg-slate-500/5 border border-[var(--border-color)] text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-[#3B7EF8]/50"
+                  />
+                </Field>
+              )}
             </div>
 
             {saveError && <p className="text-xs text-red-400">{saveError}</p>}
@@ -305,7 +339,7 @@ export default function CatalogoTecnicoView({
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={isSaving || editTarget.rendimiento === '' || Number(editTarget.rendimiento) <= 0}
+                disabled={isSaving || !canSubmit}
                 className="text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-lg bg-[#3B7EF8] text-white hover:bg-[#2563EB] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {isSaving ? 'Guardando…' : 'Guardar'}

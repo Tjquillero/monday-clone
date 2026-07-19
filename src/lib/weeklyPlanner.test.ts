@@ -15,6 +15,7 @@ function std(overrides: Partial<ActivityStandardWithFrecuencia> = {}): ActivityS
     category: 'ZONA VERDE',
     unit: 'und/dia',
     rendimiento: 160,
+    requiere_rendimiento: true,
     frecuencia: 12.5,
     priority: 'preferred',
     version: 1,
@@ -200,6 +201,33 @@ describe('buildWeeklyPlanningContext — cantidades', () => {
       WEEK_1,
     );
     expect(ctx.activities).toHaveLength(0);
+  });
+
+  it('actividad con frecuencia=null (ADR-0005) no aparece aunque tenga qty y rendimiento', () => {
+    const ctx = buildWeeklyPlanningContext(
+      [std({ frecuencia: null })],
+      PLATEO_MAP,
+      { arbustos: 2295 },
+      ZONE,
+      WEEK_1,
+    );
+    expect(ctx.activities).toHaveLength(0);
+  });
+
+  it('actividad con requiere_rendimiento=false (Decisión 4) no aparece aunque tenga qty y frecuencia', () => {
+    const ctx = buildWeeklyPlanningContext(
+      [std({ requiere_rendimiento: false, rendimiento: null })],
+      PLATEO_MAP,
+      { arbustos: 2295 },
+      ZONE,
+      WEEK_1,
+    );
+    expect(ctx.activities).toHaveLength(0);
+  });
+
+  it('requiere_rendimiento=true (default) sigue generando el plan normalmente', () => {
+    const ctx = buildWeeklyPlanningContext(PLATEO_STD, PLATEO_MAP, { arbustos: 2295 }, ZONE, WEEK_1);
+    expect(ctx.activities).toHaveLength(1);
   });
 });
 

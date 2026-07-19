@@ -130,8 +130,17 @@ export function buildWeeklyPlanningContext(
       // (replace_weekly_plan_items exige planned_frecuencia > 0 — un envío
       // con frecuencia nula sería rechazado por el RPC, no silenciado).
       if (s.frecuencia === null) continue;
+      // requiere_rendimiento === false: decisión deliberada de que esta
+      // actividad no se planifica por rendimiento (Decisión 4, poa-technical-
+      // catalog-decoupling.md) — mismo patrón que frecuencia === null. No
+      // entra con "0 jornales" (se confundiría con un error de captura),
+      // simplemente no participa del modelo de capacidad semanal.
+      if (!s.requiere_rendimiento) continue;
+      // Invariante de base de datos (chk_bas_rendimiento_por_requiere): con
+      // requiere_rendimiento=true, rendimiento nunca es NULL.
+      const rendimiento = s.rendimiento as number;
 
-      const jr_month = calculateTheoreticalJournals(qty, s.rendimiento, s.frecuencia);
+      const jr_month = calculateTheoreticalJournals(qty, rendimiento, s.frecuencia);
       const distribution = calculateWeeklyDistribution(jr_month, CONTRACT_PERIODS_PER_MONTH);
       const jr_week = distribution[week.number - 1] ?? 0;
 
@@ -142,7 +151,7 @@ export function buildWeeklyPlanningContext(
         priority: s.priority,
         qty,
         unit: s.unit,
-        rendimiento: s.rendimiento,
+        rendimiento,
         frecuencia: s.frecuencia,
         theoretical_journals_month: jr_month,
         theoretical_journals_week: jr_week,

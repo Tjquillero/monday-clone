@@ -35,7 +35,8 @@ export default function CatalogoTecnicoContainer({ boardId }: Props) {
   const error = (pendientesErr ?? catalogoErr) as Error | null;
 
   const handleSave = async (target: {
-    activityKey: string; description: string; unit: string; category: ActivityCategory; rendimiento: number;
+    activityKey: string; description: string; unit: string; category: ActivityCategory;
+    rendimiento: number | null; requiereRendimiento: boolean;
   }): Promise<boolean> => {
     setSaveError(null);
     try {
@@ -46,6 +47,7 @@ export default function CatalogoTecnicoContainer({ boardId }: Props) {
         category: target.category,
         unit: target.unit,
         rendimiento: target.rendimiento,
+        requiereRendimiento: target.requiereRendimiento,
       });
       return true;
     } catch (err) {

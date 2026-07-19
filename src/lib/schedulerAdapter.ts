@@ -31,11 +31,15 @@ export function buildActivityMappings(
 
   const result: Record<string, ActivityRule[]> = {};
   for (const s of standards) {
+    // requiere_rendimiento === false: mismo criterio que weeklyPlanner.ts
+    // (Decisión 4, poa-technical-catalog-decoupling.md) — sin rendimiento no
+    // hay nada que este cálculo pueda mostrar para esta actividad.
+    if (!s.requiere_rendimiento) continue;
     for (const scopeKey of scopeByKey.get(s.activity_key) ?? []) {
       (result[scopeKey] ??= []).push({
         name: s.name,
         unit: s.unit,
-        rend: s.rendimiento,     // campo renombrado: rendimiento → rend
+        rend: s.rendimiento as number,     // campo renombrado: rendimiento → rend
         // s.frecuencia puede ser null (ADR-0005: sin programación periódica
         // en esta versión del POA). ActivityRule.freq es la forma que ya
         // consume el motor de cálculo de este widget (siempre number) — 0

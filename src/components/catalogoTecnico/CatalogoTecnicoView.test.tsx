@@ -34,6 +34,7 @@ const CONFIGURADO: ActivityStandard = {
   category: 'ZONA DE PLAYA',
   unit: 'M2',
   rendimiento: 3000,
+  requiere_rendimiento: true,
   priority: 'preferred',
   version: 1,
   effective_from: '2026-07-18',
@@ -83,11 +84,48 @@ describe('CatalogoTecnicoView', () => {
         unit: 'M2-MES',
         category: 'ZONA VERDE',
         rendimiento: 1200,
+        requiereRendimiento: true,
       }),
     );
 
     // El panel se cierra tras un guardado exitoso.
     await waitFor(() => expect(screen.queryByText('Configurar actividad')).not.toBeInTheDocument());
+  });
+
+  it('marcar "No aplica rendimiento" oculta el campo numérico y habilita Guardar sin valor (Decisión 4)', async () => {
+    const onSave = jest.fn().mockResolvedValue(true);
+    render(<CatalogoTecnicoView {...baseProps({ pendientes: [PENDIENTE], onSave })} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Configurar' }));
+
+    const saveButton = screen.getByRole('button', { name: 'Guardar' });
+    expect(saveButton).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('checkbox'));
+    expect(screen.queryByPlaceholderText('Ej. 500')).not.toBeInTheDocument();
+    expect(saveButton).not.toBeDisabled();
+
+    fireEvent.click(saveButton);
+
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith({
+        activityKey: '2.04',
+        description: 'Herbicida grama',
+        unit: 'M2-MES',
+        category: 'ZONA VERDE',
+        rendimiento: null,
+        requiereRendimiento: false,
+      }),
+    );
+  });
+
+  it('el catálogo completo muestra "No aplica" en vez de un número cuando requiere_rendimiento es false', () => {
+    const noAplica: ActivityStandard = {
+      ...CONFIGURADO, id: 'std-3', activity_key: '4.01', name: 'Atención de incidencia',
+      requiere_rendimiento: false, rendimiento: null,
+    };
+    render(<CatalogoTecnicoView {...baseProps({ catalogo: [noAplica] })} />);
+
+    expect(screen.getAllByText('No aplica')).toHaveLength(2); // rendimiento + badge de estado
   });
 
   it('si onSave falla, el panel permanece abierto y muestra saveError', async () => {

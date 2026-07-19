@@ -199,13 +199,18 @@ export function useMissingBoardActivityStandards(
 // (esa distinción queda fuera de alcance de esta pantalla).
 // ─────────────────────────────────────────────────────────────────────────────
 
+// requiereRendimiento default true mantiene el contrato anterior (rendimiento
+// obligatorio) sin romper a los llamadores existentes. Cuando es false,
+// rendimiento se ignora aquí y se persiste NULL (Decisión 4, ver
+// poa-technical-catalog-decoupling.md) — nunca 0 ni un número inventado.
 export interface UpsertActivityStandardInput {
   boardId: string;
   activityKey: string;
   name: string;
   category: ActivityCategory;
   unit: string;
-  rendimiento: number;
+  rendimiento: number | null;
+  requiereRendimiento?: boolean;
   priority?: ActivityPriority;
   source?: string;
 }
@@ -215,6 +220,7 @@ export function useUpsertActivityStandard() {
 
   return useMutation({
     mutationFn: async (input: UpsertActivityStandardInput) => {
+      const requiereRendimiento = input.requiereRendimiento ?? true;
       const { error } = await supabase.from('board_activity_standards').insert({
         board_id: input.boardId,
         group_id: null,
@@ -222,7 +228,8 @@ export function useUpsertActivityStandard() {
         name: input.name,
         category: input.category,
         unit: input.unit,
-        rendimiento: input.rendimiento,
+        rendimiento: requiereRendimiento ? input.rendimiento : null,
+        requiere_rendimiento: requiereRendimiento,
         priority: input.priority ?? 'preferred',
         source: input.source ?? 'catalogo_tecnico_ui',
       });
