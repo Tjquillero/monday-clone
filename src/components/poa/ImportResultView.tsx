@@ -7,19 +7,43 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import {
-  CheckCircle2, MapPinX, ScaleIcon, AlertTriangle, ServerCrash, RotateCw, Sparkles,
+  CheckCircle2, MapPinX, ScaleIcon, AlertTriangle, ServerCrash, RotateCw, Sparkles, Wrench,
 } from 'lucide-react';
 import type { ImportPoaResult } from '@/lib/poaImport/service/types';
 import type { ImportValidationError } from '@/lib/poaImport/types';
+import { useMissingBoardActivityStandards } from '@/hooks/useActivityStandards';
 
 interface ImportResultViewProps {
   poaId: string;
+  boardId: string | null;
   result: ImportPoaResult;
   onRetry?: () => void;
   retrying?: boolean;
 }
 
-function SuccessView({ result }: { result: Extract<ImportPoaResult, { status: 'success' }> }) {
+// Separación de fases (docs/architecture/poa-technical-catalog-decoupling.md):
+// el import ya no depende del catálogo técnico, así que "success" puede
+// convivir con actividades pendientes de configuración — este contador es
+// puramente informativo, nunca bloquea esta pantalla (el bloqueo real ocurre
+// al intentar generar el Cronograma, ver PlanningWarnings.tsx).
+function TechnicalConfigSummary({ boardId, versionId }: { boardId: string | null; versionId: string }) {
+  const { data: missing, isLoading } = useMissingBoardActivityStandards(boardId ?? undefined, versionId);
+
+  if (isLoading || missing === undefined) return null;
+
+  return (
+    <div className={`rounded-lg p-3 text-xs ${missing.length > 0 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
+      <div className="flex items-center gap-1.5 font-semibold">
+        <Wrench className="w-3.5 h-3.5" />
+        {missing.length > 0
+          ? `Configuración técnica: ${missing.length} actividad${missing.length === 1 ? '' : 'es'} pendiente${missing.length === 1 ? '' : 's'} de rendimiento`
+          : 'Configuración técnica completa — el Cronograma puede generarse'}
+      </div>
+    </div>
+  );
+}
+
+function SuccessView({ boardId, result }: { boardId: string | null; result: Extract<ImportPoaResult, { status: 'success' }> }) {
   return (
     <div className="bg-emerald-50/50 border border-emerald-200 rounded-xl p-5 space-y-3">
       <div className="flex items-center gap-2 text-emerald-700">
@@ -44,6 +68,7 @@ function SuccessView({ result }: { result: Extract<ImportPoaResult, { status: 's
           <dd className="font-semibold text-slate-800">{result.activitiesNotContracted}</dd>
         </div>
       </dl>
+      <TechnicalConfigSummary boardId={boardId} versionId={result.versionId} />
     </div>
   );
 }
@@ -221,8 +246,8 @@ function PersistenceFailedView({
   );
 }
 
-export default function ImportResultView({ poaId, result, onRetry, retrying }: ImportResultViewProps) {
-  if (result.status === 'success') return <SuccessView result={result} />;
+export default function ImportResultView({ poaId, boardId, result, onRetry, retrying }: ImportResultViewProps) {
+  if (result.status === 'success') return <SuccessView boardId={boardId} result={result} />;
   if (result.status === 'blocked') return <BlockedView poaId={poaId} result={result} />;
   return <PersistenceFailedView result={result} onRetry={onRetry} retrying={retrying} />;
 }

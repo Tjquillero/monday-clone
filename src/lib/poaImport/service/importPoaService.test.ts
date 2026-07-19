@@ -46,11 +46,10 @@ const REAL_ZONE_NAMES = [
   'PLAYA PUNTA ASTILLEROS',
 ];
 
-function fullyMappedContext(parseResult: ParseResult): ValidatePoaImportContext {
+function fullyMappedContext(_parseResult: ParseResult): ValidatePoaImportContext {
   const zoneMappings = new Map<string, string>();
   REAL_ZONE_NAMES.forEach((name, i) => zoneMappings.set(name, `group-${i}`));
-  const knownActivityKeys = new Set(parseResult.actividades.map((a) => a.activityKey));
-  return { zoneMappings, knownActivityKeys };
+  return { zoneMappings };
 }
 
 /** Stub defensivo: para los tests que esperan `blocked`, persistir nunca debería invocarse. */
@@ -87,7 +86,7 @@ describe('importPoaVersion — Commit 1: validación de forma del input', () => 
 });
 
 describe('importPoaVersion — Commits 2-3: integración parser -> validator, resolución de contexto inyectable', () => {
-  it('el archivo real COMPLETO, con zonas y catálogo perfectamente resueltos, persiste con éxito (las 14 actividades de frecuencia ambigua quedaron resueltas 2026-07-18, ver docs/discovery/poa-frequency-per-zone.md)', async () => {
+  it('el archivo real COMPLETO, con zonas resueltas, persiste con éxito (las 14 actividades de frecuencia ambigua quedaron resueltas 2026-07-18, ver docs/discovery/poa-frequency-per-zone.md)', async () => {
     let receivedPayload: ImportPayloadActivity[] | null = null;
     const service = createImportPoaService({
       resolveValidationContext: async (parseResult) => fullyMappedContext(parseResult),
@@ -115,9 +114,8 @@ describe('importPoaVersion — Commits 2-3: integración parser -> validator, re
 
   it('sin ningún mapeo de zona resuelto, devuelve blocked con las 9 zonas en unresolvedZones', async () => {
     const service = createImportPoaService({
-      resolveValidationContext: async (parseResult) => ({
+      resolveValidationContext: async () => ({
         zoneMappings: new Map(), // ninguna zona resuelta
-        knownActivityKeys: new Set(parseResult.actividades.map((a) => a.activityKey)),
       }),
       persistImportPoaVersion: NEVER_PERSIST,
     });
@@ -132,24 +130,7 @@ describe('importPoaVersion — Commits 2-3: integración parser -> validator, re
     );
   });
 
-  it('con zonas resueltas pero catálogo vacío, devuelve blocked con actividades desconocidas en validationErrors', async () => {
-    const service = createImportPoaService({
-      resolveValidationContext: async () => ({
-        zoneMappings: new Map(REAL_ZONE_NAMES.map((name, i) => [name, `group-${i}`])),
-        knownActivityKeys: new Set(), // ninguna actividad reconocida
-      }),
-      persistImportPoaVersion: NEVER_PERSIST,
-    });
-
-    const result = await service.importPoaVersion({ ...VALID_INPUT, file: realWorkbookArrayBuffer() });
-
-    expect(result.status).toBe('blocked');
-    if (result.status !== 'blocked') throw new Error('esperaba blocked');
-    expect(result.validationErrors.length).toBeGreaterThan(0);
-    expect(result.validationErrors.every((e) => e.code === 'activity_key_inexistente')).toBe(true);
-  });
-
-  it('con el archivo real completo (zonas y catálogo resueltos), ambiguousFrequencyActivities ya no aplica — el resultado es success, no blocked', async () => {
+  it('con el archivo real completo (zonas resueltas), ambiguousFrequencyActivities ya no aplica — el resultado es success, no blocked', async () => {
     const service = createImportPoaService({
       resolveValidationContext: async (parseResult) => fullyMappedContext(parseResult),
       persistImportPoaVersion: async () => 'version-real',
@@ -183,7 +164,6 @@ describe('importPoaVersion — Commit 4: persistencia real', () => {
     const service = createImportPoaService({
       resolveValidationContext: async () => ({
         zoneMappings: new Map([['Zona Test', 'group-0']]),
-        knownActivityKeys: new Set(['1.01']),
       }),
       persistImportPoaVersion: async (poaId, activities, importOperationId) => {
         receivedArgs = [poaId, activities, importOperationId];
@@ -211,6 +191,8 @@ describe('importPoaVersion — Commit 4: persistencia real', () => {
     expect(activities).toEqual([
       {
         activity_key: '1.01',
+        description: 'Actividad de prueba',
+        unit: 'M2',
         precio_unitario: 100,
         frecuencia: 1,
         zonas: [{ group_id: 'group-0', cantidad_contratada: 10 }],
@@ -223,7 +205,6 @@ describe('importPoaVersion — Commit 4: persistencia real', () => {
     const service = createImportPoaService({
       resolveValidationContext: async () => ({
         zoneMappings: new Map([['Zona Test', 'group-0']]),
-        knownActivityKeys: new Set(['1.01']),
       }),
       persistImportPoaVersion: async (_poaId, _activities, importOperationId) => {
         receivedOperationId = importOperationId;
@@ -244,7 +225,6 @@ describe('importPoaVersion — Commit 4: persistencia real', () => {
     const service = createImportPoaService({
       resolveValidationContext: async () => ({
         zoneMappings: new Map([['Zona Test', 'group-0']]),
-        knownActivityKeys: new Set(['1.01']),
       }),
       persistImportPoaVersion: async () => {
         throw { code: '23503', message: 'insert or update on table "poa_activity_zones" violates foreign key constraint' };
@@ -266,7 +246,6 @@ describe('importPoaVersion — Commit 4: persistencia real', () => {
     const service = createImportPoaService({
       resolveValidationContext: async () => ({
         zoneMappings: new Map(), // ninguna zona resuelta -> blocked
-        knownActivityKeys: new Set(['1.01']),
       }),
       persistImportPoaVersion: NEVER_PERSIST, // si se llamara, este test fallaría con el throw del stub
     });
@@ -282,7 +261,6 @@ describe('importPoaVersion — Commit 4: persistencia real', () => {
     const service = createImportPoaService({
       resolveValidationContext: async () => ({
         zoneMappings: new Map([['Zona Test', 'group-0']]),
-        knownActivityKeys: new Set(['1.01']),
       }),
       persistImportPoaVersion: async (_poaId, _activities, importOperationId) => {
         receivedOperationIds.push(importOperationId);
@@ -317,14 +295,16 @@ describe('importPoaVersion — Commit 4: persistencia real', () => {
 });
 
 describe('importPoaVersion — Commit 5: robustez del orquestador', () => {
-  it('blocked puede tener las tres categorías pobladas a la vez (zona sin mapear + frecuencia ambigua no cubierta por ninguna regla resuelta + catálogo desconocido)', async () => {
+  it('blocked puede tener las dos categorías pobladas a la vez (zona sin mapear + frecuencia ambigua no cubierta por ninguna regla resuelta)', async () => {
     // Las 14 actividades del archivo real ya tienen su regla de frecuencia
     // resuelta (docs/discovery/poa-frequency-per-zone.md), así que ya no
     // sirven para poblar ambiguousFrequencyActivities. Este archivo
     // sintético incluye una actividad NUEVA ('9.91', fuera de
     // RESOLVED_FRECUENCIA_OVERRIDES) con FREC. real pero distinto entre sus
-    // dos zonas, para seguir probando que el orquestador puede poblar las
-    // tres categorías a la vez.
+    // dos zonas, para seguir probando que el orquestador puede poblar ambas
+    // categorías a la vez. Separación de fases (2026-07-18): ya no existe
+    // una tercera categoría de "catálogo desconocido" — el importador no
+    // conoce board_activity_standards.
     const XLSX = require('xlsx');
     function buildRow(entries: Record<number, unknown>, length: number): unknown[] {
       const row = new Array(length).fill(null);
@@ -344,11 +324,6 @@ describe('importPoaVersion — Commit 5: robustez del orquestador', () => {
           8: 10, 9: 1, 10: 1, 11: 20, 12: 2, 13: 1 }, // FREC. 1 en Zona 1, FREC. 2 en Zona 2 -> different_values
         14,
       ),
-      buildRow(
-        { 0: 'MANTENIMIENTO', 1: '9.92', 2: 'Actividad de catálogo desconocido', 3: 'M2', 4: 1, 5: 100, 6: 100,
-          8: 5, 9: 1, 10: 1 },
-        14,
-      ),
     ];
     const sheet = XLSX.utils.aoa_to_sheet(rows);
     const wb = XLSX.utils.book_new();
@@ -357,10 +332,9 @@ describe('importPoaVersion — Commit 5: robustez del orquestador', () => {
     const file = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
 
     const service = createImportPoaService({
-      // Zona 2 queda sin mapear a propósito; X.02 queda fuera del catálogo conocido.
+      // Zona 2 queda sin mapear a propósito.
       resolveValidationContext: async () => ({
         zoneMappings: new Map([['Zona 1', 'group-0']]),
-        knownActivityKeys: new Set(['9.91']),
       }),
       persistImportPoaVersion: NEVER_PERSIST,
     });
@@ -372,14 +346,12 @@ describe('importPoaVersion — Commit 5: robustez del orquestador', () => {
     expect(result.unresolvedZones.length).toBeGreaterThan(0);
     expect(result.ambiguousFrequencyActivities.length).toBeGreaterThan(0);
     expect(result.ambiguousFrequencyActivities[0].activityKey).toBe('9.91');
-    expect(result.validationErrors.some((e) => e.code === 'activity_key_inexistente')).toBe(true);
   });
 
   it('un error de infraestructura sin forma de PostgrestError (Error genérico, ej. timeout de red) se traduce igual a persistence_failed, sin crashear', async () => {
     const service = createImportPoaService({
       resolveValidationContext: async () => ({
         zoneMappings: new Map([['Zona Test', 'group-0']]),
-        knownActivityKeys: new Set(['1.01']),
       }),
       persistImportPoaVersion: async () => {
         throw new Error('network timeout');
@@ -472,7 +444,6 @@ describe('importPoaVersion — Commit 5: robustez del orquestador', () => {
           ['Zona 1', 'b2c3d4e5-0000-0000-0000-000000000010'],
           ['Zona 2', 'b2c3d4e5-0000-0000-0000-000000000011'],
         ]),
-        knownActivityKeys: new Set(['1.01', '1.02']),
       }),
       persistImportPoaVersion: async (_poaId, activities) => {
         receivedPayload = activities;
@@ -486,6 +457,8 @@ describe('importPoaVersion — Commit 5: robustez del orquestador', () => {
     expect(receivedPayload).toEqual([
       {
         activity_key: '1.01',
+        description: 'Actividad uno',
+        unit: 'M2',
         precio_unitario: 1412.8795648795647,
         frecuencia: 1,
         zonas: [
@@ -495,6 +468,8 @@ describe('importPoaVersion — Commit 5: robustez del orquestador', () => {
       },
       {
         activity_key: '1.02',
+        description: 'Actividad dos',
+        unit: 'M2',
         precio_unitario: 890.15,
         frecuencia: 2,
         zonas: [{ group_id: 'b2c3d4e5-0000-0000-0000-000000000010', cantidad_contratada: 500 }],

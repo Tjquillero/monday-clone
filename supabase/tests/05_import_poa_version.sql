@@ -238,12 +238,12 @@ BEGIN
   v_version_id := public.import_poa_version(
     '55555555-0000-0000-0000-0000000000ff',
     $json$[
-      {"activity_key":"1.01","precio_unitario":100.50,"frecuencia":1,
+      {"activity_key":"1.01","description":"Actividad Test 1.01","unit":"M2","precio_unitario":100.50,"frecuencia":1,
        "zonas":[
          {"group_id":"88888888-0000-0000-0000-000000000002","cantidad_contratada":20},
          {"group_id":"88888888-0000-0000-0000-000000000001","cantidad_contratada":10}
        ]},
-      {"activity_key":"1.02","precio_unitario":200.75,"frecuencia":2,
+      {"activity_key":"1.02","description":"Actividad Test 1.02","unit":"M2","precio_unitario":200.75,"frecuencia":2,
        "zonas":[{"group_id":"88888888-0000-0000-0000-000000000001","cantidad_contratada":5}]}
     ]$json$::JSONB,
     '55555555-0000-0000-0000-000000003001'
@@ -324,7 +324,7 @@ DO $$
 BEGIN
   PERFORM public.import_poa_version(
     '55555555-0000-0000-0000-0000000000ff',
-    $json$[{"activity_key":"2.01","precio_unitario":50,"frecuencia":1,
+    $json$[{"activity_key":"2.01","description":"Actividad Test 2.01","unit":"M2","precio_unitario":50,"frecuencia":1,
             "zonas":[{"group_id":"88888888-0000-0000-0000-000000000001","cantidad_contratada":1}]}]$json$::JSONB,
     '55555555-0000-0000-0000-000000003002'
   );
@@ -348,12 +348,12 @@ SELECT results_eq(
 SELECT is(
   (SELECT public.import_poa_version(
      '55555555-0000-0000-0000-0000000000ff',
-     $json$[{"activity_key":"1.01","precio_unitario":100.50,"frecuencia":1,
+     $json$[{"activity_key":"1.01","description":"Actividad Test 1.01","unit":"M2","precio_unitario":100.50,"frecuencia":1,
              "zonas":[
                {"group_id":"88888888-0000-0000-0000-000000000002","cantidad_contratada":20},
                {"group_id":"88888888-0000-0000-0000-000000000001","cantidad_contratada":10}
              ]},
-            {"activity_key":"1.02","precio_unitario":200.75,"frecuencia":2,
+            {"activity_key":"1.02","description":"Actividad Test 1.02","unit":"M2","precio_unitario":200.75,"frecuencia":2,
              "zonas":[{"group_id":"88888888-0000-0000-0000-000000000001","cantidad_contratada":5}]}]$json$::JSONB,
      '55555555-0000-0000-0000-000000003001'
    ))::TEXT,
@@ -377,7 +377,7 @@ SELECT is(
 SELECT throws_like(
   $$ SELECT public.import_poa_version(
        '55555555-0000-0000-0000-0000000000ee',
-       $j$[{"activity_key":"1.01","precio_unitario":100,"frecuencia":1,
+       $j$[{"activity_key":"1.01","description":"Actividad Test 1.01","unit":"M2","precio_unitario":100,"frecuencia":1,
             "zonas":[{"group_id":"99999999-0000-0000-0000-000000000001","cantidad_contratada":1}]}]$j$::JSONB,
        '55555555-0000-0000-0000-000000004001'
      ) $$,
@@ -408,7 +408,7 @@ SELECT is(
 SELECT throws_like(
   $$ SELECT public.import_poa_version(
        '55555555-0000-0000-0000-0000000000ee',
-       '[{"activity_key":"1.01","precio_unitario":100,"frecuencia":1,"zonas":[]}]'::JSONB,
+       '[{"activity_key":"1.01","description":"Actividad Test 1.01","unit":"M2","precio_unitario":100,"frecuencia":1,"zonas":[]}]'::JSONB,
        '55555555-0000-0000-0000-000000004002'
      ) $$,
   '%sin ninguna zona asociada%',
@@ -445,7 +445,7 @@ SELECT is(
 SELECT throws_like(
   $$ SELECT public.import_poa_version(
        '55555555-0000-0000-0000-0000000000dd',
-       $j$[{"activity_key":"1.01","precio_unitario":100,"frecuencia":1,
+       $j$[{"activity_key":"1.01","description":"Actividad Test 1.01","unit":"M2","precio_unitario":100,"frecuencia":1,
             "zonas":[{"group_id":"99999999-0000-0000-0000-000000000001","cantidad_contratada":1}]}]$j$::JSONB,
        '55555555-0000-0000-0000-000000004003'
      ) $$,
@@ -477,7 +477,7 @@ SELECT is(
 SELECT lives_ok(
   $$ SELECT public.import_poa_version(
        '55555555-0000-0000-0000-0000000000ff',
-       $j$[{"activity_key":"9.99","precio_unitario":100,"frecuencia":null,
+       $j$[{"activity_key":"9.99","description":"Actividad Test 9.99","unit":"M2","precio_unitario":100,"frecuencia":null,
             "zonas":[{"group_id":"88888888-0000-0000-0000-000000000001","cantidad_contratada":1}]}]$j$::JSONB,
        '55555555-0000-0000-0000-000000004004'
      ) $$,

@@ -16,6 +16,8 @@ export interface ImportPayloadZone {
 
 export interface ImportPayloadActivity {
   activity_key: string;
+  description: string;
+  unit: string;
   precio_unitario: number;
   /** null = actividad contratada sin programación periódica en esta versión (ADR-0005), no un dato faltante. */
   frecuencia: number | null;
@@ -25,6 +27,8 @@ export interface ImportPayloadActivity {
 export function buildImportPayload(activities: ValidatedActivity[]): ImportPayloadActivity[] {
   return activities.map((activity) => ({
     activity_key: activity.activityKey,
+    description: activity.descripcion,
+    unit: activity.unidad,
     precio_unitario: activity.precioUnitario,
     frecuencia: activity.frecuencia,
     zonas: activity.zonas.map((zone) => ({

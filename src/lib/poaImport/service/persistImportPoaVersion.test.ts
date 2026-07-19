@@ -10,6 +10,8 @@ import type { ImportPayloadActivity } from './buildImportPayload';
 const SAMPLE_ACTIVITIES: ImportPayloadActivity[] = [
   {
     activity_key: '1.01',
+    description: 'Actividad de prueba',
+    unit: 'M2',
     precio_unitario: 100,
     frecuencia: 1,
     zonas: [{ group_id: 'group-a', cantidad_contratada: 10 }],

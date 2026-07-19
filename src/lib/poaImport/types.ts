@@ -68,7 +68,6 @@ export interface ParseResult {
 export type ImportValidationErrorCode =
   | 'zona_sin_mapeo'
   | 'codigo_actividad_duplicado'
-  | 'activity_key_inexistente'
   | 'campo_requerido_vacio'
   | 'frecuencia_pendiente_regla_negocio';
 
@@ -102,6 +101,8 @@ export interface ImportValidationError {
  */
 export interface ValidatedActivity {
   activityKey: string;
+  descripcion: string;
+  unidad: string;
   precioUnitario: number;
   frecuencia: number | null;
   zonas: { groupId: string; cantidadContratada: number }[];

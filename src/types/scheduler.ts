@@ -320,6 +320,24 @@ export interface BoardOperationalAgendaWeek {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// MissingActivityStandard — get_missing_board_activity_standards(board_id, poa_version_id)
+// Ref: supabase/migrations/20260825_get_missing_board_activity_standards.sql,
+//      docs/architecture/poa-technical-catalog-decoupling.md
+//
+// Separación de fases: actividades contratadas (poa_activities, fase
+// contractual) que todavía no tienen catálogo técnico vigente
+// (board_activity_standards, fase técnica) en este board. description/unit
+// vienen de poa_activities — nunca de board_activity_standards, que es
+// precisamente lo que falta.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface MissingActivityStandard {
+  activity_key: string;
+  description: string;
+  unit: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Errores de dominio
 // ─────────────────────────────────────────────────────────────────────────────
 

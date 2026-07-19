@@ -8,6 +8,7 @@ import {
   PerformanceObservation,
   ActivityStandardNotFound,
   SchedulerMigrationMissingError,
+  MissingActivityStandard,
 } from '@/types/scheduler';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -144,6 +145,41 @@ export function useScopeMappings() {
       return (data ?? []) as ScopeMapping[];
     },
     staleTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useMissingBoardActivityStandards
+//
+// Actividades contratadas de la versión activa del POA que todavía no
+// tienen catálogo técnico vigente — fuente única de verdad (Decisión 2,
+// docs/architecture/poa-technical-catalog-decoupling.md), consumida por el
+// Scheduler para bloquear la generación del Cronograma y por la pantalla de
+// resultado de importación. `enabled` se pasa explícito: no tiene sentido
+// consultar sin boardId ni poaVersionId (ej. board sin POA activo todavía).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function useMissingBoardActivityStandards(
+  boardId: string | undefined,
+  poaVersionId: string | null | undefined,
+) {
+  return useQuery({
+    queryKey: ['missing_board_activity_standards', boardId, poaVersionId],
+    queryFn: async (): Promise<MissingActivityStandard[]> => {
+      if (!boardId || !poaVersionId) return [];
+
+      const { data, error } = await supabase.rpc('get_missing_board_activity_standards', {
+        p_board_id: boardId,
+        p_poa_version_id: poaVersionId,
+      });
+
+      if (error?.code === '42883') throw new SchedulerMigrationMissingError('get_missing_board_activity_standards');
+      if (error) throw error;
+      return (data ?? []) as MissingActivityStandard[];
+    },
+    enabled: !!boardId && !!poaVersionId,
+    staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
 }

@@ -37,6 +37,7 @@ export default function PoaImportContainer({ poaId }: PoaImportContainerProps) {
   const [importOperationId, setImportOperationId] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [result, setResult] = useState<ImportPoaResult | null>(null);
+  const [boardId, setBoardId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   // Fuerza el remount del <input type="file"> al reiniciar, así el navegador
   // permite volver a seleccionar el mismo archivo (si no cambia el "value"
@@ -55,6 +56,7 @@ export default function PoaImportContainer({ poaId }: PoaImportContainerProps) {
         .eq('id', poaId)
         .single();
       if (poaError) throw poaError;
+      setBoardId(poaRow.board_id as string);
 
       const buffer = await file.arrayBuffer();
       const importResult = await importPoaVersion({
@@ -202,6 +204,7 @@ export default function PoaImportContainer({ poaId }: PoaImportContainerProps) {
       {result && (
         <ImportResultView
           poaId={poaId}
+          boardId={boardId}
           result={result}
           onRetry={result.status === 'persistence_failed' ? handleRetry : undefined}
           retrying={isImporting}

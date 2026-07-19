@@ -6,8 +6,8 @@ describe('buildExplainImportErrorsPrompt', () => {
     const errors: ImportValidationError[] = [
       { code: 'zona_sin_mapeo', message: 'La zona "Sector 4" no tiene group asignado.', zona: 'Sector 4' },
       {
-        code: 'activity_key_inexistente',
-        message: 'La actividad CM_099 no existe en el catálogo técnico.',
+        code: 'campo_requerido_vacio',
+        message: 'La actividad CM_099 no tiene un precio unitario válido.',
         activityKey: 'CM_099',
         excelRow: 45,
       },
@@ -19,7 +19,7 @@ describe('buildExplainImportErrorsPrompt', () => {
     expect(prompt).toContain('[zona_sin_mapeo]');
     expect(prompt).toContain('La zona "Sector 4" no tiene group asignado.');
     expect(prompt).toContain('zona: Sector 4');
-    expect(prompt).toContain('[activity_key_inexistente]');
+    expect(prompt).toContain('[campo_requerido_vacio]');
     expect(prompt).toContain('actividad: CM_099');
     expect(prompt).toContain('fila Excel: 45');
   });

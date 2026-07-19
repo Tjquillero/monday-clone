@@ -115,6 +115,40 @@ export function usePoaActiveCatalog(boardId: string | undefined) {
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// useActivePoaVersionId
+//
+// Solo el id de la poa_version activa del board — sin traer poa_activities
+// completo. Lo necesita get_missing_board_activity_standards() (Scheduler:
+// docs/architecture/poa-technical-catalog-decoupling.md), que compara contra
+// una versión específica, no contra "el board" en general.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function useActivePoaVersionId(boardId: string | undefined) {
+  return useQuery({
+    queryKey: ['poa_active_version_id', boardId],
+    queryFn: async (): Promise<string | null> => {
+      if (!boardId) return null;
+
+      const { data, error } = await supabase
+        .from('poa')
+        .select('id, poa_versions!inner(id)')
+        .eq('board_id', boardId)
+        .eq('poa_versions.status', 'active')
+        .maybeSingle();
+
+      if (error?.code === '42P01') throw new SchedulerMigrationMissingError('poa_versions');
+      if (error) throw error;
+
+      const row = data as { poa_versions: { id: string }[] } | null;
+      return row?.poa_versions?.[0]?.id ?? null;
+    },
+    enabled: !!boardId,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+}
+
 // Existencia pura (sin catálogo) — para distinguir en la UI "no hay POA
 // activo todavía" de "hay POA activo pero sin saldo elegible". A diferencia
 // de usePoaActiveCatalog, no colapsa ambos casos en un Map vacío.

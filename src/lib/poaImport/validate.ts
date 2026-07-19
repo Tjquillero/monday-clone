@@ -31,12 +31,18 @@
 // contratado de esta versión. Se reporta en `noContratadas` (informativo, no
 // bloqueante), no como error.
 //
-// Ampliación (2026-07-18): una actividad sin cantidad contratada TAMPOCO
-// necesita existir en `board_activity_standards` para esta importación —
-// ese catálogo alimenta el motor de jornales recurrentes, no tiene sentido
-// exigirlo para obra puntual (ej. siembra) que nunca se va a planificar
-// semanalmente mientras no esté contratada. `validateActivity()` chequea
-// `zonas.length === 0` ANTES que `knownActivityKeys` a propósito.
+// Separación de fases (2026-07-18, ver
+// docs/architecture/poa-technical-catalog-decoupling.md): este archivo NO
+// valida ni conoce `board_activity_standards`. La existencia del contrato
+// (fase contractual: Excel → POA → poa_activities) y la configuración
+// técnica que hace falta para programar jornales (fase técnica:
+// board_activity_standards → Scheduler → weekly_plans) son preguntas
+// distintas, con dueños y tiempos distintos — no comparten gate. Una
+// actividad contratada se importa igual tenga o no catálogo técnico
+// todavía; el Scheduler es quien bloquea la generación del Cronograma si
+// falta (`get_missing_board_activity_standards`), no el importador. Si en
+// el futuro alguien necesita "requerir catálogo técnico antes de importar",
+// esa no es una corrección de este archivo — es reabrir esta decisión.
 //
 // Las 14 actividades del POA 2026 con FREC. inconsistente entre zonas
 // (docs/discovery/poa-frequency-per-zone.md) quedaron RESUELTAS
@@ -83,8 +89,6 @@ import type {
 export interface ValidatePoaImportContext {
   /** excelZoneName -> group_id resuelto, o null/undefined si está pendiente (ADR-0004). */
   zoneMappings: Map<string, string | null | undefined>;
-  /** activity_key vigentes en board_activity_standards para este board. */
-  knownActivityKeys: Set<string>;
 }
 
 const FREC_EPSILON = 1e-6;
@@ -232,33 +236,10 @@ function validateActivity(
   // negocio: poa_activities representa lo CONTRATADO, no el catálogo
   // completo — ver docs/domain/poa-domain.md, "Catálogo Contractual" vs.
   // "Catálogo Técnico"). No es un error — se reporta como informativo y no
-  // se valida ni unidad, ni precio, ni frecuencia, ni catálogo técnico,
-  // porque no hay nada que persistir para ella en esta versión.
-  //
-  // Este chequeo corre ANTES que `knownActivityKeys` a propósito (2026-07-18):
-  // `board_activity_standards` alimenta el motor de jornales recurrentes
-  // (rendimiento por actividad para planificación semanal) — una actividad
-  // sin cantidad contratada esta versión no se va a programar, así que
-  // exigirle una entrada en ese catálogo antes de tiempo bloquearía la
-  // importación completa (ADR-0004, todo o nada) por rendimientos que hoy
-  // no hacen falta para nada. Ejemplo real: 56 de 107 actividades del POA
-  // 2026 son obra puntual de siembra/jardinería (categoría "4.xx"), nunca
-  // contratadas en esta versión — no tiene sentido pedir su rendimiento de
-  // planificación recurrente antes de que exista una versión que las
-  // contrate. El orden anterior (activity_key_inexistente primero) las
-  // bloqueaba igual que a una actividad contratada real, sin necesidad.
+  // se valida ni unidad, ni precio, ni frecuencia, porque no hay nada que
+  // persistir para ella en esta versión.
   if (act.zonas.length === 0) {
     return { validated: null, noContratada: { activityKey: act.activityKey, excelRow: act.excelRow } };
-  }
-
-  if (!context.knownActivityKeys.has(act.activityKey)) {
-    errors.push({
-      code: 'activity_key_inexistente',
-      message: `El código de actividad "${act.activityKey}" no existe en el catálogo técnico del board (board_activity_standards).`,
-      activityKey: act.activityKey,
-      excelRow: act.excelRow,
-    });
-    return { validated: null, noContratada: null };
   }
 
   let hasFieldError = false;
@@ -314,6 +295,8 @@ function validateActivity(
   return {
     validated: {
       activityKey: act.activityKey,
+      descripcion: act.descripcion,
+      unidad: act.unidad as string,
       precioUnitario: act.precioUnitario as number,
       frecuencia: frecResult.valor,
       zonas: zonasValidadas,

@@ -1,7 +1,7 @@
 'use client';
 
-import { AlertTriangle, MapPin, Database, Info } from 'lucide-react';
-import { SchedulerMigrationMissingError } from '@/types/scheduler';
+import { AlertTriangle, MapPin, Database, Info, ShieldAlert } from 'lucide-react';
+import { SchedulerMigrationMissingError, MissingActivityStandard } from '@/types/scheduler';
 
 // Estados bloqueantes — reemplazan la tabla cuando no hay datos que mostrar.
 // La advertencia de infactibilidad (plan existe pero supera capacidad) no
@@ -11,9 +11,10 @@ interface Props {
   error: Error | null;
   noGroupSelected: boolean;
   hasNoActivities: boolean;
+  missingStandards: MissingActivityStandard[];
 }
 
-export default function PlanningWarnings({ error, noGroupSelected, hasNoActivities }: Props) {
+export default function PlanningWarnings({ error, noGroupSelected, hasNoActivities, missingStandards }: Props) {
   if (noGroupSelected) {
     return (
       <Banner icon={<MapPin className="w-8 h-8 text-[#3B7EF8]" />} color="blue">
@@ -21,6 +22,29 @@ export default function PlanningWarnings({ error, noGroupSelected, hasNoActiviti
         <p className="text-slate-400 text-xs mt-1">
           Usa el selector de ubicación en la barra superior para elegir el sitio a planificar.
         </p>
+      </Banner>
+    );
+  }
+
+  // Separación de fases (docs/architecture/poa-technical-catalog-decoupling.md):
+  // el contrato puede estar importado con actividades sin rendimiento
+  // configurado todavía — el Cronograma bloquea aquí, explícitamente, en vez
+  // de generar un plan parcial que omita trabajo real en silencio.
+  if (missingStandards.length > 0) {
+    return (
+      <Banner icon={<ShieldAlert className="w-8 h-8 text-red-400" />} color="red">
+        <p className="font-black text-sm text-white">No es posible generar el cronograma</p>
+        <p className="text-slate-400 text-xs mt-1">
+          Faltan {missingStandards.length} actividad{missingStandards.length === 1 ? '' : 'es'} sin configuración
+          técnica. Configure primero su rendimiento en el catálogo técnico:
+        </p>
+        <ul className="mt-2 space-y-0.5">
+          {missingStandards.map((a) => (
+            <li key={a.activity_key} className="text-[11px] text-slate-300">
+              <span className="font-black text-red-400">{a.activity_key}</span> — {a.description} ({a.unit})
+            </li>
+          ))}
+        </ul>
       </Banner>
     );
   }

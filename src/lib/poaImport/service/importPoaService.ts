@@ -33,7 +33,6 @@ export interface ImportPoaServiceDeps {
   resolveValidationContext(
     parseResult: ParseResult,
     poaId: string,
-    boardId: string,
   ): Promise<ValidatePoaImportContext>;
   persistImportPoaVersion(
     poaId: string,
@@ -59,7 +58,7 @@ export function createImportPoaService(deps: ImportPoaServiceDeps): ImportPoaSer
       }
 
       const parseResult = parsePoaExcel(input.file);
-      const context = await deps.resolveValidationContext(parseResult, input.poaId, input.boardId);
+      const context = await deps.resolveValidationContext(parseResult, input.poaId);
       const validationResult = validateParsedPoa(parseResult, context);
 
       const blocked = buildBlockedResult(parseResult, validationResult);

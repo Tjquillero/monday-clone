@@ -1,7 +1,7 @@
 'use client';
 
 import { AlertTriangle, Save, CheckCircle } from 'lucide-react';
-import { WeeklyPlanningContext, WeeklyPlan, PlanStatus } from '@/types/scheduler';
+import { WeeklyPlanningContext, WeeklyPlan, PlanStatus, MissingActivityStandard } from '@/types/scheduler';
 import WeekSelector from './WeekSelector';
 import PlanningTable from './PlanningTable';
 import CapacitySummary from './CapacitySummary';
@@ -28,6 +28,7 @@ const STATUS_STYLE: Record<PlanStatus, string> = {
 
 interface Props {
   plan: WeeklyPlanningContext | null;
+  missingStandards: MissingActivityStandard[];
   isLoading: boolean;
   isError: boolean;
   error: Error | null;
@@ -53,16 +54,17 @@ interface Props {
 }
 
 export default function WeeklyPlannerView({
-  plan, isLoading, isError, error,
+  plan, missingStandards, isLoading, isError, error,
   group, weekStart,
   savedPlan, onSave, isSaving, onPublish, isPublishing, saveError,
   onConfirm, isConfirming, confirmError, onClose, isClosing, closeError, onGoToCosts,
   onPrevWeek, onNextWeek,
 }: Props) {
-  const noGroupSelected  = !group;
-  const hasNoActivities  = !!plan && plan.activities.length === 0;
-  const showTable        = !!plan && plan.activities.length > 0;
-  const isBlockingState  = noGroupSelected || isError || hasNoActivities;
+  const noGroupSelected     = !group;
+  const hasMissingStandards = missingStandards.length > 0;
+  const hasNoActivities     = !!plan && plan.activities.length === 0;
+  const showTable           = !!plan && plan.activities.length > 0;
+  const isBlockingState     = noGroupSelected || isError || hasMissingStandards || hasNoActivities;
 
   const canSave    = showTable && (!savedPlan || savedPlan.status === 'draft');
   const canPublish = !!savedPlan && savedPlan.status === 'draft';
@@ -176,6 +178,7 @@ export default function WeeklyPlannerView({
               error={isError ? error : null}
               noGroupSelected={noGroupSelected}
               hasNoActivities={hasNoActivities}
+              missingStandards={missingStandards}
             />
           )}
 

@@ -30,6 +30,14 @@ jest.mock('@/hooks/usePoaZoneMappings', () => ({
   registerUnresolvedZones: jest.fn(() => Promise.resolve()),
 }));
 
+// TechnicalConfigSummary (dentro de ImportResultView) usa este hook — se
+// mockea aquí en vez de envolver el render en QueryClientProvider, mismo
+// patrón que el resto de este archivo (mockear en la frontera del hook,
+// no reimplementar React Query en el test).
+jest.mock('@/hooks/useActivityStandards', () => ({
+  useMissingBoardActivityStandards: () => ({ data: [], isLoading: false }),
+}));
+
 const importPoaVersionMock = jest.fn<Promise<ImportPoaResult>, [unknown]>();
 jest.mock('@/lib/poaImport/service/importPoaService', () => ({
   importPoaVersion: (input: unknown) => importPoaVersionMock(input),

@@ -58,8 +58,7 @@ function realParseResult(): ParseResult {
 describe('validateParsedPoa — archivo real completo', () => {
   it('valida sin errores (las 14 actividades antes ambiguas ya no bloquean)', () => {
     const parseResult = realParseResult();
-    const knownActivityKeys = new Set(parseResult.actividades.map((a) => a.activityKey));
-    const context: ValidatePoaImportContext = { zoneMappings: fullyMappedZones(), knownActivityKeys };
+    const context: ValidatePoaImportContext = { zoneMappings: fullyMappedZones() };
 
     const result = validateParsedPoa(parseResult, context);
 
@@ -73,8 +72,7 @@ describe('validateParsedPoa — archivo real completo', () => {
 
   it('aplica la regla de frecuencia definitiva a cada una de las 14 actividades, ignorando lo que traiga el Excel', () => {
     const parseResult = realParseResult();
-    const knownActivityKeys = new Set(parseResult.actividades.map((a) => a.activityKey));
-    const context: ValidatePoaImportContext = { zoneMappings: fullyMappedZones(), knownActivityKeys };
+    const context: ValidatePoaImportContext = { zoneMappings: fullyMappedZones() };
 
     const result = validateParsedPoa(parseResult, context);
 
@@ -91,16 +89,29 @@ describe('validateParsedPoa — archivo real completo', () => {
     }
   });
 
-  it('no reporta ningún error de zona sin mapeo ni de catálogo cuando el contexto está completo', () => {
+  it('no reporta ningún error de zona sin mapeo ni de código duplicado cuando el contexto está completo', () => {
     const parseResult = realParseResult();
-    const knownActivityKeys = new Set(parseResult.actividades.map((a) => a.activityKey));
-    const context: ValidatePoaImportContext = { zoneMappings: fullyMappedZones(), knownActivityKeys };
+    const context: ValidatePoaImportContext = { zoneMappings: fullyMappedZones() };
 
     const result = validateParsedPoa(parseResult, context);
 
     expect(result.errors.some((e) => e.code === 'zona_sin_mapeo')).toBe(false);
-    expect(result.errors.some((e) => e.code === 'activity_key_inexistente')).toBe(false);
     expect(result.errors.some((e) => e.code === 'codigo_actividad_duplicado')).toBe(false);
+  });
+
+  it('cada actividad validada trae descripcion y unidad reales del Excel, no solo el código', () => {
+    // Separación de fases (docs/architecture/poa-technical-catalog-decoupling.md,
+    // Decisión 1): poa_activities debe ser autocontenido — el import ya no
+    // depende de board_activity_standards para conocer el nombre de una
+    // actividad, y por eso el propio Excel debe seguir aportando esa
+    // metadata hasta el final del pipeline de validación.
+    const parseResult = realParseResult();
+    const result = validateParsedPoa(parseResult, { zoneMappings: fullyMappedZones() });
+
+    const act101 = result.activities.find((a) => a.activityKey === '1.01');
+    expect(act101).toBeDefined();
+    expect(act101?.descripcion.length).toBeGreaterThan(0);
+    expect(act101?.unidad.length).toBeGreaterThan(0);
   });
 });
 
@@ -125,8 +136,7 @@ describe('validateParsedPoa — subconjunto sin las 14 actividades ya resueltas 
       ...full,
       actividades: full.actividades.filter((a) => !excluded.has(a.activityKey)),
     };
-    const knownActivityKeys = new Set(cleanParseResult.actividades.map((a) => a.activityKey));
-    const context: ValidatePoaImportContext = { zoneMappings: fullyMappedZones(), knownActivityKeys };
+    const context: ValidatePoaImportContext = { zoneMappings: fullyMappedZones() };
 
     const result = validateParsedPoa(cleanParseResult, context);
 
@@ -159,8 +169,7 @@ describe('validateParsedPoa — 3.14: FREC. vacío en el 100% de sus zonas contr
       ...full,
       actividades: full.actividades.filter((a) => !excluded.has(a.activityKey)),
     };
-    const knownActivityKeys = new Set(partial.actividades.map((a) => a.activityKey));
-    const result = validateParsedPoa(partial, { zoneMappings: fullyMappedZones(), knownActivityKeys });
+    const result = validateParsedPoa(partial, { zoneMappings: fullyMappedZones() });
 
     expect(result.errors.some((e) => e.activityKey === '3.14')).toBe(false);
     expect(result.valid).toBe(true);
@@ -178,8 +187,7 @@ describe('validateParsedPoa — TC-02: zona sin mapeo', () => {
     const zoneMappings = fullyMappedZones();
     zoneMappings.delete('MERCADO LA SAZÓN'); // simula zona nunca vista / sin resolver
 
-    const knownActivityKeys = new Set(full.actividades.map((a) => a.activityKey));
-    const result = validateParsedPoa(full, { zoneMappings, knownActivityKeys });
+    const result = validateParsedPoa(full, { zoneMappings });
 
     expect(result.valid).toBe(false);
     expect(result.activities).toHaveLength(0);
@@ -193,25 +201,30 @@ describe('validateParsedPoa — TC-02: zona sin mapeo', () => {
     const zoneMappings = fullyMappedZones();
     zoneMappings.set('MERCADO LA SAZÓN', null);
 
-    const knownActivityKeys = new Set(full.actividades.map((a) => a.activityKey));
-    const result = validateParsedPoa(full, { zoneMappings, knownActivityKeys });
+    const result = validateParsedPoa(full, { zoneMappings });
 
     expect(result.errors.some((e) => e.code === 'zona_sin_mapeo' && e.zona === 'MERCADO LA SAZÓN')).toBe(true);
   });
 });
 
-describe('validateParsedPoa — TC-03: activity_key inexistente', () => {
-  it('reporta el código exacto que falta en el catálogo y no lo incluye en las actividades validadas', () => {
+describe('validateParsedPoa — separación de fases: catálogo técnico ya no es precondición del import', () => {
+  it('una actividad contratada se valida e importa igual sin ninguna fila en board_activity_standards (2026-07-18)', () => {
+    // Congela la frontera del rediseño (docs/architecture/
+    // poa-technical-catalog-decoupling.md): el importador de POA no conoce
+    // board_activity_standards en absoluto — ni para actividades
+    // contratadas ni para las que no lo son. Si en el futuro alguien
+    // reintroduce aquí un chequeo contra el catálogo técnico pensando que
+    // "corrige un bug", este test debe fallar para evitarlo.
     const full = realParseResult();
-    const knownActivityKeys = new Set(full.actividades.map((a) => a.activityKey));
-    knownActivityKeys.delete('1.01'); // simula que el catálogo técnico no reconoce este código
+    const result = validateParsedPoa(full, { zoneMappings: fullyMappedZones() });
 
-    const result = validateParsedPoa(full, { zoneMappings: fullyMappedZones(), knownActivityKeys });
-
-    const catalogErrors = result.errors.filter((e) => e.code === 'activity_key_inexistente');
-    expect(catalogErrors).toHaveLength(1);
-    expect(catalogErrors[0].activityKey).toBe('1.01');
-    expect(result.valid).toBe(false);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+    // 1.01 es una de las 31 actividades reales sin rendimiento configurado
+    // hoy en board_activity_standards (ver poa-rendimiento-decision-request.md)
+    // — y aun así se importa como cualquier otra.
+    const act = result.activities.find((a) => a.activityKey === '1.01');
+    expect(act).toBeDefined();
   });
 });
 
@@ -222,8 +235,7 @@ describe('validateParsedPoa — TC-07: campo obligatorio vacío (unidad)', () =>
     const act = parseResult.actividades.find((a) => a.activityKey === '1.01');
     expect(act?.unidad).toBeNull();
 
-    const knownActivityKeys = new Set(parseResult.actividades.map((a) => a.activityKey));
-    const result = validateParsedPoa(parseResult, { zoneMappings: fullyMappedZones(), knownActivityKeys });
+    const result = validateParsedPoa(parseResult, { zoneMappings: fullyMappedZones() });
 
     const fieldErrors = result.errors.filter(
       (e) => e.code === 'campo_requerido_vacio' && e.activityKey === '1.01' && e.message.includes('unidad'),
@@ -245,8 +257,7 @@ describe('validateParsedPoa — TC-09: nombre de zona con variación de formato'
     zoneMappings.set('Plaza de Pto Colombia ', 'group-0'); // variante, no el nombre exacto
 
     const full = realParseResult();
-    const knownActivityKeys = new Set(full.actividades.map((a) => a.activityKey));
-    const result = validateParsedPoa(full, { zoneMappings, knownActivityKeys });
+    const result = validateParsedPoa(full, { zoneMappings });
 
     const zoneErrors = result.errors.filter((e) => e.code === 'zona_sin_mapeo');
     expect(zoneErrors.some((e) => e.zona === 'PLAZA DE PTO COLOMBIA')).toBe(true);
@@ -260,8 +271,7 @@ describe('validateParsedPoa — código de actividad duplicado dentro del archiv
       ...full,
       actividades: [...full.actividades, { ...full.actividades[0], excelRow: 9999 }],
     };
-    const knownActivityKeys = new Set(full.actividades.map((a) => a.activityKey));
-    const result = validateParsedPoa(duplicated, { zoneMappings: fullyMappedZones(), knownActivityKeys });
+    const result = validateParsedPoa(duplicated, { zoneMappings: fullyMappedZones() });
 
     const dupErrors = result.errors.filter((e) => e.code === 'codigo_actividad_duplicado');
     expect(dupErrors).toHaveLength(1);
@@ -305,8 +315,7 @@ describe('validateParsedPoa — actividades sin ninguna zona con cantidad contra
       ...full,
       actividades: full.actividades.filter((a) => !excluded.has(a.activityKey)),
     };
-    const knownActivityKeys = new Set(partial.actividades.map((a) => a.activityKey));
-    const result = validateParsedPoa(partial, { zoneMappings: fullyMappedZones(), knownActivityKeys });
+    const result = validateParsedPoa(partial, { zoneMappings: fullyMappedZones() });
 
     expect(result.valid).toBe(true);
     // 4.01 es representativa de las 57 actividades sin cobertura.
@@ -319,32 +328,6 @@ describe('validateParsedPoa — actividades sin ninguna zona con cantidad contra
     expect(result.noContratadas.some((n) => n.activityKey === '1.01')).toBe(false);
   });
 
-  it('una actividad sin cantidad contratada NO exige estar en board_activity_standards (2026-07-18)', () => {
-    // Congela la regla: zonas.length === 0 se chequea ANTES que
-    // knownActivityKeys en validateActivity(). Board_activity_standards
-    // alimenta el motor de jornales recurrentes — una actividad de obra
-    // puntual (ej. "4.01", siembra) sin cantidad contratada esta versión no
-    // debería bloquear la importación completa solo por no tener todavía un
-    // rendimiento de planificación que no hace falta para nada.
-    const full = realParseResult();
-    const excluded = new Set([...RESOLVED_CODES, '3.14']);
-    const partial: ParseResult = {
-      ...full,
-      actividades: full.actividades.filter((a) => !excluded.has(a.activityKey)),
-    };
-    // knownActivityKeys deliberadamente NO incluye "4.01" — simula un
-    // catálogo técnico que nunca cargó rendimiento para esta actividad.
-    const knownActivityKeys = new Set(
-      partial.actividades.map((a) => a.activityKey).filter((k) => k !== '4.01'),
-    );
-    const result = validateParsedPoa(partial, { zoneMappings: fullyMappedZones(), knownActivityKeys });
-
-    expect(result.valid).toBe(true);
-    expect(result.errors.some((e) => e.code === 'activity_key_inexistente' && e.activityKey === '4.01')).toBe(false);
-    expect(result.noContratadas.some((n) => n.activityKey === '4.01')).toBe(true);
-    expect(result.activities.some((a) => a.activityKey === '4.01')).toBe(false);
-  });
-
   it('las 57 actividades reales sin cobertura quedan en noContratadas incluso cuando el archivo completo es inválido (no depende de todo o nada)', () => {
     // noContratadas es informativo, no bloqueante — a diferencia de
     // `activities`, debe seguir poblado aunque el resto del archivo tenga
@@ -355,8 +338,7 @@ describe('validateParsedPoa — actividades sin ninguna zona con cantidad contra
     const full = realParseResult();
     const zoneMappings = fullyMappedZones();
     zoneMappings.delete('MERCADO LA SAZÓN');
-    const knownActivityKeys = new Set(full.actividades.map((a) => a.activityKey));
-    const result = validateParsedPoa(full, { zoneMappings, knownActivityKeys });
+    const result = validateParsedPoa(full, { zoneMappings });
 
     expect(result.valid).toBe(false);
     expect(result.noContratadas).toHaveLength(57);

@@ -5,6 +5,14 @@ import ImportResultView from './ImportResultView';
 import type { ImportPoaResult } from '@/lib/poaImport/service/types';
 import type { ImportValidationError } from '@/lib/poaImport/types';
 
+// ImportResultView importa (transitivamente, vía useMissingBoardActivityStandards)
+// el cliente real de Supabase, que falla en jsdom sin las env vars — estos
+// tests nunca ejercitan esa ruta (solo status: 'blocked'), así que se mockea
+// en la frontera del hook, mismo patrón que PoaImportContainer.test.tsx.
+jest.mock('@/hooks/useActivityStandards', () => ({
+  useMissingBoardActivityStandards: () => ({ data: [], isLoading: false }),
+}));
+
 describe('ImportResultView — explicar errores de validación con IA', () => {
   beforeEach(() => {
     (global as any).fetch = jest.fn();
@@ -32,8 +40,9 @@ describe('ImportResultView — explicar errores de validación con IA', () => {
     render(
       <ImportResultView
         poaId="poa-1"
+        boardId={null}
         result={blockedResult([
-          { code: 'activity_key_inexistente', message: 'La actividad CM_099 no existe.', activityKey: 'CM_099', excelRow: 45 },
+          { code: 'campo_requerido_vacio', message: 'La actividad CM_099 no existe.', activityKey: 'CM_099', excelRow: 45 },
         ])}
       />
     );
@@ -48,7 +57,7 @@ describe('ImportResultView — explicar errores de validación con IA', () => {
     // El fetch debe llevar los errores reales, no un resumen inventado.
     const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
     expect(body.errors).toEqual([
-      { code: 'activity_key_inexistente', message: 'La actividad CM_099 no existe.', activityKey: 'CM_099', excelRow: 45 },
+      { code: 'campo_requerido_vacio', message: 'La actividad CM_099 no existe.', activityKey: 'CM_099', excelRow: 45 },
     ]);
 
     // El botón desaparece una vez hay explicación (no se puede pedir dos veces a la vez).
@@ -64,6 +73,7 @@ describe('ImportResultView — explicar errores de validación con IA', () => {
     render(
       <ImportResultView
         poaId="poa-1"
+        boardId={null}
         result={blockedResult([{ code: 'campo_requerido_vacio', message: 'Falta un campo.' }])}
       />
     );
@@ -74,7 +84,7 @@ describe('ImportResultView — explicar errores de validación con IA', () => {
   });
 
   it('no muestra el botón cuando no hay errores de validación', () => {
-    render(<ImportResultView poaId="poa-1" result={blockedResult([])} />);
+    render(<ImportResultView poaId="poa-1" boardId={null} result={blockedResult([])} />);
     expect(screen.queryByRole('button', { name: /Explícame estos errores/i })).not.toBeInTheDocument();
   });
 });
