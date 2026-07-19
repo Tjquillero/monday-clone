@@ -94,9 +94,15 @@ function DashboardContent() {
   useEffect(() => {
     setLastUsedBoardId(window.localStorage.getItem('mantenix_last_board_id'));
   }, []);
-  const navigationDecision = !boardId && userBoards
-    ? resolveBoardNavigation(userBoards, lastUsedBoardId)
-    : null;
+  // useMemo es obligatorio aquí, no solo optimización: resolveBoardNavigation()
+  // devuelve un objeto nuevo en cada llamada. Sin memoizar, el useEffect de
+  // abajo (dependencia [navigationDecision]) lo ve "cambiado" en cada render
+  // y vuelve a ejecutar router.replace() sin parar — exactamente el bug real
+  // encontrado 2026-07-19 ("se demora al cargar la vista beta y no carga").
+  const navigationDecision = useMemo(
+    () => (!boardId && userBoards ? resolveBoardNavigation(userBoards, lastUsedBoardId) : null),
+    [boardId, userBoards, lastUsedBoardId],
+  );
 
   useEffect(() => {
     if (navigationDecision?.action !== 'redirect') return;
