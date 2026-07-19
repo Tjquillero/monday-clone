@@ -6,7 +6,7 @@ import { Database, AlertCircle, Table, MapPin, DollarSign } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useContractStandards, useScopeMappings } from '@/hooks/useActivityStandards';
 import { usePoaActiveCatalog } from '@/hooks/usePoaActivities';
-import { WORKING_DAYS_MONTH } from '@/lib/schedulerMath';
+import { calculateTheoreticalJournals, WORKING_DAYS_MONTH } from '@/lib/schedulerMath';
 import { SchedulerMigrationMissingError, ActivityStandardWithFrecuencia } from '@/types/scheduler';
 import { buildActivityMappings, ActivityRule } from '@/lib/schedulerAdapter';
 
@@ -277,9 +277,11 @@ export default function ResourceEfficiencyWidget({ boardId, groups, activityTemp
           if (qty > 0) {
               const rules = activityMappings[scopeKey];
               rules.forEach(rule => {
-                  const factor = rule.freq / WORKING_DAYS_MONTH;
-                  const denominator = rule.rend * factor;
-                  const theoretical = (denominator > 0) ? (qty / denominator) : 0;
+                  // ADR-0009: calculateTheoreticalJournals es la única fuente de la
+                  // fórmula — antes este cálculo la reimplementaba en línea con un
+                  // factor frecuencia/25 que inflaba el resultado hasta 25x para
+                  // actividades de baja frecuencia, sin justificación documentada.
+                  const theoretical = calculateTheoreticalJournals(qty, rule.rend, rule.freq);
                   
                   // Unique ID for this row context
                   const rowId = `${scopeKey}-${rule.name.replace(/\s/g, '')}`;
@@ -296,7 +298,6 @@ export default function ResourceEfficiencyWidget({ boardId, groups, activityTemp
                       unit: rule.unit,
                       rendimiento: rule.rend,
                       frecuencia: rule.freq,
-                      factor,
                       scopeName: SCOPE_ITEMS.find(s => s.id === scopeKey)?.name || scopeKey.toUpperCase(),
                       qty,
                       theoretical,
@@ -492,7 +493,6 @@ export default function ResourceEfficiencyWidget({ boardId, groups, activityTemp
                                                 <td className="p-3 border-r border-slate-50 text-center text-slate-400 font-bold">{idx + 1}</td>
                                                 <td className="p-3 border-r border-slate-50">
                                                     <div className="font-bold text-slate-800">{row.name}</div>
-                                                    <div className="text-[9px] text-slate-400 font-medium">Factor: {row.factor.toFixed(2)}</div>
                                                 </td>
                                                 <td className="p-3 border-r border-slate-50 text-center text-slate-500 font-medium italic">{row.unit}</td>
                                                 <td className="p-3 border-r border-slate-50 text-right font-mono text-slate-600 font-bold">{row.qty.toLocaleString()}</td>

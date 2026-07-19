@@ -154,7 +154,6 @@ export interface EfficiencyRow {
   unit: string;
   rendimiento: number;
   frecuencia: number;
-  factor: number;
   scopeName: string;
   qty: number;
   theoretical: number;

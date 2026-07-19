@@ -5,6 +5,8 @@
 **Estado:** CONGELADO — No modificar sin revisión de arquitectura  
 **Equivalente a:** `BOARD_ENGINE_V1.md` para el módulo de planificación operativa
 
+**Corrección (2026-07-19, ADR-0009 — Aceptado):** la fórmula original de `JR_teórico` (sección "Motor Matemático") escalaba el resultado por `frecuencia/workingDays`, inflando el total mensual hasta 25x para actividades de baja frecuencia, sin justificación documentada en ningún lugar de este documento ni de los ADR posteriores. Corregido a `JR_mes = qty / rendimiento` — la frecuencia ya no escala el total mensual, solo determina si la actividad participa del cálculo (`frecuencia=null` o `<=0` → no genera jornales). Ver ADR-0009 para la evidencia completa.
+
 ---
 
 ## Propósito
@@ -47,7 +49,7 @@ Almacena qué actividades existen en un contrato, cómo se ejecutan y cuál es s
 | `category` | TEXT | `ZONA VERDE` \| `ZONA DURA` \| `ZONA DE PLAYA` |
 | `unit` | TEXT | `m2/dia`, `und/dia` |
 | `rendimiento` | NUMERIC | Unidades por jornal. Ej: `160` und/jornal |
-| `frecuencia` | NUMERIC | Veces en 25 días hábiles/mes. Ej: `12.5`, `25`, `2.083` |
+| `frecuencia` | NUMERIC | Cuántas veces ocurre la actividad al mes. Desde ADR-0009 (2026-07-19) ya NO escala `JR_teórico` — solo determina si la actividad participa (`null`/`<=0` → excluida). Ej: `12.5`, `25`, `2.083`, `1` |
 | `priority` | TEXT | `must_execute` \| `preferred` \| `flexible` |
 | `version` | INT | Secuencia de cambios de este estándar en este board/grupo. Empieza en 1. |
 | `effective_from` | DATE | Inicio de vigencia |
@@ -259,9 +261,10 @@ FOR EACH ROW EXECUTE FUNCTION fn_close_previous_activity_standard();
 **Regla absoluta:** Esta es la única fuente de la fórmula. `ResourceEfficiencyWidget`, el scheduler y el prompt builder de Gemini importan desde aquí. Sin React, sin Supabase, sin state. Solo números → números.
 
 ```
-JR_teórico = qty / (rendimiento × frecuencia / workingDays)
-           = qty × workingDays / (rendimiento × frecuencia)
+JR_teórico = qty / rendimiento
 ```
+
+(Corregido por ADR-0009, 2026-07-19 — la versión anterior multiplicaba por `workingDays/frecuencia`, sin justificación documentada. `qty` es la cantidad contractual MENSUAL, `rendimiento` es "unidades por jornal" tal como lo captura el Catálogo Técnico; el total de un mes no depende de en cuántas visitas se reparta. `frecuencia` sigue siendo un argumento de la función — `null`/`<=0` excluye la actividad del cálculo — pero ya no escala la magnitud del resultado.)
 
 Funciones implementadas y con 54 tests verdes:
 - `calculateTheoreticalJournals(qty, rendimiento, frecuencia, workingDays?)`
