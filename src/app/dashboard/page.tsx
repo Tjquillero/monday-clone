@@ -16,10 +16,13 @@ import { useState, useMemo, useEffect, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useBoard, useBoardColumns, useBoardGroups } from '@/hooks/useBoardData';
 import { useBoardMutations } from '@/hooks/useBoardMutations';
+import { useUserBoards } from '@/hooks/useUserBoards';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { resolveBoardNavigation } from '@/lib/resolveBoardNavigation';
+import BoardSelector from '@/components/BoardSelector';
 
 import BoardViewContainer from '@/components/views/BoardViewContainer';
 import ExecutionViewContainer from '@/components/views/ExecutionViewContainer';
@@ -77,6 +80,34 @@ function DashboardContent() {
   const { data: groups } = useBoardGroups(board?.id);
   const { data: columns } = useBoardColumns(board?.id);
   const { addItem, updateItem, deleteItem } = useBoardMutations(board?.id);
+
+  // Navegación inicial cuando no hay boardId en la URL (2026-07-19): antes
+  // useBoard() adivinaba "el board más recientemente creado en toda la
+  // base" — un usuario real, dueño de su propio board pero sin fila en
+  // board_members de NINGÚN board, terminó viendo un board de pruebas ajeno
+  // sin ningún indicio de qué había pasado (el único síntoma visible era
+  // "No tiene acceso a este board." en pantallas que sí verifican membresía).
+  // Ver docs/architecture — reemplazado por una decisión explícita basada
+  // en membresía real (resolveBoardNavigation), nunca en adivinar.
+  const { data: userBoards, isLoading: userBoardsLoading } = useUserBoards(!boardId ? user?.id : undefined);
+  const [lastUsedBoardId, setLastUsedBoardId] = useState<string | null>(null);
+  useEffect(() => {
+    setLastUsedBoardId(window.localStorage.getItem('mantenix_last_board_id'));
+  }, []);
+  const navigationDecision = !boardId && userBoards
+    ? resolveBoardNavigation(userBoards, lastUsedBoardId)
+    : null;
+
+  useEffect(() => {
+    if (navigationDecision?.action !== 'redirect') return;
+    const p = new URLSearchParams(searchParams ? searchParams.toString() : '');
+    p.set('boardId', navigationDecision.boardId);
+    router.replace(`/dashboard?${p.toString()}`);
+  }, [navigationDecision, searchParams, router]);
+
+  useEffect(() => {
+    if (board?.id) window.localStorage.setItem('mantenix_last_board_id', board.id);
+  }, [board?.id]);
 
   // 3. EFFECTS
   useEffect(() => {
@@ -152,6 +183,43 @@ function DashboardContent() {
       </div>
     </div>
   );
+
+  // Sin boardId en la URL: nunca se adivina un board. Se resuelve por
+  // membresía real (ver navigationDecision más arriba).
+  if (!boardId) {
+    if (userBoardsLoading || navigationDecision?.action === 'redirect') return (
+      <div className="flex h-screen items-center justify-center bg-[var(--bg-primary)]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-[#3B7EF8] border-t-transparent rounded-full animate-spin glow-blue" />
+          <p className="text-[#3B7EF8] font-bold uppercase tracking-widest text-xs animate-pulse">Iniciando Mantenix...</p>
+        </div>
+      </div>
+    );
+
+    if (navigationDecision?.action === 'empty') return (
+      <div className="flex h-screen items-center justify-center bg-[var(--bg-primary)] p-6 text-center">
+        <div className="max-w-md space-y-4">
+          <div className="w-20 h-20 bg-slate-500/10 rounded-full flex items-center justify-center mx-auto text-slate-400 border border-slate-500/30">
+            <AlertTriangle className="w-10 h-10" />
+          </div>
+          <h2 className="text-xl font-black text-white uppercase tracking-widest italic">No perteneces a ningún tablero</h2>
+          <p className="text-slate-500 text-sm">Pide al administrador que te agregue como miembro de un tablero para poder continuar.</p>
+        </div>
+      </div>
+    );
+
+    if (navigationDecision?.action === 'select') return (
+      <BoardSelector
+        boards={navigationDecision.boards}
+        onSelect={(id) => {
+          window.localStorage.setItem('mantenix_last_board_id', id);
+          const p = new URLSearchParams(searchParams ? searchParams.toString() : '');
+          p.set('boardId', id);
+          router.push(`/dashboard?${p.toString()}`);
+        }}
+      />
+    );
+  }
 
   return (
     <div className={`flex h-full flex-col transition-colors duration-500 font-sans overflow-hidden relative bg-transparent text-[var(--text-primary)]`}>

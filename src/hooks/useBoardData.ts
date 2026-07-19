@@ -32,17 +32,13 @@ export function useBoard(boardId?: string) {
     queryKey: ['board', boardId],
     queryFn: async () => {
       try {
-        let query = supabase.from('boards').select('*');
-        if (boardId) {
-          query = query.eq('id', boardId);
-        } else {
-          query = query.order('created_at', { ascending: false }).limit(1);
-        }
-        
-        const { data, error } = await query;
-        
+        const { data, error } = await supabase
+          .from('boards')
+          .select('*')
+          .eq('id', boardId as string);
+
         if (error) throw error;
-        
+
         const board = data && data.length > 0 ? (data[0] as Board) : null;
         if (board && offlineDB) {
           await offlineDB.upsertRecords('boards', [board]);
@@ -58,9 +54,7 @@ export function useBoard(boardId?: string) {
         if (isNetworkError(error) && offlineDB) {
           console.log('[Offline] Board query failed due to network. Falling back to IndexedDB.');
           const localBoards = await offlineDB.getTable('boards');
-          const found = boardId 
-            ? localBoards.find((b: any) => String(b.id) === String(boardId))
-            : [...localBoards].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+          const found = localBoards.find((b: any) => String(b.id) === String(boardId));
           return found || null;
         }
 
@@ -68,7 +62,13 @@ export function useBoard(boardId?: string) {
         throw error;
       }
     },
-    retry: 2, 
+    // Sin boardId no hay ninguna entidad que adivinar (feedback_hook_no_implicit_fallback):
+    // antes caía en "el board más recientemente creado en TODA la base" — un usuario real
+    // sin boardId en la URL podía terminar viendo el board de otra persona, con el único
+    // síntoma visible siendo "No tiene acceso a este board." La resolución de qué board
+    // mostrar cuando falta el parámetro vive en dashboard/page.tsx (useUserBoards), no aquí.
+    enabled: !!boardId,
+    retry: 2,
     staleTime: 30 * 60 * 1000,
   });
 }
