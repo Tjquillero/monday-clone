@@ -158,6 +158,7 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
 
   return (
     <WeeklyPlannerView
+      boardId={boardId}
       plan={plan}
       missingStandards={missingStandards}
       isLoading={isLoading}

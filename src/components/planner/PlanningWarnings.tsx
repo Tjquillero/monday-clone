@@ -1,6 +1,7 @@
 'use client';
 
-import { AlertTriangle, MapPin, Database, Info, ShieldAlert } from 'lucide-react';
+import Link from 'next/link';
+import { AlertTriangle, MapPin, Database, Info, ShieldAlert, Wrench } from 'lucide-react';
 import { SchedulerMigrationMissingError, MissingActivityStandard } from '@/types/scheduler';
 
 // Estados bloqueantes — reemplazan la tabla cuando no hay datos que mostrar.
@@ -8,13 +9,14 @@ import { SchedulerMigrationMissingError, MissingActivityStandard } from '@/types
 // es bloqueante y se maneja en WeeklyPlannerView directamente sobre la tabla.
 
 interface Props {
+  boardId: string | undefined;
   error: Error | null;
   noGroupSelected: boolean;
   hasNoActivities: boolean;
   missingStandards: MissingActivityStandard[];
 }
 
-export default function PlanningWarnings({ error, noGroupSelected, hasNoActivities, missingStandards }: Props) {
+export default function PlanningWarnings({ boardId, error, noGroupSelected, hasNoActivities, missingStandards }: Props) {
   if (noGroupSelected) {
     return (
       <Banner icon={<MapPin className="w-8 h-8 text-[#3B7EF8]" />} color="blue">
@@ -45,6 +47,14 @@ export default function PlanningWarnings({ error, noGroupSelected, hasNoActiviti
             </li>
           ))}
         </ul>
+        {boardId && (
+          <Link
+            href={`/dashboard?boardId=${boardId}&view=catalogo-tecnico`}
+            className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/40 text-red-400 hover:bg-red-500/20 transition-colors"
+          >
+            <Wrench className="w-3 h-3" /> Configurar catálogo técnico
+          </Link>
+        )}
       </Banner>
     );
   }

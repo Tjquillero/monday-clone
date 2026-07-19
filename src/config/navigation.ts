@@ -50,7 +50,14 @@ import {
  *  pestaña: ExecutionView sigue viva en "Ejecución" hasta que la Agenda
  *  cubra semáforo + Hoy + Semana (criterio literal de ADR-0006, sin
  *  modificar). En la Fase 3 se promueve reemplazando el destino de
- *  'execution' — no antes, y no silenciosamente. */
+ *  'execution' — no antes, y no silenciosamente.
+ *
+ *  'catalogo-tecnico' — Catálogo Técnico (2026-07-18, ver
+ *  docs/architecture/poa-technical-catalog-decoupling.md). Responde "¿cómo
+ *  debe ejecutarse técnicamente una actividad?" — distinto del Cronograma
+ *  (que solo consume el catálogo ya configurado). Deep-link deliberado sin
+ *  pestaña: se llega desde el banner de bloqueo del Cronograma
+ *  (PlanningWarnings.tsx) o por URL directa. */
 export type BoardViewId =
   | 'board'
   | 'execution'
@@ -61,7 +68,8 @@ export type BoardViewId =
   | 'kanban'
   | 'reports'
   | 'notifications'
-  | 'agenda';
+  | 'agenda'
+  | 'catalogo-tecnico';
 
 export interface BoardTab {
   id: BoardViewId;
@@ -81,7 +89,7 @@ export const BOARD_TABS: readonly BoardTab[] = [
 /** Valores aceptados en el query param `?view=` del dashboard. */
 export const VALID_VIEW_PARAMS: readonly BoardViewId[] = [
   'board', 'execution', 'map', 'financial', 'planner',
-  'dashboards', 'kanban', 'reports', 'notifications', 'agenda',
+  'dashboards', 'kanban', 'reports', 'notifications', 'agenda', 'catalogo-tecnico',
 ] as const;
 
 export interface SidebarItem {

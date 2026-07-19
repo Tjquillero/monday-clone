@@ -27,6 +27,7 @@ const STATUS_STYLE: Record<PlanStatus, string> = {
 };
 
 interface Props {
+  boardId: string | undefined;
   plan: WeeklyPlanningContext | null;
   missingStandards: MissingActivityStandard[];
   isLoading: boolean;
@@ -54,7 +55,7 @@ interface Props {
 }
 
 export default function WeeklyPlannerView({
-  plan, missingStandards, isLoading, isError, error,
+  boardId, plan, missingStandards, isLoading, isError, error,
   group, weekStart,
   savedPlan, onSave, isSaving, onPublish, isPublishing, saveError,
   onConfirm, isConfirming, confirmError, onClose, isClosing, closeError, onGoToCosts,
@@ -175,6 +176,7 @@ export default function WeeklyPlannerView({
         <div className="flex-1 flex flex-col gap-4 min-h-0">
           {isBlockingState && (
             <PlanningWarnings
+              boardId={boardId}
               error={isError ? error : null}
               noGroupSelected={noGroupSelected}
               hasNoActivities={hasNoActivities}

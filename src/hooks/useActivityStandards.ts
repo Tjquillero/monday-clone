@@ -1,9 +1,11 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import {
   ActivityStandard,
+  ActivityCategory,
+  ActivityPriority,
   ScopeMapping,
   PerformanceObservation,
   ActivityStandardNotFound,
@@ -181,6 +183,55 @@ export function useMissingBoardActivityStandards(
     enabled: !!boardId && !!poaVersionId,
     staleTime: 60_000,
     refetchOnWindowFocus: false,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useUpsertActivityStandard
+//
+// Crea una nueva versión vigente de un estándar del Catálogo Técnico —
+// nunca UPDATE (RLS lo bloquea explícitamente): board_activity_standards es
+// insert-only, fn_insert_activity_standard() calcula la versión y cierra la
+// fila anterior en la misma transacción. Sirve tanto para poblar una
+// actividad pendiente (primera versión) como para corregir el rendimiento
+// de una ya confirmada (nueva versión) — mismo mecanismo en ambos casos.
+// group_id siempre NULL aquí: estándar de contrato, no excepción de sitio
+// (esa distinción queda fuera de alcance de esta pantalla).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface UpsertActivityStandardInput {
+  boardId: string;
+  activityKey: string;
+  name: string;
+  category: ActivityCategory;
+  unit: string;
+  rendimiento: number;
+  priority?: ActivityPriority;
+  source?: string;
+}
+
+export function useUpsertActivityStandard() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: UpsertActivityStandardInput) => {
+      const { error } = await supabase.from('board_activity_standards').insert({
+        board_id: input.boardId,
+        group_id: null,
+        activity_key: input.activityKey,
+        name: input.name,
+        category: input.category,
+        unit: input.unit,
+        rendimiento: input.rendimiento,
+        priority: input.priority ?? 'preferred',
+        source: input.source ?? 'catalogo_tecnico_ui',
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_data, input) => {
+      queryClient.invalidateQueries({ queryKey: ['activity_standards', input.boardId] });
+      queryClient.invalidateQueries({ queryKey: ['missing_board_activity_standards', input.boardId] });
+    },
   });
 }
 
