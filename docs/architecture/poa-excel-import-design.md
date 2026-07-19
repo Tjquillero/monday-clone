@@ -1,6 +1,6 @@
 # Diseño: Importador del Excel oficial del POA
 
-**Estado: Propuesto — diseño previo a implementación, no construido todavía.**
+**Estado: Implementado (Incremento 5).** Este documento describe el diseño original del importador, ya construido y en producción. Una parte de la Sección 4 quedó desactualizada tras la separación de fases Contrato/Configuración técnica (2026-07-18, ver [`poa-technical-catalog-decoupling.md`](./poa-technical-catalog-decoupling.md), que es la fuente de verdad vigente para esa relación) — señalado explícitamente donde corresponde, más abajo. El resto del documento sigue describiendo correctamente el comportamiento real del importador.
 
 Este documento responde a la pregunta "¿cómo se convierte el Excel oficial del POA en una nueva `poa_version`?", una vez que [ADR-0003](../adr/ADR-0003-billing-source.md) y [ADR-0004](../adr/ADR-0004-poa-zone-catalog.md) ya definieron el *qué* y el *por qué*. Toda la estructura de archivo descrita aquí fue **verificada contra el Excel real** (`POA 2026 V.02 Ene.26-2026.xlsx`, presente en la raíz del repo) — ninguna parte de este documento asume una tabla plana genérica.
 
@@ -45,7 +45,9 @@ La identidad de una actividad es su **código contractual de la columna B** (`1.
 - `precio_unitario` = "Vr. UNITARIO 2026" (o el año vigente — ver nota).
 - `frecuencia` = `FREC.` del bloque de zona (constante entre zonas, se toma de cualquiera).
 - `cantidad_contratada` (por zona) = `CANT.` del bloque de "presupuesto mes" de esa zona.
-- Categoría, descripción, unidad — para el Catálogo Técnico (`board_activity_standards`, ya reducido por ADR-0002), no para `poa_activities`. Esto es la representación técnica actual del POA_ACTIVITY conceptual (dividido en dos tablas por razones pragmáticas de ADR-0002) — no contradice la tabla de "Fuente de verdad por campo" de ADR-0003: esa tabla describe el origen conceptual ("lo gobierna el POA vigente, no la ejecución"), no en qué tabla física aterriza cada campo.
+- Categoría, descripción, unidad — **desactualizado, ver nota siguiente**.
+
+> **Nota (2026-07-18): esta fila se corrigió tras la separación de fases** (ver [`poa-technical-catalog-decoupling.md`](./poa-technical-catalog-decoupling.md)). La versión original de este documento preveía que categoría/descripción/unidad se poblaran automáticamente en el Catálogo Técnico (`board_activity_standards`) durante la importación — eso nunca se implementó, a propósito: `board_activity_standards` vive en la fase **técnica** (rendimiento, configurado por el operador del sitio, nunca inventado — ADR-0008), separada de la fase **contractual** que construye este importador. Lo que sí ocurre hoy: `descripción` y `unidad` se persisten en `poa_activities` (columnas `description`/`unit`, migración `20260823`), haciendo que el catálogo contractual sea autocontenido sin depender del Excel original ni del catálogo técnico para mostrar un nombre. **`categoría` (columna A) sigue sin persistirse en ningún lugar** — no se lee ni se descarta explícitamente, simplemente ninguna tabla la almacena hoy; queda como brecha real, no resuelta por este documento. `board_activity_standards` se completa por un proceso aparte, humano, cuando existe un rendimiento real que confirmar — nunca automáticamente desde el Excel.
 
 **NO se importa, deliberadamente** (Sección "Puntos pendientes" de ADR-0003: el Acta nunca copia una fuente externa, siempre se calcula desde ejecuciones `verified`):
 - Las 12 columnas mensuales de Acta 32-43 (`CANT.`/`V/TOTAL` por mes).
