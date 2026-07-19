@@ -34,6 +34,7 @@ import ReportsViewContainer from '@/components/views/ReportsViewContainer';
 import WeeklyPlannerContainer from '@/components/views/WeeklyPlannerContainer';
 import AgendaOperativaContainer from '@/components/views/AgendaOperativaContainer';
 import CatalogoTecnicoContainer from '@/components/views/CatalogoTecnicoContainer';
+import CostosOperativosContainer from '@/components/views/CostosOperativosContainer';
 
 import MantenixMap from '@/components/MantenixMap';
 import ItemModal from '@/components/modals/ItemModal';
@@ -349,6 +350,7 @@ function DashboardContent() {
             {currentView === 'planner' && <WeeklyPlannerContainer boardId={board?.id} selectedGroupId={selectedGroupId} groups={groups} />}
             {currentView === 'agenda' && <AgendaOperativaContainer boardId={board?.id} />}
             {currentView === 'catalogo-tecnico' && <CatalogoTecnicoContainer boardId={board?.id} />}
+            {currentView === 'costos-operativos' && <CostosOperativosContainer boardId={board?.id} selectedGroupId={selectedGroupId} groups={groups} />}
           </motion.div>
         </AnimatePresence>
       </main>

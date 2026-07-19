@@ -1,6 +1,7 @@
 'use client';
 
-import { AlertTriangle, Save, CheckCircle } from 'lucide-react';
+import Link from 'next/link';
+import { AlertTriangle, Save, CheckCircle, DollarSign } from 'lucide-react';
 import { WeeklyPlanningContext, WeeklyPlan, PlanStatus, MissingActivityStandard } from '@/types/scheduler';
 import WeekSelector from './WeekSelector';
 import PlanningTable from './PlanningTable';
@@ -101,7 +102,17 @@ export default function WeeklyPlannerView({
             </p>
           )}
         </div>
-        <WeekSelector {...selectorProps} onPrev={onPrevWeek} onNext={onNextWeek} />
+        <div className="flex items-center gap-3">
+          {boardId && group && (
+            <Link
+              href={`/dashboard?boardId=${boardId}&view=costos-operativos&groupId=${group.id}`}
+              className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg border border-[var(--border-color)] text-slate-400 hover:text-[#3B7EF8] hover:border-[#3B7EF8]/40 transition-colors"
+            >
+              <DollarSign className="w-3 h-3" /> Costos operativos
+            </Link>
+          )}
+          <WeekSelector {...selectorProps} onPrev={onPrevWeek} onNext={onNextWeek} />
+        </div>
       </div>
 
       {/* ── Barra de acciones ───────────────────────────────────── */}

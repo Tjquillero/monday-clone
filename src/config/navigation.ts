@@ -57,7 +57,15 @@ import {
  *  debe ejecutarse técnicamente una actividad?" — distinto del Cronograma
  *  (que solo consume el catálogo ya configurado). Deep-link deliberado sin
  *  pestaña: se llega desde el banner de bloqueo del Cronograma
- *  (PlanningWarnings.tsx) o por URL directa. */
+ *  (PlanningWarnings.tsx) o por URL directa.
+ *
+ *  'costos-operativos' — Dashboard de Costos Operativos (2026-07-19, ADR-0009).
+ *  Responde "¿cuántos jornales/dinero consume cada actividad?" a partir de lo
+ *  que ya calcula el Scheduler (useWeeklyPlan) — nunca reinterpreta cantidad,
+ *  rendimiento ni frecuencia. Deliberadamente NO se llama 'costos' ni
+ *  reutiliza la pestaña 'financial' (esa es el módulo de Actas/presupuesto,
+ *  un concepto de "costos" distinto y ya establecido). Deep-link sin pestaña,
+ *  se llega desde el Cronograma. */
 export type BoardViewId =
   | 'board'
   | 'execution'
@@ -69,7 +77,8 @@ export type BoardViewId =
   | 'reports'
   | 'notifications'
   | 'agenda'
-  | 'catalogo-tecnico';
+  | 'catalogo-tecnico'
+  | 'costos-operativos';
 
 export interface BoardTab {
   id: BoardViewId;
@@ -90,6 +99,7 @@ export const BOARD_TABS: readonly BoardTab[] = [
 export const VALID_VIEW_PARAMS: readonly BoardViewId[] = [
   'board', 'execution', 'map', 'financial', 'planner',
   'dashboards', 'kanban', 'reports', 'notifications', 'agenda', 'catalogo-tecnico',
+  'costos-operativos',
 ] as const;
 
 export interface SidebarItem {
