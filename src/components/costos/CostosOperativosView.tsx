@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react';
 import { AlertTriangle, ArrowUp, ArrowDown, DollarSign } from 'lucide-react';
 import { WeeklyPlanningContext } from '@/types/scheduler';
-import { WORKING_DAYS_MONTH } from '@/lib/schedulerMath';
 import { BoardSitePlan } from '@/lib/weeklyPlanner';
 import ExecutiveIndicators from './ExecutiveIndicators';
 
@@ -159,17 +158,17 @@ interface PerSiteDetailProps {
 function PerSiteDetail({ group, plan, costoJornal, rows, topKeys, wageMissing, effectiveSortKey, sortKey, sortDir, setSortKey, setSortDir, sorted }: PerSiteDetailProps) {
   const totalJornales = rows.reduce((s, r) => s + r.activity.theoretical_journals_month, 0);
   const totalCosto = totalJornales * costoJornal;
-  const capacidadDisponible = (plan?.zone.daily_capacity ?? 0) * WORKING_DAYS_MONTH;
-  // TODO: deuda técnica — esta "Utilización" es MENSUAL (totalJornales / capacidad
-  // mensual), distinta de la que usan CapacitySummary.tsx (Cronograma) y el
-  // ranking ejecutivo de ExecutiveIndicators.tsx, que son SEMANALES
-  // (plan.capacity.weekly_required / weekly_available). Son dos convenciones
-  // preexistentes en la app, no introducidas por Fase 3 — verificado que dan
-  // números distintos para el mismo sitio (19% mensual vs. 23% semanal en
-  // Playa del Country). Unificar la definición oficial de "Utilización" en
-  // una tarea de dominio aparte, no mezclada con Costos Operativos.
-  const utilizacion = capacidadDisponible > 0 ? Math.round((totalJornales / capacidadDisponible) * 100) : 0;
-  const deficit = Math.max(0, totalJornales - capacidadDisponible);
+  // "Utilización"/"Capacidad disponible"/"Déficit" son SIEMPRE semanales en
+  // toda la app (decisión de dominio, unifica la deuda técnica dejada por
+  // Fase 3): se leen directo de plan.capacity, la misma salida del motor
+  // que ya usa CapacitySummary.tsx (Cronograma) y el ranking ejecutivo —
+  // sin recalcular nada aparte. "JR mensuales"/"Costo mensual" siguen siendo
+  // mensuales a propósito (responden una pregunta distinta: cuánto va a
+  // costar el mes, no si esta semana hay sobrecarga), mismo patrón que
+  // PlanningTable ya usa (columnas JR/Mes y JR/Sem juntas).
+  const capacidadDisponible = plan?.capacity.weekly_available ?? 0;
+  const utilizacion = capacidadDisponible > 0 ? Math.round(((plan?.capacity.weekly_required ?? 0) / capacidadDisponible) * 100) : 0;
+  const deficit = plan?.capacity.deficit ?? 0;
 
   const handleSort = (key: SortKey) => {
     if (key === sortKey) {

@@ -63,10 +63,12 @@ describe('CostosOperativosView', () => {
     expect(screen.getByText('18.1')).toBeInTheDocument();
   });
 
-  it('capacidad disponible = daily_capacity × 25 (WORKING_DAYS_MONTH), sin fórmula nueva', () => {
+  it('capacidad disponible/utilización/déficit se leen directo de plan.capacity (semanal), igual que CapacitySummary — sin recalcular nada aparte', () => {
     render(<CostosOperativosView {...baseProps()} />);
-    // zone.daily_capacity = 7 → 7 × 25 = 175 JR
-    expect(screen.getByText('175 JR')).toBeInTheDocument();
+    // plan.capacity.weekly_available = 35 (fixture), no daily_capacity × WORKING_DAYS_MONTH
+    expect(screen.getByText('35 JR')).toBeInTheDocument();
+    // 4.53 / 35 ≈ 13%
+    expect(screen.getByText('13%')).toBeInTheDocument();
   });
 
   it('sin grupo seleccionado, pide elegir un sitio', () => {
