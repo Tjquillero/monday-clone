@@ -139,3 +139,7 @@ RLS is enforced via `get_user_board_role(board_id, user_id)` — every table use
 - **Tests**: colocated as `*.test.ts(x)` next to source files
 - **Images**: must come from `azhkbijknwywpqtgknus.supabase.co` (configured in `next.config.mjs`)
 - Always verify RLS exists before adding a new table — use `get_user_board_role` pattern from existing migrations
+
+## Operational sources of truth
+
+Before concluding a business rule about the POA/contract domain (e.g. "does this site belong to the active contract?"), consult `docs/operacion/dataset.md` first (which document is the official current source) and the index in `docs/operacion/investigaciones/README.md` (prior diagnostics, referenceable by ID — e.g. "see INV-0001"). If the documentation can't answer it, say so explicitly — **never turn an absence of data into a business claim** (a SQL query returning 0 rows proves "the system didn't find this," not "this doesn't exist in the business" — see `docs/operacion/investigaciones/poa/INV-0001-salinas-del-rey.md`).
