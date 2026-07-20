@@ -37,7 +37,7 @@
 
 import {
   Table2, Activity, MapPin, DollarSign, Calendar,
-  Home, Briefcase, CheckSquare, Target, Layout, ShieldCheck,
+  Home, Briefcase, CheckSquare, Target, Layout, ShieldCheck, FileText,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -118,4 +118,11 @@ export const SIDEBAR_ITEMS: readonly SidebarItem[] = [
   // Insumos aún no tiene módulo propio; apunta al dashboard de forma
   // provisional hasta que exista su ruta.
   { icon: Layout, label: 'Insumos', path: '/dashboard' },
+  // Documentos (2026-07-20) — Biblioteca Documental de Mantenix Fase 1, ver
+  // docs/operacion/README.md. Módulo propio con ruta propia (no un ?view=
+  // dentro del dashboard) porque su alcance va a crecer (Contratos, Actas,
+  // Diseños, Planos...) — decisión explícita del usuario, actuando como
+  // propietario del producto, que modifica la navegación congelada de
+  // 2026-07-01 documentada arriba en este archivo.
+  { icon: FileText, label: 'Documentos', path: '/documentos' },
 ] as const;
