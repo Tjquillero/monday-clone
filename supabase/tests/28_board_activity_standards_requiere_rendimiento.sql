@@ -24,7 +24,7 @@ SELECT set_config(
 
 BEGIN;
 
-SELECT plan(6);
+SELECT plan(7);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Fixtures (prefijo ec0e0000...0028 / 5ca1ab1e...28NN)
@@ -73,17 +73,22 @@ SELECT lives_ok(
 -- Test 3-4: el CHECK cruzado rechaza combinaciones invalidas
 -- ─────────────────────────────────────────────────────────────────────────────
 
-SELECT throws_ok(
+-- throws_ok(sql, '23514', desc) con el codigo entre comillas resuelve al
+-- overload (text, text, text) -- compara MENSAJE literal, no SQLSTATE -- y
+-- nunca coincide (encontrado via CI real, no localmente: sin Docker aqui
+-- para correr pgTAP de verdad). throws_like() sobre el mensaje evita la
+-- ambiguedad de sobrecarga, mismo mecanismo ya usado en el resto de la suite.
+SELECT throws_like(
   $$ INSERT INTO public.board_activity_standards (board_id, activity_key, name, category, unit, rendimiento, requiere_rendimiento)
      VALUES ('ec0e0000-0000-0000-0000-000000000028', 'RR_INVALIDO_1', 'Sin rendimiento pero requerido', 'ZONA VERDE', 'M2', NULL, true) $$,
-  '23514',
+  '%chk_bas_rendimiento_por_requiere%',
   'Test 3: requiere_rendimiento=true con rendimiento NULL viola el CHECK ✓'
 );
 
-SELECT throws_ok(
+SELECT throws_like(
   $$ INSERT INTO public.board_activity_standards (board_id, activity_key, name, category, unit, rendimiento, requiere_rendimiento)
      VALUES ('ec0e0000-0000-0000-0000-000000000028', 'RR_INVALIDO_2', 'Con rendimiento pero no aplica', 'ZONA VERDE', 'M2', 500, false) $$,
-  '23514',
+  '%chk_bas_rendimiento_por_requiere%',
   'Test 4: requiere_rendimiento=false con rendimiento NOT NULL viola el CHECK ✓'
 );
 
