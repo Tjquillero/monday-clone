@@ -66,7 +66,7 @@ function ActivityRow({ activity: a, weeklyAvailable }: { activity: PlanningActiv
   return (
     <tr className="border-b border-[var(--border-color)] hover:bg-white/[0.02] transition-colors">
       <td className="px-4 py-3">
-        <p className="text-xs font-bold text-white leading-snug">{a.name}</p>
+        <p className="text-xs font-bold text-[var(--text-primary)] leading-snug">{a.name}</p>
         <span className={`inline-block mt-1 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${CATEGORY_STYLE[a.category]}`}>
           {a.category}
         </span>
@@ -78,12 +78,12 @@ function ActivityRow({ activity: a, weeklyAvailable }: { activity: PlanningActiv
         </span>
       </td>
 
-      <td className="px-4 py-3 text-xs text-slate-300">
-        <span className="font-black">{a.qty.toLocaleString('es-CO')}</span>{' '}
-        <span className="text-slate-600 text-[10px]">{a.unit}</span>
+      <td className="px-4 py-3 text-xs text-[var(--text-secondary)]">
+        <span className="font-black text-[var(--text-primary)]">{a.qty.toLocaleString('es-CO')}</span>{' '}
+        <span className="text-[10px]">{a.unit}</span>
       </td>
 
-      <td className="px-4 py-3 text-right text-xs font-black text-slate-300">
+      <td className="px-4 py-3 text-right text-xs font-black text-[var(--text-primary)]">
         {a.theoretical_journals_month.toFixed(2)}
       </td>
 
@@ -92,7 +92,7 @@ function ActivityRow({ activity: a, weeklyAvailable }: { activity: PlanningActiv
           <div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden">
             <div className="h-full bg-[#3B7EF8] rounded-full" style={{ width: `${pct}%` }} />
           </div>
-          <span className="text-xs font-black text-white w-10 text-right">
+          <span className="text-xs font-black text-[var(--text-primary)] w-10 text-right">
             {a.theoretical_journals_week.toFixed(2)}
           </span>
         </div>
