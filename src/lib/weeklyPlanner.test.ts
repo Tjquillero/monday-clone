@@ -1,4 +1,4 @@
-import { buildWeeklyPlanningContext, calculateContractWeek, getWeekBounds, ZoneInfo, WeekInfo } from './weeklyPlanner';
+import { buildWeeklyPlanningContext, calculateContractWeek, getWeekBounds, getMonday, getBogotaToday, ZoneInfo, WeekInfo } from './weeklyPlanner';
 import { ActivityStandardWithFrecuencia, ScopeMapping } from '@/types/scheduler';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -41,6 +41,41 @@ const PLATEO_STD = [std()];
 const PLATEO_MAP = [map('plateo', 'arbustos')];
 // PLAZA: 2295 arbustos → JR/mes = 2295 / 160 = 14.34 aprox (ADR-0009)
 const PLAZA_QTY = { arbustos: 2295 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// getMonday / getBogotaToday
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('getMonday', () => {
+  it('un lunes se devuelve a sí mismo', () => {
+    expect(getMonday(new Date('2026-07-13T00:00:00Z')).toISOString().slice(0, 10)).toBe('2026-07-13');
+  });
+
+  it('un domingo (UTC) resuelve al lunes de esa misma semana ISO, no a la siguiente', () => {
+    // 2026-07-19 es domingo — pertenece a la semana 2026-07-13..19, no a 2026-07-20..26.
+    expect(getMonday(new Date('2026-07-19T00:00:00Z')).toISOString().slice(0, 10)).toBe('2026-07-13');
+  });
+
+  it('un sábado resuelve al lunes de la misma semana', () => {
+    expect(getMonday(new Date('2026-07-18T00:00:00Z')).toISOString().slice(0, 10)).toBe('2026-07-13');
+  });
+});
+
+describe('getBogotaToday', () => {
+  // No se mockea el reloj: se compara contra un cálculo independiente del
+  // día de negocio en America/Bogota, para no probar la función contra sí misma.
+  it('coincide con la fecha calendario actual en America/Bogota (no en UTC ni en la hora local del test runner)', () => {
+    const expected = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+    expect(getBogotaToday().toISOString().slice(0, 10)).toBe(expected);
+  });
+
+  it('devuelve medianoche UTC exacta (fecha calendario pura, sin componente de hora)', () => {
+    const d = getBogotaToday();
+    expect(d.getUTCHours()).toBe(0);
+    expect(d.getUTCMinutes()).toBe(0);
+    expect(d.getUTCSeconds()).toBe(0);
+  });
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // calculateWeekNumber

@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { Group } from '@/types/monday';
 import { useWeeklyPlan } from '@/hooks/useWeeklyPlan';
 import { useSiteWage } from '@/hooks/useSiteWage';
-import { getMonday } from '@/lib/weeklyPlanner';
+import { getMonday, getBogotaToday } from '@/lib/weeklyPlanner';
 import CostosOperativosView from '@/components/costos/CostosOperativosView';
 
 // Dashboard de Costos Operativos — reusa exactamente la misma fuente que el
@@ -20,7 +20,7 @@ interface Props {
 }
 
 export default function CostosOperativosContainer({ boardId, selectedGroupId, groups }: Props) {
-  const weekStart = useMemo(() => getMonday(new Date()), []);
+  const weekStart = useMemo(() => getMonday(getBogotaToday()), []);
 
   const group = useMemo(() => {
     if (!selectedGroupId || !groups) return undefined;

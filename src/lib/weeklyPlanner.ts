@@ -74,6 +74,22 @@ export function getMonday(date: Date): Date {
   ));
 }
 
+// "Hoy" en el día de negocio (America/Bogota), no en UTC ni en la hora local
+// del navegador — mismo bug ya corregido una vez en el SQL
+// (get_delayed_weekly_plans, 20260819_fix_delayed_weekly_plans_bogota_timezone.sql).
+// Entre las 19:00 y las 23:59 hora de Bogotá, `new Date()` en UTC ya rodó al
+// día siguiente — sin esto, getMonday(new Date()) salta a la semana
+// siguiente ~5 horas antes de tiempo. Todo caller que resuelva "la semana
+// actual" por defecto (sin un weekStart explícito) debe usar
+// getMonday(getBogotaToday()), nunca getMonday(new Date()) directo.
+export function getBogotaToday(): Date {
+  const [y, m, d] = new Date()
+    .toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
+    .split('-')
+    .map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
 // Devuelve el lunes y el viernes de la semana (ISO date strings).
 export function getWeekBounds(weekStart: Date): { start: string; end: string } {
   return {

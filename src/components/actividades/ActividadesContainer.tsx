@@ -8,7 +8,7 @@
 import { useMemo } from 'react';
 import { Loader2, CalendarX2, AlertTriangle } from 'lucide-react';
 import { usePublishedWeekPlans } from '@/hooks/useWeeklyPlans';
-import { getMonday, getWeekBounds } from '@/lib/weeklyPlanner';
+import { getMonday, getWeekBounds, getBogotaToday } from '@/lib/weeklyPlanner';
 import ActividadesView from './ActividadesView';
 
 function formatDayMonth(iso: string): string {
@@ -18,7 +18,7 @@ function formatDayMonth(iso: string): string {
 
 export default function ActividadesContainer() {
   const week = useMemo(() => {
-    const monday = getMonday(new Date());
+    const monday = getMonday(getBogotaToday());
     return getWeekBounds(monday);
   }, []);
 

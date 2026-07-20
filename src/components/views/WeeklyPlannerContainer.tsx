@@ -8,7 +8,7 @@ import { useWeeklyPlans } from '@/hooks/useWeeklyPlans';
 import { useWeeklyPlanMutations, PlanItemInput } from '@/hooks/useWeeklyPlanMutations';
 import { usePoaActiveCatalog } from '@/hooks/usePoaActivities';
 import { WeeklyPlan } from '@/types/scheduler';
-import { getMonday } from '@/lib/weeklyPlanner';
+import { getMonday, getBogotaToday } from '@/lib/weeklyPlanner';
 import WeeklyPlannerView from '@/components/planner/WeeklyPlannerView';
 
 interface Props {
@@ -27,7 +27,7 @@ function shiftWeek(date: Date, direction: -1 | 1): Date {
 
 export default function WeeklyPlannerContainer({ boardId, selectedGroupId, groups }: Props) {
   const router = useRouter();
-  const [weekStart, setWeekStart] = useState<Date>(() => getMonday(new Date()));
+  const [weekStart, setWeekStart] = useState<Date>(() => getMonday(getBogotaToday()));
   const [saveError, setSaveError] = useState<string | null>(null);
   const [confirmError, setConfirmError] = useState<Error | null>(null);
   const [closeError, setCloseError] = useState<Error | null>(null);
