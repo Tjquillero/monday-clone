@@ -11,6 +11,10 @@ Este directorio existe porque el código y la base de datos, por sí solos, no p
 
 No mezclar estas capas es la regla explícita: un manifiesto (`dataset.md`) no describe hallazgos observados un día concreto, y una investigación no reemplaza al documento oficial.
 
+## Relación con el módulo "Documentos" de la aplicación (2026-07-20)
+
+Este directorio (`fuentes/`) sigue siendo la documentación técnica/arquitectónica y la trazabilidad para desarrollo — sirve para que el código y quien investigue una duda de negocio tengan un lugar versionado en Git. Para los documentos reales que Operaciones sube y consulta día a día (POA, Resource Analysis, Salarios, Contratos, Manuales, Cronogramas, Catálogos Técnicos), la fuente operativa pasa a ser el módulo **Documentos** dentro de Mantenix (`/documentos` — ver `docs/architecture/documentos-roadmap.md`): evita que Operaciones dependa de un `git pull` para ver cuál es el documento vigente. Los dos sistemas son independientes a propósito (Fase 1 de esa hoja de ruta) — no se sincronizan automáticamente todavía.
+
 ## Cómo se usa
 
 - **Antes de asumir una regla de negocio** (ej. "¿esta zona está contratada?"), consultar primero `dataset.md` (cuál es el documento oficial vigente) y el índice de `investigaciones/README.md` (si ya se investigó esta duda antes).
