@@ -3,9 +3,9 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
-import { WeeklyPlanningContext, SchedulerMigrationMissingError, ActivityStandardWithFrecuencia, MissingActivityStandard } from '@/types/scheduler';
+import { WeeklyPlanningContext, SchedulerMigrationMissingError, MissingActivityStandard } from '@/types/scheduler';
 import { getSiteCapacity } from '@/lib/siteCapacity';
-import { buildWeeklyPlanningContext, calculateContractWeek } from '@/lib/weeklyPlanner';
+import { buildWeeklyPlanningContext, calculateContractWeek, mergeStandardsForZone } from '@/lib/weeklyPlanner';
 import { WORKING_DAYS_WEEK } from '@/lib/schedulerMath';
 import { useContractStandards, useScopeMappings, useMissingBoardActivityStandards } from './useActivityStandards';
 import { usePoaActiveCatalog, useActivePoaVersionId } from './usePoaActivities';
@@ -138,17 +138,7 @@ export function useWeeklyPlan(
 
     // Merge Catálogo Técnico + Actividad del POA (frecuencia/precio) por
     // activity_key, filtrando por cobertura vigente en esta zona.
-    const mergedStandards: ActivityStandardWithFrecuencia[] = [];
-    for (const s of standards) {
-      const poaActivity = poaCatalog.get(s.activity_key);
-      const zoneCoverage = poaActivity?.zones.get(group.id);
-      if (!poaActivity || !zoneCoverage) continue; // sin cobertura POA vigente: no se planifica
-      mergedStandards.push({
-        ...s,
-        frecuencia: poaActivity.frecuencia,
-        poa_activity_zone_id: zoneCoverage.poaActivityZoneId,
-      });
-    }
+    const mergedStandards = mergeStandardsForZone(standards, poaCatalog, group.id);
 
     const scopeQuantities: Record<string, number> = analysisRow?.scope_data ?? {};
 

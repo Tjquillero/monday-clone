@@ -1,4 +1,5 @@
 import {
+  ActivityStandard,
   ActivityStandardWithFrecuencia,
   ScopeMapping,
   PlanningActivity,
@@ -13,6 +14,8 @@ import {
   calculateWeeklyDistribution,
   calculateCapacityUsage,
 } from './schedulerMath';
+import { getSiteCapacity } from './siteCapacity';
+import type { PoaActiveCatalog } from '@/hooks/usePoaActivities';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos de entrada del motor
@@ -118,6 +121,30 @@ const PRIORITY_ORDER: Record<ActivityPriority, number> = {
   flexible: 2,
 };
 
+// Catálogo Técnico (board_activity_standards) × POA activo (frecuencia +
+// cobertura por zona) → estándares vigentes para UNA zona. Un estándar de
+// contrato (group_id null) o de sitio sin cobertura POA vigente en esta
+// zona simplemente no se planifica ahí (Regla 13, poa-domain.md: origen
+// exclusivo de actividades).
+export function mergeStandardsForZone(
+  standards: ActivityStandard[],
+  poaCatalog: PoaActiveCatalog,
+  groupId: string,
+): ActivityStandardWithFrecuencia[] {
+  const merged: ActivityStandardWithFrecuencia[] = [];
+  for (const s of standards) {
+    const poaActivity = poaCatalog.get(s.activity_key);
+    const zoneCoverage = poaActivity?.zones.get(groupId);
+    if (!poaActivity || !zoneCoverage) continue;
+    merged.push({
+      ...s,
+      frecuencia: poaActivity.frecuencia,
+      poa_activity_zone_id: zoneCoverage.poaActivityZoneId,
+    });
+  }
+  return merged;
+}
+
 export function buildWeeklyPlanningContext(
   standards: ActivityStandardWithFrecuencia[],
   scopeMappings: ScopeMapping[],
@@ -212,4 +239,40 @@ export function buildWeeklyPlanningContext(
       weather_sensitive: [],
     },
   };
+}
+
+export interface BoardSitePlan {
+  group: { id: string; title: string };
+  plan: WeeklyPlanningContext;
+}
+
+// Fan-out de buildWeeklyPlanningContext() a TODAS las zonas de un board — la
+// base de datos de los indicadores ejecutivos (ranking de sitios, Pareto de
+// JR). Pura: recibe todas las fuentes ya resueltas, sin red ni estado. Sitios
+// sin ninguna actividad planificable (catálogo técnico sin cobertura POA en
+// esa zona, o sin resource_analysis) se excluyen — no hay señal real de
+// utilización que mostrar para ellos.
+export function buildBoardPlanningContexts(
+  groups: { id: string; title: string }[],
+  standards: ActivityStandard[],
+  poaCatalog: PoaActiveCatalog,
+  scopeMappings: ScopeMapping[],
+  scopeDataBySite: Record<string, Record<string, number>>,
+  week: WeekInfo,
+): BoardSitePlan[] {
+  const results: BoardSitePlan[] = [];
+  for (const group of groups) {
+    const siteCapacity = getSiteCapacity(group.title);
+    const zone: ZoneInfo = {
+      id: group.id,
+      name: group.title,
+      daily_capacity: siteCapacity?.daily_capacity ?? 0,
+    };
+    const mergedStandards = mergeStandardsForZone(standards, poaCatalog, group.id);
+    const scopeQuantities = scopeDataBySite[group.id] ?? {};
+    const plan = buildWeeklyPlanningContext(mergedStandards, scopeMappings, scopeQuantities, zone, week);
+    if (plan.activities.length === 0) continue;
+    results.push({ group, plan });
+  }
+  return results;
 }

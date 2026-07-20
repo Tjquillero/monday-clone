@@ -1,5 +1,6 @@
-import { buildWeeklyPlanningContext, calculateContractWeek, getWeekBounds, getMonday, getBogotaToday, ZoneInfo, WeekInfo } from './weeklyPlanner';
+import { buildWeeklyPlanningContext, buildBoardPlanningContexts, mergeStandardsForZone, calculateContractWeek, getWeekBounds, getMonday, getBogotaToday, ZoneInfo, WeekInfo } from './weeklyPlanner';
 import { ActivityStandardWithFrecuencia, ScopeMapping } from '@/types/scheduler';
+import { PoaActiveCatalog, PoaActivityEntry } from '@/hooks/usePoaActivities';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Factories
@@ -338,5 +339,67 @@ describe('buildWeeklyPlanningContext — valores reales del contrato', () => {
     expect(ctx.constraints.incompatible_pairs).toHaveLength(0);
     expect(ctx.constraints.dependencies).toHaveLength(0);
     expect(ctx.constraints.weather_sensitive).toHaveLength(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// mergeStandardsForZone / buildBoardPlanningContexts
+// ─────────────────────────────────────────────────────────────────────────────
+
+function poaEntry(overrides: Partial<PoaActivityEntry> = {}): PoaActivityEntry {
+  return {
+    poaActivityId: 'poa-activity-1',
+    activityKey: 'plateo',
+    frecuencia: 12.5,
+    precioUnitario: 100,
+    zones: new Map([['group-plaza', { poaActivityZoneId: 'paz-1', zoneId: 'group-plaza', cantidadContratada: 2295 }]]),
+    ...overrides,
+  };
+}
+
+function catalog(entries: PoaActivityEntry[]): PoaActiveCatalog {
+  return new Map(entries.map((e) => [e.activityKey, e]));
+}
+
+describe('mergeStandardsForZone', () => {
+  it('incluye un estándar cuando el POA tiene cobertura vigente para esa zona', () => {
+    const merged = mergeStandardsForZone(PLATEO_STD, catalog([poaEntry()]), 'group-plaza');
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ activity_key: 'plateo', frecuencia: 12.5, poa_activity_zone_id: 'paz-1' });
+  });
+
+  it('excluye un estándar sin actividad correspondiente en el POA activo', () => {
+    const merged = mergeStandardsForZone(PLATEO_STD, catalog([]), 'group-plaza');
+    expect(merged).toHaveLength(0);
+  });
+
+  it('excluye un estándar cuya actividad del POA no tiene cobertura para ESTA zona', () => {
+    const merged = mergeStandardsForZone(PLATEO_STD, catalog([poaEntry()]), 'group-otra-zona');
+    expect(merged).toHaveLength(0);
+  });
+});
+
+describe('buildBoardPlanningContexts', () => {
+  const GROUPS = [
+    { id: 'group-plaza', title: 'PLAZA PUERTO COLOMBIA' },
+    { id: 'group-sin-datos', title: 'MANGLARES' },
+  ];
+
+  it('produce un plan por cada sitio con actividades reales, excluyendo sitios sin ninguna', () => {
+    const results = buildBoardPlanningContexts(
+      GROUPS,
+      PLATEO_STD,
+      catalog([poaEntry()]),
+      PLATEO_MAP,
+      { 'group-plaza': PLAZA_QTY }, // MANGLARES sin fila de resource_analysis
+      WEEK_1,
+    );
+    expect(results).toHaveLength(1);
+    expect(results[0].group.id).toBe('group-plaza');
+    expect(results[0].plan.activities[0].theoretical_journals_month).toBeCloseTo(14.34, 2);
+  });
+
+  it('con 0 grupos devuelve un arreglo vacío', () => {
+    expect(buildBoardPlanningContexts([], PLATEO_STD, catalog([poaEntry()]), PLATEO_MAP, {}, WEEK_1)).toEqual([]);
   });
 });

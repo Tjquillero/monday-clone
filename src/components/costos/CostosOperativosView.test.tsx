@@ -35,6 +35,9 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof CostosOperativ
     isLoading: false,
     isError: false,
     error: null,
+    boardSites: [],
+    boardSitesLoading: false,
+    onSelectGroup: jest.fn(),
     ...overrides,
   };
 }

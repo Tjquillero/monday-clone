@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import { AlertTriangle, ArrowUp, ArrowDown, DollarSign } from 'lucide-react';
 import { WeeklyPlanningContext } from '@/types/scheduler';
 import { WORKING_DAYS_MONTH } from '@/lib/schedulerMath';
+import { BoardSitePlan } from '@/lib/weeklyPlanner';
+import ExecutiveIndicators from './ExecutiveIndicators';
 
 // Dashboard de Costos Operativos — hace visible lo que el Scheduler ya
 // calcula correctamente (ADR-0009), sin ninguna fórmula propia.
@@ -24,6 +26,9 @@ interface Props {
   isLoading: boolean;
   isError: boolean;
   error: Error | null;
+  boardSites: BoardSitePlan[];
+  boardSitesLoading: boolean;
+  onSelectGroup: (groupId: string) => void;
 }
 
 type SortKey = 'codigo' | 'actividad' | 'jr' | 'costo';
@@ -42,7 +47,7 @@ function semaphoreColor(pct: number): string {
   return 'bg-[#10B981]';
 }
 
-export default function CostosOperativosView({ group, plan, costoJornal, isLoading, isError, error }: Props) {
+export default function CostosOperativosView({ group, plan, costoJornal, isLoading, isError, error, boardSites, boardSitesLoading, onSelectGroup }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('costo');
   const [sortDir, setSortDir] = useState<SortDirection>('desc');
 
@@ -88,38 +93,81 @@ export default function CostosOperativosView({ group, plan, costoJornal, isLoadi
     });
   }, [rows, effectiveSortKey, sortDir]);
 
+  let perSiteSection: React.ReactNode;
+
   if (isLoading) {
-    return (
-      <div className="flex-1 flex items-center justify-center h-full">
+    perSiteSection = (
+      <div className="flex-1 flex items-center justify-center h-40">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-[#3B7EF8] border-t-transparent rounded-full animate-spin" />
           <p className="text-[10px] text-slate-500 uppercase tracking-widest">Calculando costos...</p>
         </div>
       </div>
     );
-  }
-
-  if (isError) {
-    return (
-      <div className="p-6">
-        <div className="flex items-start gap-3 px-6 py-4 rounded-xl border border-red-500/30 bg-red-500/10">
-          <p className="text-xs text-red-400">{error?.message ?? 'No se pudo calcular el costo operativo.'}</p>
-        </div>
+  } else if (isError) {
+    perSiteSection = (
+      <div className="flex items-start gap-3 px-6 py-4 rounded-xl border border-red-500/30 bg-red-500/10">
+        <p className="text-xs text-red-400">{error?.message ?? 'No se pudo calcular el costo operativo.'}</p>
       </div>
     );
-  }
-
-  if (!group) {
-    return (
-      <div className="p-6">
-        <p className="text-xs text-slate-500">Selecciona un sitio para ver sus costos operativos.</p>
-      </div>
+  } else if (!group) {
+    perSiteSection = (
+      <p className="text-xs text-slate-500">Selecciona un sitio (o un sitio del ranking arriba) para ver su detalle de costos operativos.</p>
     );
+  } else {
+    perSiteSection = <PerSiteDetail group={group} plan={plan} costoJornal={costoJornal} rows={rows} topKeys={topKeys} wageMissing={wageMissing} effectiveSortKey={effectiveSortKey} sortDir={sortDir} sortKey={sortKey} setSortKey={setSortKey} setSortDir={setSortDir} sorted={sorted} />;
   }
 
+  return (
+    <div className="h-full overflow-auto custom-scrollbar p-4 md:p-6 space-y-6">
+      <div>
+        <h2 className="text-xs font-black uppercase tracking-widest text-white flex items-center gap-2">
+          <DollarSign className="w-4 h-4 text-[#3B7EF8]" /> Costos Operativos
+        </h2>
+        <p className="text-[10px] text-slate-500 mt-0.5 uppercase tracking-widest">
+          {group ? `${group.title} — mano de obra teórica del Cronograma` : 'Todos los sitios — mano de obra teórica del Cronograma'}
+        </p>
+      </div>
+
+      <ExecutiveIndicators sites={boardSites} onSelectSite={onSelectGroup} isLoading={boardSitesLoading} />
+
+      {perSiteSection}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Detalle por sitio (Fases 1-2, sin cambios de comportamiento) — extraído
+// para que el estado de carga/error/"sin sitio" no bloquee ExecutiveIndicators.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface PerSiteDetailProps {
+  group: { id: string; title: string };
+  plan: WeeklyPlanningContext | null;
+  costoJornal: number;
+  rows: { activity: WeeklyPlanningContext['activities'][number]; costo: number; pctJr: number; pctCosto: number }[];
+  topKeys: Set<string>;
+  wageMissing: boolean;
+  effectiveSortKey: SortKey;
+  sortKey: SortKey;
+  sortDir: SortDirection;
+  setSortKey: (k: SortKey) => void;
+  setSortDir: React.Dispatch<React.SetStateAction<SortDirection>>;
+  sorted: { activity: WeeklyPlanningContext['activities'][number]; costo: number; pctJr: number; pctCosto: number }[];
+}
+
+function PerSiteDetail({ group, plan, costoJornal, rows, topKeys, wageMissing, effectiveSortKey, sortKey, sortDir, setSortKey, setSortDir, sorted }: PerSiteDetailProps) {
   const totalJornales = rows.reduce((s, r) => s + r.activity.theoretical_journals_month, 0);
   const totalCosto = totalJornales * costoJornal;
   const capacidadDisponible = (plan?.zone.daily_capacity ?? 0) * WORKING_DAYS_MONTH;
+  // TODO: deuda técnica — esta "Utilización" es MENSUAL (totalJornales / capacidad
+  // mensual), distinta de la que usan CapacitySummary.tsx (Cronograma) y el
+  // ranking ejecutivo de ExecutiveIndicators.tsx, que son SEMANALES
+  // (plan.capacity.weekly_required / weekly_available). Son dos convenciones
+  // preexistentes en la app, no introducidas por Fase 3 — verificado que dan
+  // números distintos para el mismo sitio (19% mensual vs. 23% semanal en
+  // Playa del Country). Unificar la definición oficial de "Utilización" en
+  // una tarea de dominio aparte, no mezclada con Costos Operativos.
   const utilizacion = capacidadDisponible > 0 ? Math.round((totalJornales / capacidadDisponible) * 100) : 0;
   const deficit = Math.max(0, totalJornales - capacidadDisponible);
 
@@ -133,15 +181,8 @@ export default function CostosOperativosView({ group, plan, costoJornal, isLoadi
   };
 
   return (
-    <div className="h-full overflow-auto custom-scrollbar p-4 md:p-6 space-y-6">
-      <div>
-        <h2 className="text-xs font-black uppercase tracking-widest text-white flex items-center gap-2">
-          <DollarSign className="w-4 h-4 text-[#3B7EF8]" /> Costos Operativos
-        </h2>
-        <p className="text-[10px] text-slate-500 mt-0.5 uppercase tracking-widest">
-          {group.title} — mano de obra teórica del Cronograma
-        </p>
-      </div>
+    <div className="space-y-6">
+      <p className="text-[10px] text-slate-500 uppercase tracking-widest">Detalle — {group.title}</p>
 
       {wageMissing && (
         <div className="flex items-start gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">

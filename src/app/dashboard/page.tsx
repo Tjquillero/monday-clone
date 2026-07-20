@@ -350,7 +350,7 @@ function DashboardContent() {
             {currentView === 'planner' && <WeeklyPlannerContainer boardId={board?.id} selectedGroupId={selectedGroupId} groups={groups} />}
             {currentView === 'agenda' && <AgendaOperativaContainer boardId={board?.id} />}
             {currentView === 'catalogo-tecnico' && <CatalogoTecnicoContainer boardId={board?.id} />}
-            {currentView === 'costos-operativos' && <CostosOperativosContainer boardId={board?.id} selectedGroupId={selectedGroupId} groups={groups} />}
+            {currentView === 'costos-operativos' && <CostosOperativosContainer boardId={board?.id} selectedGroupId={selectedGroupId} groups={groups} onSelectGroup={setSelectedGroupId} />}
           </motion.div>
         </AnimatePresence>
       </main>
