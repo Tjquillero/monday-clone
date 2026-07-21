@@ -31,32 +31,30 @@ export interface CapacityResult {
 /**
  * Jornales teóricos mensuales para una actividad.
  *
- * Fórmula: qty / rendimiento
+ * Fórmula: qty / (rendimiento × frecuencia / workingDays)
  *
- * ADR-0009 (2026-07-19): `qty` ya es la cantidad CONTRACTUAL MENSUAL (verificado
- * contra el Excel real del POA) y `rendimiento` es "unidades por jornal" tal
- * como lo captura el Catálogo Técnico — el trabajo total de un mes no depende
- * de en cuántas visitas se reparta. La versión anterior de esta función
- * escalaba el resultado por `workingDays/frecuencia`, inflando el total hasta
- * 25× para actividades de baja frecuencia (ej. una actividad mensual real de
- * ~15 JR se reportaba como ~375 JR) sin ninguna justificación documentada.
+ * ADR-0009 reabierto (2026-07-21, INV-0002): el dueño del proceso confirmó que
+ * `COSTOS GENERALES (V2).xlsx` — el Resource Analysis oficial vigente — calcula
+ * `CANT JORNALES MES` con esta misma fórmula (`qty × 25 / (rendimiento × frecuencia)`),
+ * y que es la correcta. Se revierte el cambio de ADR-0009 (que había eliminado
+ * el factor `frecuencia/workingDays`).
  *
- * `frecuencia` ya NO afecta la magnitud del resultado — solo determina si la
- * actividad participa del cálculo:
- *   frecuencia=null → actividad contratada sin programación periódica en esta
+ * La frecuencia expresa cuántas veces ocurre la actividad en workingDays.
+ *   frec=25 → diaria
+ *   frec=4  → semanal
+ *   frec=1  → mensual
+ *   frec=12.5 → cada dos días aproximadamente
+ *   frec=null → actividad contratada sin programación periódica en esta
  *     versión del POA (ADR-0005) — no genera jornales, igual que frec<=0.
- *   frecuencia<=0   → dato inválido, no genera jornales.
- * Cómo se distribuye el trabajo dentro del mes (semana a semana) sigue sin
- * cambios — ver calculateWeeklyDistribution, deliberadamente fuera de
- * alcance de ADR-0009.
  */
 export function calculateTheoreticalJournals(
   qty: number,
   rendimiento: number,
   frecuencia: number | null,
+  workingDays = WORKING_DAYS_MONTH,
 ): number {
-  if (qty <= 0 || rendimiento <= 0 || frecuencia === null || frecuencia <= 0) return 0;
-  return qty / rendimiento;
+  if (qty <= 0 || rendimiento <= 0 || frecuencia === null || frecuencia <= 0 || workingDays <= 0) return 0;
+  return qty / (rendimiento * (frecuencia / workingDays));
 }
 
 /**

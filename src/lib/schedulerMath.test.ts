@@ -9,16 +9,17 @@ import {
 
 // Valores reales del contrato (Plateo, Limpieza General, Poda Arbustos)
 // Verificados contra la pantalla "Análisis de Recursos y Eficiencia".
-// ADR-0009 (2026-07-19): JR_mes = qty / rendimiento — frecuencia ya no
-// escala el total (ver schedulerMath.ts). `frec` se conserva en cada caso
-// porque sigue siendo un argumento real de la función (gate de actividad
-// activa), no porque afecte el resultado esperado.
+// ADR-0009 reabierto (2026-07-21, INV-0002): el dueño del proceso confirmó que
+// la fórmula del Excel oficial (`qty × 25 / (rendimiento × frecuencia)`) es la
+// correcta — se revierte el cambio que había hecho la frecuencia no escalar
+// el total.
 const CASES = {
-  plateo:           { qty: 2295, rend: 160,  frec: 12.5,  expected: 14.34375 },
-  limpiezaGeneral:  { qty: 2295, rend: 7500, frec: 2.083, expected: 0.306    },
-  podaArbustos:     { qty: 2295, rend: 1495, frec: 12.5,  expected: 1.535    },
-  limpieza_playa:   { qty: 3000, rend: 3000, frec: 25,    expected: 1.0      },
-  trasiego_playa:   { qty: 5000, rend: 5000, frec: 4,     expected: 1.0      },
+  plateo:           { qty: 2295, rend: 160,  frec: 12.5,  expected: 28.6875 },
+  limpiezaGeneral:  { qty: 2295, rend: 7500, frec: 2.083, expected: 3.672   },
+  podaArbustos:     { qty: 2295, rend: 1495, frec: 12.5,  expected: 3.071   },
+  limpieza_playa:   { qty: 3000, rend: 3000, frec: 25,    expected: 1.0     },
+  // 5000 / (5000 × 4/25) = 5000 / 800 = 6.25
+  trasiego_playa:   { qty: 5000, rend: 5000, frec: 4,     expected: 6.25    },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -31,7 +32,7 @@ describe('WORKING_DAYS_MONTH', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('calculateTheoreticalJournals', () => {
   describe('valores conocidos del contrato', () => {
-    it('Plateo: 2295 und / rend 160 → 14.34 JR (frecuencia no escala el total, ADR-0009)', () => {
+    it('Plateo: 2295 und / rend 160 / frec 12.5 → 28.69 JR', () => {
       const jr = calculateTheoreticalJournals(
         CASES.plateo.qty,
         CASES.plateo.rend,
@@ -40,7 +41,7 @@ describe('calculateTheoreticalJournals', () => {
       expect(jr).toBeCloseTo(CASES.plateo.expected, 2);
     });
 
-    it('Limpieza General: 2295 m2 / rend 7500 → 0.31 JR', () => {
+    it('Limpieza General: 2295 m2 / rend 7500 / frec 2.083 → 3.67 JR', () => {
       const jr = calculateTheoreticalJournals(
         CASES.limpiezaGeneral.qty,
         CASES.limpiezaGeneral.rend,
@@ -49,7 +50,7 @@ describe('calculateTheoreticalJournals', () => {
       expect(jr).toBeCloseTo(CASES.limpiezaGeneral.expected, 2);
     });
 
-    it('Poda Arbustos: 2295 m2 / rend 1495 → 1.54 JR', () => {
+    it('Poda Arbustos: 2295 m2 / rend 1495 / frec 12.5 → 3.07 JR', () => {
       const jr = calculateTheoreticalJournals(
         CASES.podaArbustos.qty,
         CASES.podaArbustos.rend,
@@ -58,7 +59,7 @@ describe('calculateTheoreticalJournals', () => {
       expect(jr).toBeCloseTo(CASES.podaArbustos.expected, 2);
     });
 
-    it('Limpieza playa (frec=25, caso invariante bajo la fórmula anterior): 3000 m2 / rend 3000 → 1.0 JR', () => {
+    it('Limpieza playa diaria (frec=25): 3000 m2 / rend 3000 / frec 25 → 1.0 JR', () => {
       const jr = calculateTheoreticalJournals(
         CASES.limpieza_playa.qty,
         CASES.limpieza_playa.rend,
@@ -67,7 +68,7 @@ describe('calculateTheoreticalJournals', () => {
       expect(jr).toBeCloseTo(CASES.limpieza_playa.expected, 4);
     });
 
-    it('Trasiego playa (frec=4): 5000 m2 / rend 5000 → 1.0 JR (antes 6.25, inflado por el factor 25/frec ya retirado)', () => {
+    it('Trasiego playa semanal (frec=4): 5000 m2 / rend 5000 / frec 4 → 6.25 JR', () => {
       const jr = calculateTheoreticalJournals(
         CASES.trasiego_playa.qty,
         CASES.trasiego_playa.rend,
@@ -76,28 +77,30 @@ describe('calculateTheoreticalJournals', () => {
       expect(jr).toBeCloseTo(CASES.trasiego_playa.expected, 4);
     });
 
-    it('Corte de troncos (1.09, Tablero Principal): 300 UN / rend 20 → 15 JR (antes 375, ADR-0009)', () => {
-      const jr = calculateTheoreticalJournals(300, 20, 1);
-      expect(jr).toBeCloseTo(15, 4);
+    it('Corte de troncos (1.09, Tablero Principal): 300 UN / rend 30 / frec 1 → 250 JR (rendimiento corregido 20→30, INV-0002)', () => {
+      const jr = calculateTheoreticalJournals(300, 30, 1);
+      expect(jr).toBeCloseTo(250, 4);
     });
   });
 
   describe('invariante de la fórmula', () => {
+    it('qty / (rend × frec/25) = qty × 25 / (rend × frec)', () => {
+      const qty = 1800; const rend = 200; const frec = 8;
+      const result = calculateTheoreticalJournals(qty, rend, frec);
+      const manual = (qty * 25) / (rend * frec);
+      expect(result).toBeCloseTo(manual, 10);
+    });
+
     it('duplicar rendimiento reduce JR a la mitad', () => {
       const base   = calculateTheoreticalJournals(1000, 100, 5);
       const double = calculateTheoreticalJournals(1000, 200, 5);
       expect(double).toBeCloseTo(base / 2, 10);
     });
 
-    it('la frecuencia NO cambia el JR mensual — solo determina si la actividad participa (ADR-0009)', () => {
-      const frec5  = calculateTheoreticalJournals(1000, 100, 5);
-      const frec10 = calculateTheoreticalJournals(1000, 100, 10);
-      const frec1  = calculateTheoreticalJournals(1000, 100, 1);
-      const frec25 = calculateTheoreticalJournals(1000, 100, 25);
-      expect(frec5).toBe(10);
-      expect(frec10).toBe(frec5);
-      expect(frec1).toBe(frec5);
-      expect(frec25).toBe(frec5);
+    it('duplicar frecuencia reduce JR a la mitad', () => {
+      const base   = calculateTheoreticalJournals(1000, 100, 5);
+      const double = calculateTheoreticalJournals(1000, 100, 10);
+      expect(double).toBeCloseTo(base / 2, 10);
     });
 
     it('duplicar cantidad duplica JR', () => {
@@ -115,6 +118,20 @@ describe('calculateTheoreticalJournals', () => {
     it('frecuencia = 0 → 0', () => expect(calculateTheoreticalJournals(2295, 160, 0)).toBe(0));
     it('frecuencia < 0 → 0', () => expect(calculateTheoreticalJournals(2295, 160, -1)).toBe(0));
     it('frecuencia = null (ADR-0005, sin programación periódica) → 0', () => expect(calculateTheoreticalJournals(2295, 160, null)).toBe(0));
+    it('workingDays = 0 → 0', () => expect(calculateTheoreticalJournals(2295, 160, 12.5, 0)).toBe(0));
+  });
+
+  describe('workingDays personalizado', () => {
+    it('workingDays=20 produce menos JR que workingDays=25', () => {
+      // fórmula: qty × workingDays / (rend × frec)
+      // Con workingDays=25: 1000×25/(100×5) = 50
+      // Con workingDays=20: 1000×20/(100×5) = 40
+      const jr25 = calculateTheoreticalJournals(1000, 100, 5, 25);
+      const jr20 = calculateTheoreticalJournals(1000, 100, 5, 20);
+      expect(jr25).toBeCloseTo(50, 4);
+      expect(jr20).toBeCloseTo(40, 4);
+      expect(jr20).toBeLessThan(jr25);
+    });
   });
 });
 
@@ -314,12 +331,12 @@ describe('calculatePerformanceDeviation', () => {
 describe('integración — flujo completo de planificación', () => {
   it('Plateo en PLAZA: de qty a distribución semanal', () => {
     // Datos: qty=2295 und, rend=160 und/jornal, frec=12.5, cap=8 workers
-    // ADR-0009: JR_mes = qty/rendimiento = 2295/160 = 14.34 (frecuencia ya no escala el total)
+    // Fórmula reabierta (INV-0002): JR_mes = qty × 25 / (rend × frec) = 28.6875
     const jr = calculateTheoreticalJournals(2295, 160, 12.5);
-    expect(jr).toBeCloseTo(14.34, 1);
+    expect(jr).toBeCloseTo(28.6875, 1);
 
     const daily = calculateDailyJournals(jr);
-    expect(daily).toBeCloseTo(0.57, 1);
+    expect(daily).toBeCloseTo(1.15, 1);
 
     const weekly = calculateWeeklyDistribution(jr);
     expect(weekly).toHaveLength(4);

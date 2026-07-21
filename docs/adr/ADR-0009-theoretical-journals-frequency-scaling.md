@@ -1,9 +1,14 @@
 # ADR-0009 — Qué representa `theoreticalJournals`: ¿jornales mensuales reales o una métrica escalada por frecuencia?
 
 ## Estado
-**Aceptado (2026-07-19)** — el dueño del proceso confirmó explícitamente la Interpretación A: no se encontró (ni se buscaría más) evidencia que justifique el factor `25/frecuencia`; la carga de la prueba estaba en sostener la Interpretación B y no se sostuvo. Implementado el mismo día — ver "Alcance de la corrección (implementado)" más abajo.
+**Reabierto y revertido (2026-07-21)** — el dueño del proceso confirmó explícitamente que la Interpretación B es la correcta: la fórmula del Resource Analysis oficial (`COSTOS GENERALES (V2).xlsx`), `qty × 25 / (rendimiento × frecuencia)`, es la que debe usar el Scheduler. Esto revierte la aceptación de la Interpretación A del 2026-07-19 (ver historial de estado abajo). Investigación que originó la reapertura: `docs/operacion/investigaciones/costos/INV-0002-formula-jornales-vs-adr0009.md` (cerrada con esta resolución).
 
-**Nota de actualización (2026-07-21)**: apareció evidencia relevante para el "Criterio para revisar esta decisión" (ver abajo) — `COSTOS GENERALES (V2).xlsx`, el documento oficial con el que Operaciones planifica recursos hoy (no un artefacto legado), calcula "CANT JORNALES MES" con la fórmula algebraicamente idéntica a la que este ADR reemplazó (`qty × 25 / (rendimiento × frecuencia)`); verificado además que la derivación "jornales del mes → personal por día" (÷25) sí coincide entre el Excel y `calculateDailyJournals` — la disputa es exclusivamente sobre el cálculo del total mensual, no sobre esa derivación. Esto NO reabre el ADR todavía, pero **tampoco puede darse por sentado que la carga de la prueba sigue favoreciendo la Interpretación A** solo porque ya está implementada — este ADR concluyó eso sin haber contrastado contra el documento oficial de Operaciones, y ahora existe esa evidencia. Investigación abierta: `docs/operacion/investigaciones/costos/INV-0002-formula-jornales-vs-adr0009.md`.
+Como parte de la misma resolución, se corrigió también el dato de origen: `board_activity_standards.rendimiento` para `1.09` (Corte de troncos, Tablero Principal) estaba capturado en 20 und/jornal; el dueño del proceso confirmó que el valor correcto es **30 und/jornal**. Corregido directamente en la fila vigente (sin crear nueva versión, por tratarse de una corrección de captura, no de un cambio contractual).
+
+**Historial de estado:**
+- **2026-07-19** — Aceptada la Interpretación A: no se encontró (ni se buscaría más) evidencia que justificara el factor `25/frecuencia`; implementado el mismo día.
+- **2026-07-21 (nota de actualización)** — Apareció evidencia de que `COSTOS GENERALES (V2).xlsx` (Resource Analysis oficial vigente) usa la fórmula que este ADR había reemplazado. No reabría el ADR todavía; quedaba pendiente confirmación del dueño del proceso.
+- **2026-07-21 (esta reapertura)** — El dueño del proceso confirmó directamente que la fórmula del Excel es la correcta. Revertido el mismo día — ver "Alcance de la reversión (implementado)" más abajo.
 
 ## Fecha
 2026-07-19
@@ -79,13 +84,19 @@ El efecto existe desde Fase 4 (2026-06-29) para **toda** actividad con `frecuenc
 
 **Prueba de sentido común, para cerrar cualquier ambigüedad residual:** cuando un supervisor configura "20 unidades/jornal" para una actividad con 300 unidades contratadas al mes, ¿espera que el sistema le diga que necesita 15 jornales, o 375? Ningún supervisor real respondería "375" — y si la respuesta natural es "15", la Interpretación B queda prácticamente descartada por la propia forma en que el dato se captura y se entiende operativamente.
 
-## Decisión
+## Decisión (2026-07-19 — histórica, revertida el 2026-07-21)
 
 **Interpretación A aceptada**: `board_activity_standards.rendimiento` representa "unidades producidas por un jornal de trabajo", sin ajuste implícito por frecuencia. `JR_mes = qty / rendimiento`. La frecuencia no modifica el trabajo total — solo determina si la actividad participa del cálculo (`null`/`<=0` → excluida).
 
 **Explícitamente fuera de alcance de esta corrección** (decisión del dueño del proceso, para acotar el riesgo del cambio): `calculateWeeklyDistribution` **no se toca** — sigue con distribución uniforme entre semanas, exactamente como antes. Cómo se reparte el trabajo dentro del calendario (concentrar una actividad de baja frecuencia en una sola semana en vez de repartirla uniforme) queda como mejora futura, deliberadamente no incluida aquí para que el único cambio observable sea la magnitud de `JR_mes` — sin efectos laterales en semanas ni asignación de calendario.
 
-## Alcance de la corrección (implementado)
+## Decisión de reapertura (2026-07-21)
+
+**Interpretación B confirmada por el dueño del proceso**: `JR_mes = qty × 25 / (rendimiento × frecuencia)`, la misma fórmula del Resource Analysis oficial (`COSTOS GENERALES (V2).xlsx`). La Interpretación A (2026-07-19) queda revertida — no se sostiene frente al documento con el que Operaciones planifica recursos hoy.
+
+Junto con la reversión de fórmula, se corrigió el dato base: `rendimiento` de Corte de troncos (`1.09`, Tablero Principal) pasó de 20 a **30** und/jornal, confirmado por el dueño del proceso como el valor real.
+
+## Alcance de la corrección (implementado 2026-07-19, revertido 2026-07-21)
 
 1. `calculateTheoreticalJournals`: `JR_mes = qty / rendimiento` (eliminado el factor `frecuencia/workingDays`; el parámetro `workingDays` se retiró de la firma por quedar sin uso).
 2. `calculateWeeklyDistribution`: **sin cambios**, por decisión explícita (ver arriba).
@@ -93,11 +104,20 @@ El efecto existe desde Fase 4 (2026-06-29) para **toda** actividad con `frecuenc
 4. Regresión: `schedulerMath.test.ts` y `weeklyPlanner.test.ts` actualizados — valores esperados recalculados contra la nueva fórmula, incluyendo el caso Plateo (28.69→14.34), un caso nuevo con los valores reales de Corte de troncos (300/20 → 15 JR, antes 375), y un test que verifica explícitamente que la frecuencia ya NO cambia la magnitud de `JR_mes` (antes sí, ahora es invariante).
 5. Reverificación de factibilidad: pendiente de confirmar en Tablero Principal tras el despliegue — los planes hoy "infactibles" por el factor inflado pueden volverse factibles.
 
+## Alcance de la reversión (implementado 2026-07-21)
+
+1. `calculateTheoreticalJournals`: restaurada la fórmula `qty / (rendimiento × (frecuencia / workingDays))`, con `workingDays = WORKING_DAYS_MONTH` de nuevo como parámetro opcional de la firma.
+2. `ResourceEfficiencyWidget.tsx`: **sin cambios de código** — sigue llamando a `calculateTheoreticalJournals` como fuente única (patrón que ADR-0009 ya había corregido y que se mantiene); el resultado cambia automáticamente con la fórmula.
+3. `calculateWeeklyDistribution`: **sin cambios**, sigue fuera de alcance.
+4. `board_activity_standards.rendimiento` para `1.09` (Corte de troncos, Tablero Principal): corregido de 20 a 30, actualizado directamente en la fila vigente.
+5. Regresión: `schedulerMath.test.ts` y `weeklyPlanner.test.ts` revertidos a los valores esperados originales (Plateo 14.34→28.69; Corte de troncos recalculado con rendimiento=30 → 250 JR/mes, no 15). Suite completa verificada en verde (392/392).
+
 ## Consecuencias
 
-- Los JR reportados para actividades de baja frecuencia bajan significativamente (ej. Corte de troncos: 437.5 → 15) — esto puede convertir planes hoy "infactibles" en factibles, cambiando decisiones operativas ya tomadas con los números anteriores.
-- Cualquier cálculo financiero que dependa de `theoreticalJournals` (vía `ResourceEfficiencyWidget`) cambia también, ahora consistente con el Cronograma (antes podían divergir por la duplicación de fórmula).
-- Los 19+31 rendimientos ya cargados en el Catálogo Técnico de Tablero Principal (tarea #39, cerrada) NO necesitan recapturarse — el número que el usuario entendió capturar ("unidades por jornal") no cambia; lo que cambió es cómo el motor lo usa.
+- Los JR reportados para actividades de baja frecuencia vuelven a subir (ej. Corte de troncos: 15 → 250, con el rendimiento ya corregido a 30) — esto puede volver "infactibles" planes que la aceptación original de ADR-0009 había vuelto factibles.
+- Cualquier cálculo financiero que dependa de `theoreticalJournals` (vía `ResourceEfficiencyWidget`) cambia también, consistente de nuevo con el Excel oficial de Operaciones.
+- Los rendimientos ya cargados en el Catálogo Técnico NO necesitan recapturarse en general — el número que el usuario entendió capturar ("unidades por jornal") no cambia; lo que cambió es cómo el motor lo usa. La excepción puntual es Corte de troncos, cuyo dato en sí estaba mal capturado (20 en vez de 30) y se corrigió aparte.
+- Reverificación de factibilidad en Tablero Principal: pendiente tras el despliegue, igual que en la aceptación original.
 
 ## Alternativas consideradas
 
@@ -106,9 +126,10 @@ El efecto existe desde Fase 4 (2026-06-29) para **toda** actividad con `frecuenc
 
 ## Documentos afectados
 
-- `docs/MAINTENANCE_SCHEDULING_ENGINE_v1.md` (fórmula fuente) — actualizado.
+- `docs/MAINTENANCE_SCHEDULING_ENGINE_v1.md` (fórmula fuente) — pendiente de actualizar para reflejar la reversión.
 - `docs/architecture/poa-technical-catalog-decoupling.md` — sin cambios de alcance.
+- `docs/operacion/investigaciones/costos/INV-0002-formula-jornales-vs-adr0009.md` — cerrada con esta resolución.
 
 ## Criterio para revisar esta decisión
 
-Si en el futuro se confirma con evidencia real que el rendimiento capturado por los usuarios SÍ debe interpretarse como "rendimiento en jornada continua/diaria" (interpretación B) — por ejemplo, porque el dueño del proceso confirma que así se calibraron los números ya cargados — este ADR se reabre y se documenta esa semántica explícitamente en el Catálogo Técnico (cambiando la etiqueta de captura para que deje de ser ambigua).
+Si en el futuro aparece evidencia de que el Excel oficial (`COSTOS GENERALES (V2).xlsx`) quedó desactualizado respecto a una decisión de negocio posterior que sí adoptó la Interpretación A — por ejemplo, si Operaciones actualiza ese documento para dejar de usar el factor `25/frecuencia` — este ADR se reabre nuevamente.

@@ -40,7 +40,7 @@ const WEEK_4: WeekInfo = { start: new Date('2026-06-22'), number: 4, workingDays
 
 const PLATEO_STD = [std()];
 const PLATEO_MAP = [map('plateo', 'arbustos')];
-// PLAZA: 2295 arbustos → JR/mes = 2295 / 160 = 14.34 aprox (ADR-0009)
+// PLAZA: 2295 arbustos → JR/mes = 2295 / (160 × 12.5/25) = 2295 / 80 = 28.69 aprox (INV-0002, ADR-0009 revertido)
 const PLAZA_QTY = { arbustos: 2295 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -274,16 +274,16 @@ describe('buildWeeklyPlanningContext — cantidades', () => {
 describe('buildWeeklyPlanningContext — factibilidad', () => {
   it('plan factible cuando JR total ≤ capacidad mensual', () => {
     // daily_capacity=8, 25 días → 200 JR disponibles
-    // Plateo PLAZA: 2295/160 = 14.34 JR/mes (ADR-0009) → factible
+    // Plateo PLAZA: 2295/80 = 28.69 JR/mes → factible
     const ctx = buildWeeklyPlanningContext(PLATEO_STD, PLATEO_MAP, PLAZA_QTY, ZONE, WEEK_1);
     expect(ctx.capacity.feasible).toBe(true);
     expect(ctx.capacity.deficit).toBe(0);
   });
 
   it('plan infactible cuando JR total > capacidad mensual', () => {
-    // daily_capacity=0.5 → solo 12.5 JR/mes disponibles
-    // Plateo PLAZA: 14.34 JR/mes (ADR-0009) → infactible
-    const tinyZone: ZoneInfo = { ...ZONE, daily_capacity: 0.5 };
+    // daily_capacity=1 → solo 25 JR/mes disponibles
+    // Plateo PLAZA: 28.69 JR/mes → infactible
+    const tinyZone: ZoneInfo = { ...ZONE, daily_capacity: 1 };
     const ctx = buildWeeklyPlanningContext(PLATEO_STD, PLATEO_MAP, PLAZA_QTY, tinyZone, WEEK_1);
     expect(ctx.capacity.feasible).toBe(false);
     expect(ctx.capacity.deficit).toBeGreaterThan(0);
@@ -301,18 +301,19 @@ describe('buildWeeklyPlanningContext — factibilidad', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('buildWeeklyPlanningContext — valores reales del contrato', () => {
-  it('Plateo PLAZA: 2295 arbustos → ~14.34 JR/mes (ADR-0009: frecuencia no escala el total)', () => {
-    // qty=2295, rend=160 → JR = 2295/160 = 14.34375
+  it('Plateo PLAZA: 2295 arbustos → ~28.69 JR/mes', () => {
+    // qty=2295, rend=160, frec=12.5
+    // JR = 2295 / (160 × 12.5/25) = 2295 / 80 = 28.6875
     const ctx = buildWeeklyPlanningContext(PLATEO_STD, PLATEO_MAP, PLAZA_QTY, ZONE, WEEK_1);
     const plateo = ctx.activities.find(a => a.activity_key === 'plateo');
     expect(plateo).toBeDefined();
-    expect(plateo!.theoretical_journals_month).toBeCloseTo(14.34, 2);
+    expect(plateo!.theoretical_journals_month).toBeCloseTo(28.69, 2);
   });
 
-  it('Plateo PLAZA semana 1: JR semanal ≈ 3.59 (14.34/4)', () => {
+  it('Plateo PLAZA semana 1: JR semanal ≈ 7.17 (28.69/4)', () => {
     const ctx = buildWeeklyPlanningContext(PLATEO_STD, PLATEO_MAP, PLAZA_QTY, ZONE, WEEK_1);
     const plateo = ctx.activities[0];
-    expect(plateo.theoretical_journals_week).toBeCloseTo(3.59, 1);
+    expect(plateo.theoretical_journals_week).toBeCloseTo(7.17, 1);
   });
 
   it('Plateo PLAZA: la suma de las 4 semanas ≈ JR mensual', () => {
@@ -396,7 +397,7 @@ describe('buildBoardPlanningContexts', () => {
     );
     expect(results).toHaveLength(1);
     expect(results[0].group.id).toBe('group-plaza');
-    expect(results[0].plan.activities[0].theoretical_journals_month).toBeCloseTo(14.34, 2);
+    expect(results[0].plan.activities[0].theoretical_journals_month).toBeCloseTo(28.69, 2);
   });
 
   it('con 0 grupos devuelve un arreglo vacío', () => {

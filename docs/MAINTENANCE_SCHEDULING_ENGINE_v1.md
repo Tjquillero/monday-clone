@@ -261,10 +261,11 @@ FOR EACH ROW EXECUTE FUNCTION fn_close_previous_activity_standard();
 **Regla absoluta:** Esta es la única fuente de la fórmula. `ResourceEfficiencyWidget`, el scheduler y el prompt builder de Gemini importan desde aquí. Sin React, sin Supabase, sin state. Solo números → números.
 
 ```
-JR_teórico = qty / rendimiento
+JR_teórico = qty / (rendimiento × frecuencia / workingDays)
+           = qty × 25 / (rendimiento × frecuencia)
 ```
 
-(Corregido por ADR-0009, 2026-07-19 — la versión anterior multiplicaba por `workingDays/frecuencia`, sin justificación documentada. `qty` es la cantidad contractual MENSUAL, `rendimiento` es "unidades por jornal" tal como lo captura el Catálogo Técnico; el total de un mes no depende de en cuántas visitas se reparta. `frecuencia` sigue siendo un argumento de la función — `null`/`<=0` excluye la actividad del cálculo — pero ya no escala la magnitud del resultado.)
+(ADR-0009 reabierto y revertido el 2026-07-21 — el dueño del proceso confirmó que esta es la fórmula correcta, la misma que usa el Resource Analysis oficial (`COSTOS GENERALES (V2).xlsx`, ver `docs/operacion/investigaciones/costos/INV-0002-formula-jornales-vs-adr0009.md`). La aceptación de ADR-0009 del 2026-07-19, que había eliminado el factor `frecuencia/workingDays`, queda sin efecto.)
 
 Funciones implementadas y con 54 tests verdes:
 - `calculateTheoreticalJournals(qty, rendimiento, frecuencia, workingDays?)`

@@ -1,6 +1,6 @@
 # Contrato: Scheduler (`schedulerMath.ts` + consumidores) — cálculo de jornales teóricos
 
-**Estado: Vigente — describe el comportamiento real tras ADR-0009** (`docs/adr/ADR-0009-theoretical-journals-frequency-scaling.md`, Aceptado 2026-07-19, commits `2cccc3e`/`41096f9`).
+**Estado: Vigente — describe el comportamiento real tras la reapertura de ADR-0009** (`docs/adr/ADR-0009-theoretical-journals-frequency-scaling.md`, reabierto y revertido 2026-07-21 tras `docs/operacion/investigaciones/costos/INV-0002-formula-jornales-vs-adr0009.md`; aceptación original 2026-07-19, commits `2cccc3e`/`41096f9`).
 
 Este documento no es una guía de implementación — es la especificación del comportamiento garantizado de `calculateTheoreticalJournals()` y de la regla de una sola fuente que deben seguir todos sus consumidores. Cambiar cualquiera de los invariantes de abajo (la fórmula, quién puede calcularla, qué hace o no hace el motor con un rendimiento) requiere una decisión explícita de arquitectura (ADR o equivalente) — no un ajuste silencioso "porque un caso particular lo necesita".
 
@@ -10,9 +10,9 @@ Este documento no es una guía de implementación — es la especificación del 
 
 ## Invariantes garantizados (requieren ADR para cambiar)
 
-1. **`JR_mes = cantidad / rendimiento`.** `calculateTheoreticalJournals(qty, rendimiento, frecuencia)` en `src/lib/schedulerMath.ts` — única fórmula, sin excepciones por unidad, categoría ni origen de la actividad.
+1. **`JR_mes = cantidad × 25 / (rendimiento × frecuencia)`.** `calculateTheoreticalJournals(qty, rendimiento, frecuencia, workingDays?)` en `src/lib/schedulerMath.ts` — única fórmula, sin excepciones por unidad, categoría ni origen de la actividad. (Reabierto 2026-07-21: coincide con `CANT JORNALES MES` del Resource Analysis oficial, `COSTOS GENERALES (V2).xlsx` — ver INV-0002.)
 
-2. **La frecuencia no escala la magnitud de `JR_mes`.** Solo determina si la actividad participa del cálculo: `frecuencia === null` (actividad contratada sin programación periódica, ADR-0005) o `frecuencia <= 0` → la actividad queda excluida, nunca genera "0 jornales" como si fuera un dato real. Fuera de ese gate binario, el valor exacto de la frecuencia no afecta el resultado.
+2. **La frecuencia SÍ escala la magnitud de `JR_mes`** (invariante inverso al de la aceptación original de ADR-0009): a menor frecuencia, mayor `JR_mes` para la misma cantidad y rendimiento. Además sigue determinando si la actividad participa del cálculo: `frecuencia === null` (actividad contratada sin programación periódica, ADR-0005) o `frecuencia <= 0` → la actividad queda excluida, nunca genera "0 jornales" como si fuera un dato real.
 
 3. **`requiere_rendimiento = false` excluye la actividad del mismo modo que `frecuencia = null`** (mismo patrón, ver `docs/architecture/poa-technical-catalog-decoupling.md`, Decisión 4) — nunca entra al cálculo con un rendimiento inventado ni con "0 jornales".
 
@@ -39,11 +39,12 @@ Este documento no es una guía de implementación — es la especificación del 
 ```ts
 import { calculateTheoreticalJournals } from '@/lib/schedulerMath';
 
-// Corte de troncos (1.09, Tablero Principal): 300 UN/mes, rendimiento 20 UN/jornal
-calculateTheoreticalJournals(300, 20, 1); // → 15 (JR/mes)
+// Corte de troncos (1.09, Tablero Principal): 300 UN/mes, rendimiento 30 UN/jornal, frecuencia 1
+// (ADR-0009 reabierto y revertido 2026-07-21 — ver INV-0002)
+calculateTheoreticalJournals(300, 30, 1); // → 250 (JR/mes)
 
 // Actividad sin programación periódica en esta versión del POA (ADR-0005)
-calculateTheoreticalJournals(300, 20, null); // → 0, excluida — no es un "0 real"
+calculateTheoreticalJournals(300, 30, null); // → 0, excluida — no es un "0 real"
 ```
 
 ---

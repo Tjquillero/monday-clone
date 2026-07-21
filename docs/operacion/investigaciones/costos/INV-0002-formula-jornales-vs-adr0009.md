@@ -2,12 +2,13 @@
 id: INV-0002
 fecha: 2026-07-21
 dominio: costos
-estado: abierto
+estado: cerrado
 autor: Claude Code
 fuentes:
   - Excel real (COSTOS GENERALES (V2).xlsx, Operaciones)
   - git (commit 2cccc3e)
   - src/lib/schedulerMath.ts
+  - Confirmación directa del dueño del proceso (2026-07-21)
 ---
 
 # INV-0002 — La fórmula de `CANT JORNALES MES` en el Resource Analysis oficial no coincide con la de ADR-0009
@@ -69,17 +70,21 @@ Esta estructura de columnas se repite en las hojas de los demás sitios del mism
 - **Alta** — `CANT PERSONAL MES = CANT JORNALES MES / 25` (Capa 2) es exacta y estructuralmente idéntica a `calculateDailyJournals`: verificado en 2 subtotales reales.
 - **Baja** — cuál fórmula de Capa 1 (Excel o ADR-0009) representa la regla de negocio correcta, y a quién corresponde justificar la diferencia. Sin evidencia todavía para resolver esto — requiere confirmación de Operaciones, no más lectura de código.
 
-## Conclusión
+## Resolución (2026-07-21)
 
-No hay conclusión todavía. Explícitamente NO se concluye que ADR-0009 esté mal, ni que el Excel esté mal — y explícitamente tampoco se asume por defecto que la carga de la prueba favorece a ADR-0009 solo por ser el código ya implementado.
+El dueño del proceso confirmó directamente que la fórmula del Excel oficial es la correcta: `CANT JORNALES MES = qty × 25 / (rendimiento × frecuencia)`. Esto revierte la aceptación original de ADR-0009 (2026-07-19).
+
+Como parte de la misma resolución, se corrigió también un dato de origen que salió a la luz al verificar el caso real usado como ejemplo en ADR-0009 (Corte de troncos, `1.09`, Tablero Principal): `board_activity_standards.rendimiento` estaba cargado en 20 und/jornal; el valor real confirmado es **30**. Corregido directamente en la base (fila vigente, sin nueva versión — es una corrección de captura, no un cambio contractual).
+
+**Cambios aplicados:**
+- `src/lib/schedulerMath.ts::calculateTheoreticalJournals` — revertida a `qty / (rendimiento × (frecuencia / workingDays))`.
+- `board_activity_standards` — `rendimiento` de `1.09` (Tablero Principal) corregido de 20 a 30.
+- `schedulerMath.test.ts`, `weeklyPlanner.test.ts` — valores esperados revertidos y recalculados; suite completa verde (392/392).
+- `docs/adr/ADR-0009-theoretical-journals-frequency-scaling.md` — reabierto y documentada la reversión.
+- `docs/architecture/scheduler-contract.md`, `docs/MAINTENANCE_SCHEDULING_ENGINE_v1.md` — invariantes y fórmula actualizados.
+
+**Consecuencia esperada, no verificada todavía en la app real:** los JR reportados para actividades de baja frecuencia vuelven a subir (ej. Corte de troncos: 15 → 250 con el rendimiento ya corregido), lo que puede volver "infactibles" planes que la aceptación original de ADR-0009 había vuelto factibles. Pendiente reverificar factibilidad en Tablero Principal.
 
 ## Estado
 
-Abierto
-
-## Próximos pasos
-
-- Preguntar a Operaciones, con la pregunta ya acotada a la Capa 1 únicamente: ¿`CANT JORNALES MES` en `COSTOS GENERALES (V2).xlsx` representa la misma cantidad que el Scheduler llama `theoretical_journals_month`, calculada deliberadamente distinto por una razón de negocio (ej. dimensionar cuadrillas de forma conservadora), o es un cálculo que el propio Excel debería corregir?
-- Si el Excel debe seguir siendo la fuente de verdad tal como está: ADR-0009 se reabre (ver su propio "Criterio para revisar esta decisión").
-- Si ADR-0009 refleja una decisión de negocio ya tomada de abandonar esa fórmula: documentar explícitamente esa decisión (fecha, quién la tomó) y por qué el Excel oficial de Operaciones no se ha actualizado para reflejarla — dos fuentes de verdad divergentes sin que nadie lo haya decidido activamente es en sí mismo un riesgo operativo, incluso si ADR-0009 resulta ser el correcto.
-- **No importar `COSTOS GENERALES (V2).xlsx` a `resource_analysis` hasta resolver esto** — poblar la tabla ahora arriesgaría cargar valores cuya interpretación todavía no está cerrada.
+Cerrado — resuelto a favor de la fórmula del Excel (Interpretación B), con confirmación directa del dueño del proceso.
