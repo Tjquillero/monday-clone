@@ -10,19 +10,23 @@ fuentes:
   - src/lib/schedulerMath.ts
 ---
 
-# INV-0002 — La fórmula de jornales de un documento operativo real coincide con la que ADR-0009 reemplazó
+# INV-0002 — La fórmula de `CANT JORNALES MES` en el Resource Analysis oficial no coincide con la de ADR-0009
 
 ## Resumen
 
-Al preparar la carga del documento de Resource Analysis al módulo Documentos, se inspeccionó `COSTOS GENERALES (V2).xlsx` (ruta: `OneDrive - CONSORCIO CONSERVACION COSTERA\Operaciones\ARCHIVOS ASISTENTE DE OPERACIONES\CENTROS DE COSTO\`). La columna "CANT JORNALES MES" de ese archivo se calcula con la fórmula exacta que ADR-0009 (2026-07-19, commit `2cccc3e`) determinó que era defectuosa y reemplazó en el Scheduler.
+Al preparar la carga del documento de Resource Analysis al módulo Documentos, se inspeccionó `COSTOS GENERALES (V2).xlsx` (ruta: `OneDrive - CONSORCIO CONSERVACION COSTERA\Operaciones\ARCHIVOS ASISTENTE DE OPERACIONES\CENTROS DE COSTO\`) — el documento oficial con el que Operaciones planifica recursos hoy. La columna `CANT JORNALES MES` de ese archivo se calcula con una fórmula distinta a la que implementa el Scheduler tras ADR-0009 (2026-07-19, commit `2cccc3e`).
+
+**Importante, corregido tras primera ronda de análisis**: la relación `CANT PERSONAL MES = CANT JORNALES MES / 25` (jornales del mes → personal promedio diario) NO es la disputa — es un paso posterior, verificado idéntico entre el Excel y el Scheduler (`calculateDailyJournals`). La disputa real es exclusivamente sobre cómo se calcula `CANT JORNALES MES` en sí, a partir de (cantidad, rendimiento, frecuencia).
 
 ## Pregunta
 
-¿Cuál de las dos fórmulas — la del Scheduler (post ADR-0009) o la del documento operativo real que usa Operaciones — representa la regla de negocio correcta? ¿O están respondiendo preguntas distintas (jornales programados/presupuestados vs. jornales de ejecución/carga semanal) y ambas son válidas en su propio contexto?
+**La única que sigue sin responder**: ¿la fórmula para obtener `CANT JORNALES MES` debe seguir siendo la del Excel oficial (`Cantidad × 25 / (Rendimiento × Frecuencia)`), o la que implementó ADR-0009 (`Cantidad / Rendimiento`)?
+
+Formulada como pregunta de negocio: ¿el Scheduler debe reproducir exactamente los cálculos del Resource Analysis oficial, o ADR-0009 cambió deliberadamente la metodología porque el negocio decidió abandonar esa fórmula? Ninguna de las dos respuestas puede asumirse todavía.
 
 ## Evidencia
 
-Hoja "PLAZA PUERTO COLOMBIA" de `COSTOS GENERALES (V2).xlsx`, bloque de columnas `ITEM, ACTIVIDAD, UNIDAD, RENDIMIENTO, FRECUENCIA, FACTOR, CANTIDAD, CANT JORNALES MES, V. ACTIVIDAD`:
+**Capa 1 — `CANT JORNALES MES` (cantidad, rendimiento, frecuencia): la disputa real.** Hoja "PLAZA PUERTO COLOMBIA", bloque `ITEM, ACTIVIDAD, UNIDAD, RENDIMIENTO, FRECUENCIA, FACTOR, CANTIDAD, CANT JORNALES MES, V. ACTIVIDAD`:
 
 | Actividad | RENDIMIENTO | FRECUENCIA | FACTOR | CANTIDAD | CANT JORNALES MES (Excel) |
 |---|---|---|---|---|---|
@@ -31,41 +35,43 @@ Hoja "PLAZA PUERTO COLOMBIA" de `COSTOS GENERALES (V2).xlsx`, bloque de columnas
 | Mtto Cama Siembra | 600 | 6.25 | 0.25 | 2620 | 17.466666666666665 |
 | Limpieza zonas duras | 10000 | 1 | 0.04 | 17150 | 42.875 |
 
-En las 4 filas verificadas, `FACTOR = FRECUENCIA / 25` exactamente, y `CANT JORNALES MES = (CANTIDAD / RENDIMIENTO) / FACTOR = CANTIDAD × 25 / (RENDIMIENTO × FRECUENCIA)`.
+En las 4 filas, `FACTOR = FRECUENCIA / 25` exactamente, y `CANT JORNALES MES = (CANTIDAD / RENDIMIENTO) / FACTOR = CANTIDAD × 25 / (RENDIMIENTO × FRECUENCIA)`.
 
-Esta estructura de columnas (RENDIMIENTO/FRECUENCIA/FACTOR/CANTIDAD/CANT JORNALES MES) se repite en las hojas de los demás sitios del mismo archivo (Playa Manglares, Centro Gastronómico, Mercado La Sazón, Playa Miramar, Country 1, Country 2, Salinas del Rey, Santa Verónica) — no verificado fila por fila en todas, pero la presencia de la columna "CANT JORNALES MES" es consistente en las 9 hojas.
+Esta estructura de columnas se repite en las hojas de los demás sitios del mismo archivo (Playa Manglares, Centro Gastronómico, Mercado La Sazón, Playa Miramar, Country 1, Country 2, Salinas del Rey, Santa Verónica) — la columna `CANT JORNALES MES` está presente en las 9 hojas.
+
+**Capa 2 — `CANT PERSONAL MES` (jornales del mes → personal diario): NO es la disputa, verificada idéntica al Scheduler.** Subtotales al final de cada bloque:
+
+| Sitio/bloque | CANT JORNALES MES | CANT PERSONAL MES | ÷25 exacto |
+|---|---|---|---|
+| Plaza Puerto Colombia, Zona Verde | 130.93599016676953 | 5.237439606670781 | ✓ (130.936/25 = 5.2374) |
+| Playa Manglares, Zona Verde | 4.781114978396544 | 0.19124459913586175 | ✓ (4.7811/25 = 0.19124) |
+
+`calculateDailyJournals` en `src/lib/schedulerMath.ts` (sin cambios por ADR-0009): `theoreticalJournals / workingDays` (`workingDays = WORKING_DAYS_MONTH = 25`) — estructuralmente idéntica a la relación del Excel. Esta capa nunca estuvo en disputa y el Excel y el Scheduler ya concuerdan en ella.
 
 ## Consultas realizadas
 
-- Lectura directa del Excel con la librería `xlsx` (misma que usa `src/lib/poaImport/parseExcel.ts`), sin transformación — valores tal como están en el archivo.
-- `git log --oneline -- src/lib/schedulerMath.ts` y `git show 2cccc3e -- src/lib/schedulerMath.ts` para confirmar la fórmula exacta que existía antes de ADR-0009.
-
-Fórmula anterior del Scheduler (commit `2cccc3e`, diff, código retirado):
-```ts
-return qty / (rendimiento * (frecuencia / workingDays)); // workingDays = 25 por defecto
-```
-Equivalente a `qty × 25 / (rendimiento × frecuencia)` — algebraicamente idéntica a la fórmula observada en el Excel.
-
-Fórmula actual del Scheduler (post ADR-0009):
-```ts
-return qty / rendimiento;
-```
+- Lectura directa del Excel con la librería `xlsx` (misma que usa `src/lib/poaImport/parseExcel.ts`), sin transformación.
+- `git show 2cccc3e -- src/lib/schedulerMath.ts` — fórmula anterior del Scheduler (retirada): `qty / (rendimiento * (frecuencia / workingDays))`, equivalente a `qty × 25 / (rendimiento × frecuencia)` — algebraicamente idéntica a la `CANT JORNALES MES` del Excel.
+- Fórmula actual del Scheduler (post ADR-0009): `qty / rendimiento`.
+- Lectura de `calculateDailyJournals` (sin cambios): `theoreticalJournals / workingDays` — confirma que la Capa 2 (jornales→personal) es y siempre fue igual en ambos sistemas; ADR-0009 solo tocó la Capa 1.
 
 ## Hallazgos
 
-- La coincidencia no es de una sola fila: se cumple exactamente en las 4 filas verificadas, con `RENDIMIENTO`, `FRECUENCIA` y `CANTIDAD` distintos en cada una — esto hace muy improbable que sea casualidad.
-- El bloque de columnas incluye también `V. ACTIVIDAD` (valor/costo de la actividad) inmediatamente después de `CANT JORNALES MES`, sugiriendo que ese número alimenta un presupuesto de mano de obra mensual — mismo propósito general que `theoretical_journals_month` en el Scheduler (que alimenta el Dashboard de Costos Operativos). Esto es una observación, no una conclusión — no se descarta que "jornales para presupuestar el mes" y "jornales para programar la semana" sean preguntas distintas que coincidan en nombre pero no en intención.
-- Redacción correcta del hallazgo (no la que se usó inicialmente en conversación, que trataba la fórmula vieja como un hecho ya cerrado): **ADR-0009 sustituyó la fórmula que usaba el motor por otra distinta a la que usa el documento operativo vigente. Falta verificar con Operaciones cuál de las dos representa la regla de negocio correcta** — "la fórmula vieja inflaba los jornales 25x" era la conclusión técnica de ADR-0009 en su momento, pero deja de poder tratarse como un hecho cerrado ahora que existe un documento oficial que usa esa misma fórmula.
+- La coincidencia de la Capa 1 no es de una sola fila: se cumple exacta en las 4 filas verificadas de "Plaza Puerto Colombia", con `RENDIMIENTO`/`FRECUENCIA`/`CANTIDAD` distintos en cada una.
+- La Capa 2 (`CANT PERSONAL MES = CANT JORNALES MES / 25`) es deliberada y consistente en el Excel, y coincide exactamente con cómo el Scheduler deriva "personal por día" desde su propio total mensual — verificado con 2 subtotales reales, exacto en ambos.
+- **El debate no debe centrarse en la Capa 2** (esa relación es correcta y ya coincide) **sino exclusivamente en la Capa 1**: cómo se calcula el total mensual de jornales a partir de (cantidad, rendimiento, frecuencia).
+- **Corrección importante sobre a quién corresponde la carga de la prueba**: `COSTOS GENERALES (V2).xlsx` es el documento oficial con el que Operaciones planifica recursos hoy — no es un artefacto legado ni un borrador. Si ese documento es la fuente de verdad del negocio, la carga de la prueba recae sobre ADR-0009 para justificar por qué el Scheduler debería calcular distinto al documento oficial vigente — no al revés. ADR-0009 (en su momento) asumió que la carga de la prueba estaba del lado de la fórmula antigua, sin haber contrastado contra este documento; esa asunción debe revisarse a la luz de esta evidencia nueva, no darse por buena automáticamente.
 
 ## Nivel de confianza
 
-- **Alta** — que el Excel real calcula `CANT JORNALES MES` con la fórmula `cantidad × 25 / (rendimiento × frecuencia)`: verificado algebraicamente en 4 filas con valores distintos, coincide exacto en las 4.
-- **Alta** — que esa es *algebraicamente* la misma fórmula que existía en `schedulerMath.ts` antes del commit `2cccc3e`: confirmado leyendo el diff real del commit.
-- **Baja** — cuál de las dos fórmulas (o si ambas, para preguntas distintas) representa la regla de negocio correcta. Sin evidencia todavía para resolver esto — requiere confirmación de Operaciones, no más lectura de código.
+- **Alta** — `CANT JORNALES MES` (Capa 1) se calcula en el Excel como `cantidad × 25 / (rendimiento × frecuencia)`: verificado algebraicamente en 4 filas distintas.
+- **Alta** — esa fórmula es algebraicamente idéntica a la que existía en `schedulerMath.ts` antes de `2cccc3e`: confirmado en el diff real del commit.
+- **Alta** — `CANT PERSONAL MES = CANT JORNALES MES / 25` (Capa 2) es exacta y estructuralmente idéntica a `calculateDailyJournals`: verificado en 2 subtotales reales.
+- **Baja** — cuál fórmula de Capa 1 (Excel o ADR-0009) representa la regla de negocio correcta, y a quién corresponde justificar la diferencia. Sin evidencia todavía para resolver esto — requiere confirmación de Operaciones, no más lectura de código.
 
 ## Conclusión
 
-No hay conclusión todavía — ver "Próximos pasos". Explícitamente NO se concluye que ADR-0009 esté mal, ni que el Excel esté mal.
+No hay conclusión todavía. Explícitamente NO se concluye que ADR-0009 esté mal, ni que el Excel esté mal — y explícitamente tampoco se asume por defecto que la carga de la prueba favorece a ADR-0009 solo por ser el código ya implementado.
 
 ## Estado
 
@@ -73,7 +79,7 @@ Abierto
 
 ## Próximos pasos
 
-- Preguntar a Operaciones qué representa exactamente "CANT JORNALES MES" en `COSTOS GENERALES (V2).xlsx`: ¿jornales de ejecución real (comparable a lo que calcula el Scheduler), o un presupuesto/proyección mensual con un propósito distinto (ej. dimensionar cuadrillas, no programar semanas)?
-- Si son la misma pregunta de negocio: decidir si ADR-0009 debe revertirse, o si el Excel operativo (y sus decisiones derivadas, ej. dimensionamiento de personal) necesita corregirse.
-- Si son preguntas distintas: documentar explícitamente la diferencia (en ADR-0009 o en un ADR nuevo) para que nadie vuelva a asumir que son intercambiables.
+- Preguntar a Operaciones, con la pregunta ya acotada a la Capa 1 únicamente: ¿`CANT JORNALES MES` en `COSTOS GENERALES (V2).xlsx` representa la misma cantidad que el Scheduler llama `theoretical_journals_month`, calculada deliberadamente distinto por una razón de negocio (ej. dimensionar cuadrillas de forma conservadora), o es un cálculo que el propio Excel debería corregir?
+- Si el Excel debe seguir siendo la fuente de verdad tal como está: ADR-0009 se reabre (ver su propio "Criterio para revisar esta decisión").
+- Si ADR-0009 refleja una decisión de negocio ya tomada de abandonar esa fórmula: documentar explícitamente esa decisión (fecha, quién la tomó) y por qué el Excel oficial de Operaciones no se ha actualizado para reflejarla — dos fuentes de verdad divergentes sin que nadie lo haya decidido activamente es en sí mismo un riesgo operativo, incluso si ADR-0009 resulta ser el correcto.
 - **No importar `COSTOS GENERALES (V2).xlsx` a `resource_analysis` hasta resolver esto** — poblar la tabla ahora arriesgaría cargar valores cuya interpretación todavía no está cerrada.
