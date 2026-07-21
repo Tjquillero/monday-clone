@@ -39,7 +39,7 @@ En las 4 filas, `FACTOR = FRECUENCIA / 25` exactamente, y `CANT JORNALES MES = (
 
 Esta estructura de columnas se repite en las hojas de los demás sitios del mismo archivo (Playa Manglares, Centro Gastronómico, Mercado La Sazón, Playa Miramar, Country 1, Country 2, Salinas del Rey, Santa Verónica) — la columna `CANT JORNALES MES` está presente en las 9 hojas.
 
-**Capa 2 — `CANT PERSONAL MES` (jornales del mes → personal diario): NO es la disputa, verificada idéntica al Scheduler.** Subtotales al final de cada bloque:
+**Capa 2 — `CANT PERSONAL MES` (jornales del mes → personal diario): NO es la disputa, verificada idéntica al Scheduler.** Aclaración de negocio: en este contrato, "personal" y "jornal" representan la misma unidad de trabajo (1 persona = 1 jornal por día) — no son conceptos distintos. `CANT PERSONAL MES` no introduce una fórmula nueva, solo convierte el total de jornales del mes en un promedio diario de personal necesario, dividiendo entre los 25 días laborables del modelo operativo. Subtotales al final de cada bloque:
 
 | Sitio/bloque | CANT JORNALES MES | CANT PERSONAL MES | ÷25 exacto |
 |---|---|---|---|
