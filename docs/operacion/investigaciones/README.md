@@ -7,3 +7,4 @@ Diagnósticos con fecha sobre dudas de negocio concretas — el "por qué llegam
 | ID | Fecha | Dominio | Tema | Estado |
 |---|---|---|---|---|
 | [INV-0001](poa/INV-0001-salinas-del-rey.md) | 2026-07-20 | poa | Salinas del Rey no aparece en el POA importado | Abierto |
+| [INV-0002](costos/INV-0002-formula-jornales-vs-adr0009.md) | 2026-07-21 | costos | Fórmula de jornales de un documento operativo real coincide con la que ADR-0009 reemplazó | Abierto |
