@@ -22,6 +22,8 @@ Este directorio registra las decisiones de arquitectura del proyecto: **por qué
 | [ADR-0006](./ADR-0006-execution-engine-consolidation.md) | Consolidación del Motor de Ejecución — `ExecutionView` deja de ser el motor operativo | Aceptado |
 | [ADR-0007](./ADR-0007-daily-execution-legacy-model.md) | Retiro progresivo de `daily_execution` como fuente operativa | Aceptado |
 | [ADR-0008](./ADR-0008-board-activity-standards-origin.md) | Origen y Reglas de Construcción de `board_activity_standards` | Aceptado |
+| [ADR-0009](./ADR-0009-theoretical-journals-frequency-scaling.md) | Qué representa `theoreticalJournals`: ¿jornales mensuales reales o una métrica escalada por frecuencia? | Reabierto y revertido (2026-07-21) |
+| [ADR-0010](./ADR-0010-dual-journals-indicators.md) | Jornales Contractuales y Jornales Operativos como indicadores independientes | Aceptado (implementación pendiente de diseño) |
 
 ## Estados
 

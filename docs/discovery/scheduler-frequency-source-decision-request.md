@@ -1,5 +1,7 @@
 # Decisión requerida: ¿qué realidad debe modelar el Scheduler — contractual, operativa, o ambas?
 
+**RESUELTO (2026-07-22).** El dueño del proceso eligió la **Opción C**: ambos indicadores en paralelo, cada uno con su propia fuente de verdad, sin derivarse matemáticamente uno del otro. Ver `docs/adr/ADR-0010-dual-journals-indicators.md` para la decisión formal y el alcance de implementación. Este documento se conserva como registro de la pregunta original planteada, no se reescribe.
+
 **Para:** dueño del proceso / responsable de la operación
 **De:** equipo de desarrollo de Mantenix
 **Fecha:** 2026-07-22
