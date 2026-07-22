@@ -78,3 +78,59 @@ export interface ParseResult {
   sheets: ParsedSheet[];
   warnings: ParseWarning[];
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Incremento 3 — Validación
+//
+// Capa pura: no conoce Supabase, no resuelve mapeos por sí misma. El caller
+// (futuro Incremento 4) le pasa el contexto ya resuelto (`siteMappings`),
+// igual que src/lib/poaImport/validate.ts recibe `zoneMappings` en vez de
+// consultarlas. Códigos estables (RA00N) para que tests, UI y documentos de
+// arquitectura puedan referirse a una regla sin copiar el texto del mensaje.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ValidationCode =
+  | 'RA001' // Hoja sin bloques válidos
+  | 'RA002' // Sitio no identificado
+  | 'RA003' // Actividad desconocida (informativo)
+  | 'RA004' // Cantidad negativa
+  | 'RA005' // Bloque duplicado (dos bloques de la misma hoja resuelven al mismo sitio)
+  | 'RA006' // Rendimiento leído pero ignorado (informativo — Regla de Gobierno de Datos)
+  | 'RA007'; // Frecuencia leída pero ignorada (informativo — Regla de Gobierno de Datos)
+
+export interface ValidationIssue {
+  code: ValidationCode;
+  message: string;
+  sheetName: string;
+  blockIndex?: number;
+  blockLabel?: string;
+  excelRow?: number;
+  detalle?: string;
+}
+
+export interface ValidationSummary {
+  totalSheets: number;
+  totalBlocks: number;
+  /** Bloques sin ningún error (RA001/RA002/RA004/RA005) — pueden tener warnings igual. */
+  validBlocks: number;
+  blockedBlocks: number;
+}
+
+export interface ValidationResult {
+  /** `errors.length === 0`. No implica "todo el archivo se importa completo" — Resource Analysis no es todo-o-nada (a diferencia del POA): cada bloque/sitio es independiente. */
+  isValid: boolean;
+  errors: ValidationIssue[];
+  warnings: ValidationIssue[];
+  summary: ValidationSummary;
+}
+
+export interface ValidateResourceAnalysisContext {
+  /**
+   * Clave `${sheetName}#${blockIndex}` (0-indexado, en el orden en que
+   * parseResourceAnalysisExcel detectó los bloques) → identificador de sitio
+   * ya resuelto (ej. un futuro `group_id`), o `null`/`undefined` si sigue sin
+   * mapeo. Esta función NO decide el mapeo — ver
+   * docs/discovery/resource-analysis-sheet-mapping-gaps.md.
+   */
+  siteMappings: Map<string, string | null | undefined>;
+}

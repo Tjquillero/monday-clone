@@ -1,6 +1,6 @@
 # Diseño: Importador del Excel de Resource Analysis
 
-**Estado: Incremento 2 (Parser) implementado.** `src/lib/resourceAnalysisImport/parseExcel.ts` — lectura pura, sin escribir en producción, verificado contra el archivo real (`COSTOS GENERALES (V2).xlsx`, copia en la raíz del repo, mismo patrón que `POA 2026 V.02 Ene.26-2026.xlsx`). 13/13 tests verdes (`parseExcel.test.ts`). Incrementos 3 (Validación), 4 (Importación) y 5 (Verificación) siguen sin construir.
+**Estado: Incrementos 2 (Parser) y 3 (Validación) implementados.** `src/lib/resourceAnalysisImport/` — lectura y validación puras, sin escribir en producción, verificado contra el archivo real (`COSTOS GENERALES (V2).xlsx`, copia saneada en la raíz del repo, ver `docs/testing/fixtures-policy.md`). 23/23 tests verdes (`parseExcel.test.ts` + `validate.test.ts`). Incrementos 4 (Importación) y 5 (Verificación) siguen sin construir.
 
 Depende de `docs/domain/resource-analysis-domain.md` (el *qué* y el *por qué*) — este documento responde el *cómo*.
 
@@ -101,12 +101,25 @@ Actividad: Corte de troncos (1.09)
 
 Esto es explícitamente fuera de alcance del Incremento 2 (Parser) — se deja anotado aquí para que el Incremento 3+ (Validación) decida si vale la pena construirlo como una pantalla real o si basta con la documentación estática.
 
-## 7. Validaciones antes de aceptar un bloque
+## 7. Validaciones antes de aceptar un bloque — Incremento 3 implementado
 
-- Cantidad no negativa.
-- Unidad reconocible (M2, M3, UND) — informativa, no bloqueante (el `scope_key` ya implica la unidad esperada por convención existente).
-- El bloque debe tener mapeo confirmado a un `group_id` (Sección 3) antes de escribir cualquier fila.
-- `scope_key` reconocido contra la tabla de la Sección 3 de `resource-analysis-domain.md` — una descripción no reconocida se reporta, no se descarta silenciosamente ni se inventa una clave nueva.
+`src/lib/resourceAnalysisImport/validate.ts::validateResourceAnalysis(parseResult, context)` — función pura, no conoce Supabase. `context.siteMappings` (`Map<"sheetName#blockIndex", string | null | undefined>`) se lo pasa el caller ya resuelto (Incremento 4) — hoy, sin esa tabla construida todavía, se llama con un `Map` vacío y refleja correctamente que nada es importable aún (`isValid=false`, todos los bloques en RA002).
+
+`isValid = errors.length === 0`, pero **no significa "se puede importar el archivo completo"** — a diferencia del POA (todo-o-nada), aquí cada bloque es independiente (Sección 5); el `summary` (`totalBlocks`/`validBlocks`/`blockedBlocks`) es lo que un futuro Incremento 4 usaría para decidir qué bloques importar aunque `isValid` sea `false` por otros bloques.
+
+Códigos estables, para que tests/UI/documentos se refieran a la regla sin copiar el mensaje:
+
+| Código | Regla | Severidad |
+|---|---|---|
+| `RA001` | Hoja sin ningún bloque reconocible (patrón "NOMBRE DEL PROYECTO:" no encontrado) | Error |
+| `RA002` | Bloque sin sitio resuelto en `context.siteMappings` | Error |
+| `RA003` | Descripción de cantidad no reconocida contra la tabla de `scope_key` | Informativo |
+| `RA004` | Cantidad negativa | Error |
+| `RA005` | Dos bloques de la misma hoja resuelven al mismo sitio (el caso real que motivó esta regla: la hoja "COUNTRY 2", ver discovery) | Error |
+| `RA006` | Rendimiento leído en el bloque — informativo, nunca se persiste (Regla de Gobierno de Datos) | Informativo |
+| `RA007` | Frecuencia leída en el bloque — informativa, nunca se persiste (Regla de Gobierno de Datos) | Informativo |
+
+Verificado contra el archivo real (`validate.test.ts`, 23/23 tests entre parser+validación): con `siteMappings` vacío (estado actual del sistema) → 15/15 bloques bloqueados por RA002, 15 RA006, 15 RA007, 3 RA003 (`ARBOLES FUERA DE CAMASIEMBRA`), 0 RA001/RA004/RA005. RA001, RA004 y RA005 se probaron con fixtures sintéticos porque no ocurren en el archivo real.
 
 ## 8. Fuera de alcance de este diseño
 
@@ -121,4 +134,6 @@ El único caso bloqueante (COUNTRY 2, Sección 2) ya quedó resuelto (2026-07-21
 
 **Incremento 2 (Parser) — completo (2026-07-21):** `src/lib/resourceAnalysisImport/` (`types.ts`, `parseExcel.ts`, `parseExcel.test.ts`, `testFixtures.ts`). Lee las 9 hojas de sitio, extrae cantidades por `scope_key` y captura rendimiento/frecuencia crudos (solo informativo). No resuelve `group_id`, no valida reglas de negocio, no escribe nada — confirmado con los 9 sitios reales del archivo, incluida la verificación cruzada contra `resource_analysis.scope_data` ya cargado para PLAYA DEL COUNTRY.
 
-Pendiente: (1) Incremento 3 — validaciones de la Sección 7; (2) Incremento 4 — importación real (UPSERT merge), que requiere antes construir la tabla de mapeo sitio→`group_id` de la Sección 3 (Casos 2-4 del discovery); (3) Incremento 5 — re-ejecutar el barrido de factibilidad del Cronograma (`docs/operacion/investigaciones/costos/`, mismo patrón que el barrido ya hecho el 2026-07-21) para poder evaluar los 12/12 sitios en vez de 1/12.
+**Incremento 3 (Validación) — completo (2026-07-21):** `validate.ts` (Sección 7 arriba) — función pura, códigos RA001-RA007. Confirma con el archivo real que hoy nada es importable todavía (todos los bloques en RA002) porque la tabla de mapeo sitio→`group_id` no existe — comportamiento correcto, no un bug.
+
+Pendiente: (1) Incremento 4 — importación real (UPSERT merge), que requiere antes construir la tabla de mapeo sitio→`group_id` de la Sección 3 (Casos 2-4 del discovery) para poder llenar `context.siteMappings` con datos reales; (2) Incremento 5 — re-ejecutar el barrido de factibilidad del Cronograma (`docs/operacion/investigaciones/costos/`, mismo patrón que el barrido ya hecho el 2026-07-21) para poder evaluar los 12/12 sitios en vez de 1/12.
