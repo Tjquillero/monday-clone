@@ -80,7 +80,11 @@ export default function SCurveWidget({ groups, columns, activeSiteId: propActive
     
     filteredGroups.forEach(g => g.items.forEach(item => processItemForDates(item)));
 
-    const weeks = useMemo(() => {
+    // No es un Hook: ya estamos dentro del useMemo de arriba, así que este
+    // cálculo se re-memoiza junto con el resto sin necesitar su propio Hook
+    // anidado (violaba las Rules of Hooks — un useMemo no puede llamarse
+    // dentro de otro Hook).
+    const weeks = (() => {
         if (!hasDates) {
             const start = startOfWeek(new Date());
             return eachWeekOfInterval({ start, end: addWeeks(start, 8) });
@@ -94,7 +98,7 @@ export default function SCurveWidget({ groups, columns, activeSiteId: propActive
             console.error('Error calculating week interval:', e);
             return [];
         }
-    }, [minDate, maxDate, hasDates]);
+    })();
 
     let cumulativePlanned = 0;
     let cumulativeActual = 0;
