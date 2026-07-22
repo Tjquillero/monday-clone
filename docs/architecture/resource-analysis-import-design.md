@@ -1,6 +1,6 @@
 # Diseño: Importador del Excel de Resource Analysis
 
-**Estado: Incrementos 2 (Parser) y 3 (Validación) implementados.** `src/lib/resourceAnalysisImport/` — lectura y validación puras, sin escribir en producción, verificado contra el archivo real (`COSTOS GENERALES (V2).xlsx`, copia saneada en la raíz del repo, ver `docs/testing/fixtures-policy.md`). 23/23 tests verdes (`parseExcel.test.ts` + `validate.test.ts`). Incrementos 4 (Importación) y 5 (Verificación) siguen sin construir.
+**Estado: Incrementos 2 (Parser), 3 (Validación), 3.5 (Site Mapping) y 4 (Importación) implementados.** `src/lib/resourceAnalysisImport/` (incluida `service/`) — persiste realmente en `resource_analysis.scope_data`, verificado contra el archivo real. 37/37 tests verdes en el módulo, 429/429 en la suite completa. Solo falta el Incremento 5 (Verificación E2E contra un board real + re-ejecutar el barrido de factibilidad).
 
 Depende de `docs/domain/resource-analysis-domain.md` (el *qué* y el *por qué*) — este documento responde el *cómo*.
 
@@ -136,4 +136,27 @@ El único caso bloqueante (COUNTRY 2, Sección 2) ya quedó resuelto (2026-07-21
 
 **Incremento 3 (Validación) — completo (2026-07-21):** `validate.ts` (Sección 7 arriba) — función pura, códigos RA001-RA007. Confirma con el archivo real que hoy nada es importable todavía (todos los bloques en RA002) porque la tabla de mapeo sitio→`group_id` no existe — comportamiento correcto, no un bug.
 
-Pendiente: (1) Incremento 4 — importación real (UPSERT merge), que requiere antes construir la tabla de mapeo sitio→`group_id` de la Sección 3 (Casos 2-4 del discovery) para poder llenar `context.siteMappings` con datos reales; (2) Incremento 5 — re-ejecutar el barrido de factibilidad del Cronograma (`docs/operacion/investigaciones/costos/`, mismo patrón que el barrido ya hecho el 2026-07-21) para poder evaluar los 12/12 sitios en vez de 1/12.
+## 9. Incremento 4 (Importación) — completo (2026-07-22)
+
+`src/lib/resourceAnalysisImport/service/` (`types.ts`, `buildImportPayload.ts` + test, `persistResourceAnalysisImport.ts`, `importResourceAnalysisService.ts` + test). Contrato congelado antes de implementar (decisiones explícitas del usuario):
+
+- **`scope_data`: REPLACE completo por sitio, nunca merge con la fila existente.** Un solo escritor (`ResourceEfficiencyWidget.tsx`) ya trataba esa columna como snapshot completo — el importador respeta esa misma semántica en vez de introducir un segundo comportamiento (merge) sobre la misma columna. Si el Excel deja de traer una actividad que existía antes, el `scope_data` resultante refleja exactamente eso — no arrastra datos fantasma de una versión anterior.
+- **Condición del replace: solo si el sitio está completo.** Un sitio se reemplaza únicamente si TODOS sus bloques (1 o 2 — Zona Verde / Zona de Playa) están libres de error. Si falta un bloque o alguno tiene RA002/RA005, el sitio completo se saltea — nunca se persiste un `scope_data` parcial (`buildImportPayload.ts`, ver test "sitio con un bloque válido y otro bloqueado... se saltea completo").
+- **`workers_data`/`wages_data`: nunca se tocan.** Misma Regla de Gobierno de Datos que rendimiento/frecuencia — son datos que hoy mantiene un humano vía el formulario manual, y este Excel puede estar desactualizado para ellos también. Para una fila nueva se inicializan a los mismos valores vacíos que ya usa el formulario (`{}`/`0`); para una fila existente, simplemente no se incluyen en el payload del UPSERT.
+- **No es todo-o-nada.** Cada sitio se persiste (o se saltea) de forma independiente — un error en un sitio no bloquea la importación de los demás.
+- **Explícitamente fuera de alcance de este incremento**: recalcular Cronograma/factibilidad, tocar `board_activity_standards`, leer automáticamente la Biblioteca Documental, cambiar el Scheduler o cualquier fórmula.
+
+Contrato del servicio:
+```ts
+createImportResourceAnalysisService(deps: {
+  fetchExistingSiteIds(boardId): Promise<Set<string>>;
+  upsertResourceAnalysisSite(boardId, site, isNew): Promise<void>;
+}): { importResourceAnalysis(input: { boardId, file, importedBy }): Promise<ImportResourceAnalysisResult> }
+```
+`ImportResourceAnalysisResult` = `{ importedBy, sitesImported, sitesUpdated, sitesSkipped, details[], skipped[], warnings[] }` — sin campo de éxito/fallo global, los números ya son autoexplicativos dado que no es todo-o-nada.
+
+Verificado contra el archivo real con dependencias falsas (sin tocar Supabase): 9 sitios importados cuando el board no tiene datos previos; clasifica correctamente como "updated" el sitio que ya existía (Playa del Country); el `scope_data` pasado al upsert es el replace completo de 8 claves. 37/37 tests del módulo (parser+validate+siteMappings+service), 429/429 en la suite completa, `tsc` limpio.
+
+## Próximo paso
+
+Incremento 5 (Verificación): (1) pruebas E2E contra un board real ejecutando el importador de punta a punta; (2) re-ejecutar el barrido de factibilidad del Cronograma (`docs/operacion/investigaciones/costos/`, mismo patrón que el barrido ya hecho el 2026-07-21) para poder evaluar los 12/12 sitios en vez de 1/12 — de los cuales 9 quedarán poblados por este Excel, y 3 (Punta Astilleros + Presupuesto General ×2) seguirán "sin estándares configurados" por diseño (ver `resource-analysis-site-mapping.md`).
