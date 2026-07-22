@@ -1,6 +1,6 @@
 # Diseño: Importador del Excel de Resource Analysis
 
-**Estado: Incrementos 2 (Parser), 3 (Validación), 3.5 (Site Mapping) y 4 (Importación) implementados.** `src/lib/resourceAnalysisImport/` (incluida `service/`) — persiste realmente en `resource_analysis.scope_data`, verificado contra el archivo real. 37/37 tests verdes en el módulo, 429/429 en la suite completa. Solo falta el Incremento 5 (Verificación E2E contra un board real + re-ejecutar el barrido de factibilidad).
+**Estado: Incrementos 1-5 completos (2026-07-21/22).** El importador corrió realmente contra Tablero Principal — ver Sección 10 para el resultado E2E completo y la comparación de factibilidad antes/después.
 
 Depende de `docs/domain/resource-analysis-domain.md` (el *qué* y el *por qué*) — este documento responde el *cómo*.
 
@@ -157,6 +157,34 @@ createImportResourceAnalysisService(deps: {
 
 Verificado contra el archivo real con dependencias falsas (sin tocar Supabase): 9 sitios importados cuando el board no tiene datos previos; clasifica correctamente como "updated" el sitio que ya existía (Playa del Country); el `scope_data` pasado al upsert es el replace completo de 8 claves. 37/37 tests del módulo (parser+validate+siteMappings+service), 429/429 en la suite completa, `tsc` limpio.
 
-## Próximo paso
+## 10. Incremento 5 (Verificación E2E) — completo (2026-07-22)
 
-Incremento 5 (Verificación): (1) pruebas E2E contra un board real ejecutando el importador de punta a punta; (2) re-ejecutar el barrido de factibilidad del Cronograma (`docs/operacion/investigaciones/costos/`, mismo patrón que el barrido ya hecho el 2026-07-21) para poder evaluar los 12/12 sitios en vez de 1/12 — de los cuales 9 quedarán poblados por este Excel, y 3 (Punta Astilleros + Presupuesto General ×2) seguirán "sin estándares configurados" por diseño (ver `resource-analysis-site-mapping.md`).
+Corrida real contra Tablero Principal (no un board sintético — `RESOURCE_ANALYSIS_SITE_MAPPINGS` tiene los `group_id` reales, no aplica a ningún otro board). Snapshot previo guardado antes de escribir, para poder comparar o revertir.
+
+**Fase 1 — Validación en base de datos:**
+- Filas: 2 → 9 (7 importadas, 2 actualizadas). Sin duplicados.
+- `scope_data` verificado por valor (no por texto crudo — JSONB no preserva orden de claves) contra el payload del parser: coincide exacto en los 9 sitios.
+- `workers_data`/`wages_data` de los 2 sitios preexistentes: intactos, verificado campo por campo contra el snapshot previo.
+- Sitios nuevos: inicializados a `{}`/`0`, nunca con datos del Excel.
+
+**Fase 2 — Validación funcional (`ResourceEfficiencyWidget`):** bloqueada inicialmente por un bug preexistente y no relacionado en `SCurveWidget.tsx` (`useMemo` anidado dentro de otro `useMemo`, viola las Rules of Hooks, crashea toda la vista Costos). Corregido en un commit aparte (`fix(financial): resolve Rules of Hooks violation in SCurveWidget`) antes de continuar. Tras el fix: los 8 sitios visibles en el widget (Mercado La Sazón no aparece ahí por un filtro no relacionado — exige items de actividad en el tablero, no resource_analysis) muestran su `scope_data` real al cambiar de pestaña.
+
+**Fase 3 — Barrido del Cronograma (criterio de aceptación real):**
+
+| Sitio | Antes (2026-07-21) | Después (2026-07-22) |
+|---|---|---|
+| Plaza Puerto Colombia | Sin estándares | **Infactible, 667%** |
+| Playa del Country | Infactible, 563% | Infactible, 563% (sin cambio — ya tenía datos) |
+| Playa de Sabanilla 2 | Sin estándares | **Infactible, 1173%** |
+| Manglares | Sin estándares | **Infactible, 776%** |
+| Salinas del Rey | Sin estándares | Sin estándares (`scope_data` confirmado correcto en DB — falta `board_activity_standards`/Catálogo Técnico para este sitio, causa distinta, no del importador) |
+| Miramar Sector El Faro | Sin estándares | **Infactible, 1100%** |
+| Centro Gastronómico | Sin estándares | **Infactible, 680%** |
+| Sendero Santa Verónica | Sin estándares | **Infactible, 1070%** |
+| Mercado La Sazón | Sin estándares | **Infactible, 0%/déficit 86.72 JR** (anomalía separada: `siteCapacity.ts` — deuda técnica ya documentada de capacidad hardcodeada por nombre de zona, no relacionada con este importador) |
+| Playa Punta Astilleros | Sin estándares | Sin estándares (esperado — sin hoja en el Excel, Caso 4) |
+| Presupuesto General (×2) | Sin estándares | Sin estándares (esperado — excluido, no es un sitio operativo, Caso 4) |
+
+**Criterio de aceptación cumplido:** de 12 sitios, 8 pasaron de "sin datos" a "factibilidad calculada" (aunque el resultado sea "infactible" — eso es información de negocio real, no una limitación del importador). 1 (Salinas del Rey) tiene `resource_analysis` correcto pero sigue bloqueado por Catálogo Técnico, causa distinta y ya distinguida. 3 quedan sin datos por diseño (documentado en `resource-analysis-site-mapping.md`). Ninguno de los sitios restantes está bloqueado por un defecto del importador.
+
+Ningún sitio quedó "180%, 320% o 40%" trivialmente factible — los 8 nuevos sitios evaluables resultaron infactibles con utilizaciones muy altas (563%-1173%), consistente con la reversión de ADR-0009 (INV-0002): la fórmula con frecuencia infla los JR de actividades de baja frecuencia, y ningún sitio de este contrato tiene capacidad de cuadrilla dimensionada para esos totales todavía. Esto es exactamente el tipo de hallazgo de negocio que este incremento existía para exponer — no algo que corregir en el importador.
