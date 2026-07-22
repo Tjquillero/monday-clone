@@ -10,6 +10,7 @@ Este directorio contiene los documentos de dominio congelados de Mantenix: el co
 | [`workflow.md`](./workflow.md) | **Congelado (v1)** | Ciclo de estados semanal: transiciones de ejecución, verificación y rechazo. |
 | [`schedule-domain.md`](./schedule-domain.md) | Propuesto | Cronograma / Planificación, alcance v1 limitado a Programación. Deriva del POA vigente, no lo modifica (ver Principio de Desacoplamiento del Cronograma en `poa-domain.md`). Asignaciones, Calendario, Dependencias y Reprogramación quedan fuera de alcance por ahora. |
 | [`execution-domain.md`](./execution-domain.md) | Propuesto | Ejecución, alcance v1 limitado a Jornadas y Estados de ejecución. Evidencias e Incidencias quedan fuera de alcance por ahora. |
+| [`resource-analysis-domain.md`](./resource-analysis-domain.md) | Propuesto (Discovery) | Resource Analysis: cantidades de trabajo por sitio y zona técnica (`resource_analysis.scope_data`), regla de gobierno de datos frente al Catálogo Técnico. Importador aún no construido — ver `docs/architecture/resource-analysis-import-design.md` y `docs/discovery/resource-analysis-sheet-mapping-gaps.md`. |
 | `billing-domain.md` | Planeado | Pendiente de definición. Facturación: actas de cobro, liquidación, NP autorizados. |
 | `glossary.md` | Planeado | Pendiente de definición. Glosario transversal de términos compartidos entre subdominios. |
 
