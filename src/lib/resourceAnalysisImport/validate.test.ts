@@ -78,32 +78,75 @@ describe('validateResourceAnalysis — casos sintéticos (no ocurren en el archi
     expect(result.summary).toEqual({ totalSheets: 1, totalBlocks: 0, validBlocks: 0, blockedBlocks: 0 });
   });
 
-  it('RA005: dos bloques de la misma hoja resuelven al mismo sitio (caso real que motivó esta regla: COUNTRY 2)', () => {
+  it('RA005: dos bloques del mismo sitio que comparten scopeKey (riesgo real: importar la misma cantidad dos veces)', () => {
     const parsed: ParseResult = {
       sheets: [
         {
-          sheetName: 'COUNTRY 2',
+          sheetName: 'SITIO DUPLICADO',
           blocks: [
-            { blockLabel: 'PLAYAS SABANILLA - ZONA VERDE', excelRow: 1, quantities: [], activityStandardsRaw: [] },
-            { blockLabel: 'PLAYAS DEL COUNTRY - ZONA DE PLAYA', excelRow: 30, quantities: [], activityStandardsRaw: [] },
+            {
+              blockLabel: 'BLOQUE A',
+              excelRow: 1,
+              quantities: [{ scopeKey: 'corte_troncos', cantidad: 350, excelRow: 2 }],
+              activityStandardsRaw: [],
+            },
+            {
+              blockLabel: 'BLOQUE B (repite corte_troncos del bloque A)',
+              excelRow: 30,
+              quantities: [{ scopeKey: 'corte_troncos', cantidad: 999, excelRow: 31 }],
+              activityStandardsRaw: [],
+            },
           ],
         },
       ],
       warnings: [],
     };
     const siteMappings = new Map([
-      ['COUNTRY 2#0', 'sabanilla-2'],
-      ['COUNTRY 2#1', 'sabanilla-2'], // mismo sitio que el bloque 0 — duplicado
+      ['SITIO DUPLICADO#0', 'sitio-x'],
+      ['SITIO DUPLICADO#1', 'sitio-x'], // mismo sitio Y mismo scopeKey que el bloque 0 — duplicado real
     ]);
     const result = validateResourceAnalysis(parsed, { siteMappings });
     expect(result.isValid).toBe(false);
     const ra005 = result.errors.filter((e) => e.code === 'RA005');
     expect(ra005).toHaveLength(1);
     expect(ra005[0].blockIndex).toBe(1);
-    expect(ra005[0].detalle).toBe('sabanilla-2');
+    expect(ra005[0].detalle).toBe('sitio-x');
     // El primer bloque (que sí resolvió limpio) no queda marcado con error.
     expect(result.summary.blockedBlocks).toBe(1);
     expect(result.summary.validBlocks).toBe(1);
+  });
+
+  it('RA005 NO dispara cuando dos bloques del mismo sitio NO comparten scopeKey (caso normal: Zona Verde + Zona de Playa)', () => {
+    const parsed: ParseResult = {
+      sheets: [
+        {
+          sheetName: 'SITIO NORMAL',
+          blocks: [
+            {
+              blockLabel: 'SITIO NORMAL - ZONA VERDE',
+              excelRow: 1,
+              quantities: [{ scopeKey: 'arbustos', cantidad: 100, excelRow: 2 }],
+              activityStandardsRaw: [],
+            },
+            {
+              blockLabel: 'SITIO NORMAL - ZONA DE PLAYA',
+              excelRow: 30,
+              quantities: [{ scopeKey: 'corte_troncos', cantidad: 350, excelRow: 31 }],
+              activityStandardsRaw: [],
+            },
+          ],
+        },
+      ],
+      warnings: [],
+    };
+    const siteMappings = new Map([
+      ['SITIO NORMAL#0', 'sitio-y'],
+      ['SITIO NORMAL#1', 'sitio-y'], // mismo sitio, pero scopeKey distinto — no es duplicado
+    ]);
+    const result = validateResourceAnalysis(parsed, { siteMappings });
+    expect(result.isValid).toBe(true);
+    expect(result.errors.filter((e) => e.code === 'RA005')).toHaveLength(0);
+    expect(result.summary).toEqual({ totalSheets: 1, totalBlocks: 2, validBlocks: 2, blockedBlocks: 0 });
   });
 
   it('RA004: cantidad negativa reportada por el parser se reclasifica como error (bloquea isValid)', () => {

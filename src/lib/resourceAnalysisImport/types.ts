@@ -94,7 +94,7 @@ export type ValidationCode =
   | 'RA002' // Sitio no identificado
   | 'RA003' // Actividad desconocida (informativo)
   | 'RA004' // Cantidad negativa
-  | 'RA005' // Bloque duplicado (dos bloques de la misma hoja resuelven al mismo sitio)
+  | 'RA005' // Bloque duplicado (dos bloques del mismo sitio comparten al menos un scopeKey)
   | 'RA006' // Rendimiento leído pero ignorado (informativo — Regla de Gobierno de Datos)
   | 'RA007'; // Frecuencia leída pero ignorada (informativo — Regla de Gobierno de Datos)
 
@@ -132,5 +132,5 @@ export interface ValidateResourceAnalysisContext {
    * mapeo. Esta función NO decide el mapeo — ver
    * docs/discovery/resource-analysis-sheet-mapping-gaps.md.
    */
-  siteMappings: Map<string, string | null | undefined>;
+  siteMappings: ReadonlyMap<string, string | null | undefined>;
 }

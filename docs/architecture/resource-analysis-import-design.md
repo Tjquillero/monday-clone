@@ -115,7 +115,7 @@ Códigos estables, para que tests/UI/documentos se refieran a la regla sin copia
 | `RA002` | Bloque sin sitio resuelto en `context.siteMappings` | Error |
 | `RA003` | Descripción de cantidad no reconocida contra la tabla de `scope_key` | Informativo |
 | `RA004` | Cantidad negativa | Error |
-| `RA005` | Dos bloques de la misma hoja resuelven al mismo sitio (el caso real que motivó esta regla: la hoja "COUNTRY 2", ver discovery) | Error |
+| `RA005` | Dos bloques del mismo sitio comparten al menos un `scopeKey` (riesgo real: importar la misma cantidad física dos veces). Zona Verde y Zona de Playa del mismo sitio NO disparan esto — sus `scopeKey` nunca se solapan por diseño. No es la regla que detectó el caso de "COUNTRY 2" (eso fue discovery humano sobre texto copiado entre hojas distintas, no dos bloques de una misma hoja) | Error |
 | `RA006` | Rendimiento leído en el bloque — informativo, nunca se persiste (Regla de Gobierno de Datos) | Informativo |
 | `RA007` | Frecuencia leída en el bloque — informativa, nunca se persiste (Regla de Gobierno de Datos) | Informativo |
 

@@ -32,13 +32,14 @@ function validateBlock(
   block: ParsedBlock,
   blockIndex: number,
   context: ValidateResourceAnalysisContext,
-  resolvedSitesInSheet: Map<string, number>,
+  resolvedSitesInSheet: Map<string, { blockIndex: number; scopeKeys: Set<string> }>,
   errors: ValidationIssue[],
   warnings: ValidationIssue[],
 ): boolean {
   let hasError = false;
   const mappingKey = `${sheetName}#${blockIndex}`;
   const siteId = context.siteMappings.get(mappingKey);
+  const scopeKeys = new Set(block.quantities.map((q) => q.scopeKey));
 
   if (siteId === undefined || siteId === null) {
     errors.push({
@@ -51,11 +52,16 @@ function validateBlock(
     });
     hasError = true;
   } else {
-    const firstBlockIndex = resolvedSitesInSheet.get(siteId);
-    if (firstBlockIndex !== undefined) {
+    const previous = resolvedSitesInSheet.get(siteId);
+    // Dos bloques del mismo sitio son normales (Zona Verde + Zona de Playa,
+    // ver docs/architecture/resource-analysis-site-mapping.md) — solo es un
+    // problema real si además comparten scopeKey: eso sí arriesgaría
+    // importar la misma cantidad física dos veces para el mismo sitio.
+    const overlap = previous ? [...scopeKeys].filter((k) => previous.scopeKeys.has(k)) : [];
+    if (previous && overlap.length > 0) {
       errors.push({
         code: 'RA005',
-        message: `El bloque #${blockIndex} de "${sheetName}" resuelve al mismo sitio que el bloque #${firstBlockIndex} — posible duplicado.`,
+        message: `El bloque #${blockIndex} de "${sheetName}" comparte scopeKey (${overlap.join(', ')}) con el bloque #${previous.blockIndex}, ambos resueltos al mismo sitio — posible duplicado de datos.`,
         sheetName,
         blockIndex,
         blockLabel: block.blockLabel,
@@ -63,8 +69,8 @@ function validateBlock(
         detalle: siteId,
       });
       hasError = true;
-    } else {
-      resolvedSitesInSheet.set(siteId, blockIndex);
+    } else if (!previous) {
+      resolvedSitesInSheet.set(siteId, { blockIndex, scopeKeys });
     }
   }
 
@@ -109,7 +115,7 @@ export function validateResourceAnalysis(
       continue;
     }
 
-    const resolvedSitesInSheet = new Map<string, number>();
+    const resolvedSitesInSheet = new Map<string, { blockIndex: number; scopeKeys: Set<string> }>();
     sheet.blocks.forEach((block, blockIndex) => {
       totalBlocks++;
       const blockHasError = validateBlock(

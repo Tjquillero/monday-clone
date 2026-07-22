@@ -25,9 +25,13 @@ La hoja "COUNTRY 2" tiene dos bloques:
 
 **Bloqueante:** sin esta respuesta, el importador (Incremento 2+) no puede cargar el bloque de Zona de Playa de esta hoja para ningún sitio.
 
-## Caso 2 — Etiquetas internas incorrectas en 3 hojas más (no bloqueante, la pestaña sí es confiable)
+## Caso 2 — Etiquetas internas incorrectas en 3 hojas más — RESUELTO (2026-07-21)
 
-En estas 3 hojas, el nombre de la **pestaña** coincide claramente con un `group` real, pero el texto interno del bloque ("NOMBRE DEL PROYECTO:") está copiado de otro sitio:
+**Respuesta del dueño del proceso:** confirmado, usar siempre el nombre de la pestaña como fuente de verdad del sitio, ignorando el texto interno del bloque cuando no coincide.
+
+- [x] Confirmado: usar siempre el nombre de la pestaña, ignorar la etiqueta interna en estos 3 casos.
+
+Contexto original, conservado para trazabilidad — en estas 3 hojas, el nombre de la **pestaña** coincide claramente con un `group` real, pero el texto interno del bloque ("NOMBRE DEL PROYECTO:") está copiado de otro sitio:
 
 | Hoja (pestaña) | Etiqueta interna encontrada | `group` real (por nombre de pestaña) |
 |---|---|---|
@@ -35,28 +39,21 @@ En estas 3 hojas, el nombre de la **pestaña** coincide claramente con un `group
 | SANTA VERONICA | "PTO COLOMBIA - ZONA VERDE" / "... ZONA DE PLAYA" | SENDERO SANTA VERÓNICA |
 | PLAYA MANGLARES | " ZONA DURA MANGLARES" (2º bloque; el contenido es de Zona de Playa, no Zona Dura) | MANGLARES |
 
-**Propuesta de resolución** (para confirmar, no asumir): el importador usa el **nombre de la pestaña** como fuente de verdad del sitio, ignorando el texto interno del bloque cuando no coincide. ¿Confirmás que esta regla es correcta, o alguna de estas 3 hojas en realidad sí pertenece al sitio que dice la etiqueta interna (y es la pestaña la que está mal nombrada)?
+## Caso 3 — Sitio "PLAYA MIRAMAR" vs. `group` "MIRAMAR SECTOR EL FARO" — RESUELTO (2026-07-21)
 
-- [ ] Confirmado: usar siempre el nombre de la pestaña, ignorar la etiqueta interna en estos 3 casos.
-- [ ] Alguna excepción — indicar cuál hoja y por qué.
+**Respuesta del dueño del proceso:** confirmado — la hoja "PLAYA MIRAMAR" corresponde al sitio "MIRAMAR SECTOR EL FARO" (único candidato razonable de los 12 sitios).
 
-## Caso 3 — Sitio "PLAYA MIRAMAR" vs. `group` "MIRAMAR SECTOR EL FARO"
+- [x] Confirmado: la hoja "PLAYA MIRAMAR" corresponde al sitio "MIRAMAR SECTOR EL FARO".
 
-El nombre de la pestaña ("PLAYA MIRAMAR") no coincide exactamente con ningún `group.title` de la base de datos — el más parecido es "MIRAMAR SECTOR EL FARO".
+## Caso 4 — 3 sitios de la base de datos sin ninguna hoja en este Excel — RESUELTO (2026-07-21)
 
-- [ ] Confirmado: la hoja "PLAYA MIRAMAR" corresponde al sitio "MIRAMAR SECTOR EL FARO".
-- [ ] No — son sitios distintos / falta un mapeo más específico.
+**Respuesta del dueño del proceso:**
+- `PLAYA PUNTA ASTILLEROS` es un sitio real, pendiente de dato (no de desarrollo) — no existe otra fuente todavía.
+- `PRESUPUESTO GENERAL` (los dos `group_id`) **no es un sitio operativo real** — es un grupo administrativo/resumen. Se excluye explícitamente del barrido de factibilidad del Cronograma; nunca debería tener `resource_analysis` propio.
 
-## Caso 4 — 3 sitios de la base de datos sin ninguna hoja en este Excel
-
-`PLAYA PUNTA ASTILLEROS` y `PRESUPUESTO GENERAL` (dos `group_id` distintos con el mismo nombre) no tienen hoja correspondiente en `COSTOS GENERALES (V2).xlsx`.
-
-**Pregunta:** ¿existe una versión más reciente o complementaria de este documento que sí los incluya, o estos sitios simplemente no tienen Resource Analysis todavía (y deben quedar "sin estándares configurados" hasta que se levante esa información en campo)?
-
-- [ ] No existe otra fuente — quedan pendientes de dato, no de desarrollo.
-- [ ] Existe otro documento — indicar cuál.
-- [ ] "PRESUPUESTO GENERAL" no es un sitio operativo real (es un grupo administrativo/resumen) y no debería tener Resource Analysis nunca — confirmar si corresponde excluirlo del barrido de factibilidad en vez de esperar datos para él.
+- [x] Punta Astilleros: pendiente de dato, no de desarrollo.
+- [x] Presupuesto General (×2): excluido permanentemente del barrido — no es un sitio operativo.
 
 ## No bloqueante para el Incremento 2 (Parser)
 
-El parser de lectura puede construirse y probarse contra los 9 sitios ya identificados con confianza alta (Sección 2 de `resource-analysis-import-design.md`) sin esperar estas respuestas — simplemente no escribirá nada en producción (Incremento 4) hasta que el Caso 1 quede resuelto, y reportará los Casos 2-4 como advertencias, no errores.
+El parser de lectura pudo construirse y probarse contra los 9 sitios ya identificados con confianza alta (Sección 2 de `resource-analysis-import-design.md`) sin esperar estas respuestas. Con los 4 casos ya resueltos, la tabla de mapeo completa vive en `docs/architecture/resource-analysis-site-mapping.md` — ese documento es la fuente de verdad para el Incremento 4 (Importación), no este.
