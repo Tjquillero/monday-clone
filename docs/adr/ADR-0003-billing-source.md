@@ -1,12 +1,18 @@
 # ADR-0003 — Fuente y Mecanismo de Generación del Acta
 
 ## Estado
-Aceptado (mecanismo de generación, y relación con el histórico) — con dos supuestos de trabajo aún pendientes de confirmación explícita, ver sección "Puntos pendientes de confirmación".
+**Implementado y Congelado (2026-09-02).** El mecanismo de generación, la elegibilidad de ejecuciones, la captura de snapshot post-emisión y la inmutabilidad de actas emitidas quedan formalmente consolidados.
 
-## Fecha
-2026-07-09
+## Invariante de Dominio e Inmutabilidad Contractual
+1. **DRAFT (Borrador Vivo)**: Mientras el Acta está en estado `draft`, se calcula dinámicamente proyectando la versión **activa** del POA (`poa_versions.status = 'active'`) + las ejecuciones elegibles para facturación via `generate_acta_draft()`.
+2. **ISSUED (Acta Emitida e Inmutable)**: Al invocar `issue_acta()`, el sistema asigna el número consecutivo oficial (`numero`), bloquea la transacción vía `SELECT FOR UPDATE` sobre `boards`, y **captura un snapshot contractual inalterable** (`poa_activity_id`, `poa_version_id`, `codigo_actividad`, `descripcion_snapshot`, `unidad_snapshot`, `precio_unitario_snapshot`, `cantidad_facturada`, `valor_total`).
+3. **Invariante Central**: *Una Acta emitida conserva un snapshot inmutable de la fuente contractual utilizada para su generación. Ninguna modificación o activación posterior de una versión del POA puede alterar el contenido económico de un Acta emitida.*
+4. **Prohibición Absoluta de Resource Analysis (RA)**: *Resource Analysis (`operational_journals` / `cantJornalesMes`) nunca constituye fuente de cantidad, unidad, precio unitario ni valor facturable.*
+5. **Regla de Gobierno de UI**: *La interfaz de usuario (UI) representa el estado de facturación (`draft` proyectado/editable, `issued` histórico/inmutable); no puede convertirse en una segunda implementación de las reglas de facturación ni calcular precios/cantidades de cobro por su cuenta.*
 
-**Actualización (2026-07-12):** se agregó la sección "Mecanismo de emisión del Acta" — corrige la suposición inicial de relación 1:1 entre Acta y período/mes calendario (ver Regla 7 corregida en `poa-domain.md`) y especifica el mecanismo, antes implícito, de cuándo el Acta pasa de proyección viva a documento emitido e inmutable. No modifica ninguna decisión ya aceptada arriba (fuente de verdad por campo, precio unitario, relación con el histórico).
+## Elegibilidad de Facturación según Estado del Weekly Plan
+- **`weekly_plan_item_executions.status = 'verified'`**: Ejecución comprobada en terreno con evidencias.
+- **`weekly_plans.status IN ('confirmed', 'closed')`**: Aprobación del período semanal. Ambos estados habilitan las ejecuciones verificadas de ese período como **elegibles para facturación** (`billing eligible`). `closed` constituye el cierre definitivo administrativo de la semana (impide modificaciones a la agenda semanal) conservando intacta su elegibilidad en el motor de actas.
 
 ## Contexto
 `docs/discovery/billing-source-analysis.md` documentó un choque de gobernanza sin resolver: la implementación real de Facturación (`financial_actas`/`financial_acta_details`, cálculo desde `item.values.*`) no tiene relación alguna con `poa-domain.md` (Regla 14, Origen Único del Cobro) ni con `execution-domain.md`. Ese documento dejó 5 preguntas abiertas, todas de negocio, no técnicas.
