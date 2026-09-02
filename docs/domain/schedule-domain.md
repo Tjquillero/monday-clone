@@ -1,6 +1,23 @@
-# Definición y Reglas del Dominio: Cronograma / Planificación (Schedule)
+# Definición y Reglas del Dominio: Cronograma / Planificación (Schedule & Weekly Planning Engine)
 
-**Estado: Propuesto — primera versión, alcance limitado a Programación.**
+## Estado
+**Congelado v1 (2026-09-02).** El motor de planificación semanal, la generación de snapshot por línea, el cálculo de jornales proyectados y la cadena de consistencia E2E quedan formalmente consolidados.
+
+## Fórmulas y Estándar de Planificación Semanal
+- **Estándar de Días Hábiles Mes**: El sistema utiliza el estándar de **25 días laborales por mes** (`WORKING_DAYS_MONTH = 25`).
+- **Jornales Proyectados por Actividad**:
+  $$\text{planned\_jr} = \frac{\text{planned\_qty} \times \text{planned\_frecuencia}}{\text{planned\_rendimiento} \times 25}$$
+  donde `planned_rendimiento` proviene de `board_activity_standards` y `planned_frecuencia` proviene de la versión activa de `poa_activities`.
+- **Snapshot Autocontenido**: Cada `weekly_plan_items` copia e inmoviliza los valores de `planned_rendimiento`, `planned_frecuencia`, `planned_qty`, `unit` y `planned_jr` al momento de su creación.
+
+## Consistencia de la Cadena E2E ante Cambios de Versión del POA
+1. **Unidad Temporal Invariable**: La activación de un `POA v2` ($12.000/m^2$) posterior a la publicación de un Plan Semanal bajo `POA v1` ($10.000/m^2$):
+   - **NO altera** la cantidad planificada física de la línea ($50 m^2$).
+   - **NO altera** la cantidad física ejecutada ($45 m^2$).
+   - **NO modifica** retroactivamente los datos históricos del Plan ni de las Ejecuciones.
+2. **Proyección y Emisión de Facturación**:
+   - Mientras el borrador de Acta permanece en `DRAFT`, calcula sobre la versión activa vigente (`POA v2` $\rightarrow 45 m^2 \times 12.000 = 540.000$).
+   - Al emitirse (`issue_acta`), el Acta congela el snapshot contractual ($540.000$) de forma **100% INMUTABLE**.
 
 ## Introducción
 Este documento describe el subdominio de Cronograma/Planificación de Mantenix. Deriva del dominio contractual del POA ([`poa-domain.md`](./poa-domain.md), Congelado v1) sin modificarlo, y se articula con el ciclo de estados del negocio ya congelado en [`workflow.md`](./workflow.md), del cual no duplica las transiciones — las referencia.
