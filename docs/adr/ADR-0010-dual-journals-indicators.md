@@ -1,7 +1,13 @@
 # ADR-0010 — Jornales Contractuales y Jornales Operativos como indicadores independientes
 
 ## Estado
-**Aceptado (2026-07-22).** El dueño del proceso eligió la Opción C de `docs/discovery/scheduler-frequency-source-decision-request.md`. Esta ADR registra la decisión de negocio; el diseño de implementación (Sección "Alcance de implementación" más abajo) queda pendiente como un incremento aparte, con su propio Discovery → Diseño → Implementación → Verificación — mismo proceso disciplinado que ya se usó para el importador de Resource Analysis.
+**Implementado (2026-09-02, commit `d7e02bb`).** Decisión de negocio aceptada (2026-07-22) e implementada con cobertura total de pruebas unitarias y de integración UI/Dominio.
+
+## Semántica de Capas e Indicadores
+- **POA → Jornales Contractuales (`theoretical_journals_month`)**: Fuente de verdad del cumplimiento contractual. Alimenta el Scheduler, la Planificación Semanal (`weeklyPlanner.ts`), la Agenda Operativa y la Capacidad de Mano de Obra Contractual.
+- **Resource Analysis → Jornales Operativos (`operational_journals`)**: Fuente de verdad del dimensionamiento operativo real. Alimenta el Dashboard de Costos Operativos (`CostosOperativosView.tsx`), el Ranking Ejecutivo (`ExecutiveIndicators.tsx`) y `BoardSitePlan.operationalJournals`.
+
+Ambas magnitudes son **estrictamente independientes**. Modificar cantidades o actividades en Resource Analysis no altera el cálculo contractual del POA, y viceversa.
 
 ## Contexto
 
