@@ -131,12 +131,14 @@ function parseActivityStandardsTable(
       const rendimiento = typeof row[3] === 'number' ? row[3] : null;
       const frecuencia = typeof row[4] === 'number' ? row[4] : null;
       const cantidad = typeof row[6] === 'number' ? row[6] : null;
+      const cantJornalesMes = typeof row[7] === 'number' ? row[7] : null;
       activityStandardsRaw.push({
         actividad,
         unidad,
         rendimiento,
         frecuencia,
         cantidad,
+        cantJornalesMes,
         excelRow: m + 1,
       });
     }

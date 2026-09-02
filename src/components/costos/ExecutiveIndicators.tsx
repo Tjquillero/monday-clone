@@ -73,6 +73,11 @@ export default function ExecutiveIndicators({ sites, onSelectSite, isLoading }: 
                 {!r.feasible && (
                   <span className="text-[9px] font-black text-red-400">−{r.deficit.toFixed(1)} JR</span>
                 )}
+                {r.operationalJournals != null && (
+                  <span className="text-[9px] font-mono text-cyan-400" title="Jornales Operativos (Resource Analysis)">
+                    {r.operationalJournals.toFixed(1)} JR Op
+                  </span>
+                )}
                 <span className={`text-xs font-black ${r.feasible ? 'text-white' : 'text-red-400'}`}>{r.utilizacionPct}%</span>
               </div>
             </button>

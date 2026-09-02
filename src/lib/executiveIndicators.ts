@@ -13,6 +13,7 @@ export interface SiteRanking {
   utilizacionPct: number;
   deficit: number;
   feasible: boolean;
+  operationalJournals?: number | null;
 }
 
 // Orden pensado para el Director de Operaciones: no basta con "quién tiene
@@ -22,10 +23,10 @@ export interface SiteRanking {
 // 110%). Orden: (1) infactibles antes que factibles, (2) entre infactibles,
 // mayor déficit primero, (3) utilización % descendente, (4) nombre.
 export function rankSitesByUtilization(sites: BoardSitePlan[]): SiteRanking[] {
-  const ranked: SiteRanking[] = sites.map(({ group, plan }) => {
+  const ranked: SiteRanking[] = sites.map(({ group, plan, operationalJournals }) => {
     const { weekly_available, weekly_required, feasible, deficit } = plan.capacity;
     const utilizacionPct = weekly_available > 0 ? Math.round((weekly_required / weekly_available) * 100) : 0;
-    return { group, utilizacionPct, deficit, feasible };
+    return { group, utilizacionPct, deficit, feasible, operationalJournals };
   });
 
   ranked.sort((a, b) => {

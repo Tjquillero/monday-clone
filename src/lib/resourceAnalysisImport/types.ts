@@ -38,6 +38,7 @@ export interface ParsedActivityStandardRaw {
   rendimiento: number | null;
   frecuencia: number | null;
   cantidad: number | null;
+  cantJornalesMes?: number | null;
   excelRow: number;
 }
 

@@ -18,9 +18,10 @@ describe('buildImportPayload — archivo real con el mapeo congelado', () => {
   it('PLAYA DEL COUNTRY combina Zona Verde + Zona de Playa en un único scope_data de 8 claves', () => {
     const country = payload.toUpsert.find((s) => s.groupId === '6366520a-d981-4c7c-8d4d-72fbf06bb7f3')!;
     expect(country.sheetNames).toEqual(['COUNTRY 1']);
-    expect(Object.keys(country.scopeData)).toHaveLength(8);
+    expect(Object.keys(country.scopeData)).toHaveLength(9);
     expect(country.scopeData.corte_troncos).toBe(350);
     expect(country.scopeData.arbustos).toBe(2295);
+    expect(country.scopeData.operational_journals).toBeGreaterThan(0);
   });
 
   it('COUNTRY 2 (Playa de Sabanilla 2) trae cantidades propias, no una copia de COUNTRY 1', () => {
@@ -97,5 +98,103 @@ describe('buildImportPayload — casos sintéticos de bloqueo', () => {
     const payload = buildImportPayload(parsed, validation, new Map());
     expect(payload.toUpsert).toHaveLength(0);
     expect(payload.skipped).toHaveLength(1);
+  });
+});
+
+describe('ADR-0010 — Cobertura específica de Jornales Operativos', () => {
+  it('P3 & P5: agrega la suma de cantJornalesMes de múltiples actividades y bloques en operational_journals', () => {
+    const parsed: ParseResult = {
+      sheets: [
+        {
+          sheetName: 'SITIO DUAL',
+          blocks: [
+            {
+              blockLabel: 'SITIO DUAL - ZONA VERDE',
+              excelRow: 1,
+              quantities: [{ scopeKey: 'arbustos', cantidad: 100, excelRow: 2 }],
+              activityStandardsRaw: [
+                { actividad: 'Poda', unidad: 'UND', rendimiento: 10, frecuencia: 1, cantidad: 100, cantJornalesMes: 10.5, excelRow: 3 },
+                { actividad: 'Riego', unidad: 'UND', rendimiento: 20, frecuencia: 1, cantidad: 100, cantJornalesMes: 5.25, excelRow: 4 },
+              ],
+            },
+            {
+              blockLabel: 'SITIO DUAL - ZONA PLAYA',
+              excelRow: 20,
+              quantities: [{ scopeKey: 'zona_playa', cantidad: 500, excelRow: 21 }],
+              activityStandardsRaw: [
+                { actividad: 'Corte troncos', unidad: 'UND', rendimiento: 5, frecuencia: 1, cantidad: 500, cantJornalesMes: 4.25, excelRow: 22 },
+              ],
+            },
+          ],
+        },
+      ],
+      warnings: [],
+    };
+    const siteMappings = new Map([
+      ['SITIO DUAL#0', 'group-dual'],
+      ['SITIO DUAL#1', 'group-dual'],
+    ]);
+    const validation: ValidationResult = {
+      isValid: true,
+      errors: [],
+      warnings: [],
+      summary: { totalSheets: 1, totalBlocks: 2, validBlocks: 2, blockedBlocks: 0 },
+    };
+    const payload = buildImportPayload(parsed, validation, siteMappings);
+    const site = payload.toUpsert.find((s) => s.groupId === 'group-dual')!;
+    expect(site).toBeDefined();
+    // 10.5 + 5.25 + 4.25 = 20.0
+    expect(site.scopeData.operational_journals).toBe(20.0);
+  });
+
+  it('P6: sitio sin actividades operativas (activityStandardsRaw vacíos o sin jornales) NO recibe un valor inventado', () => {
+    const parsed: ParseResult = {
+      sheets: [
+        {
+          sheetName: 'SITIO VACIO OP',
+          blocks: [
+            {
+              blockLabel: 'SITIO VACIO - ZONA VERDE',
+              excelRow: 1,
+              quantities: [{ scopeKey: 'grama', cantidad: 100, excelRow: 2 }],
+              activityStandardsRaw: [],
+            },
+          ],
+        },
+      ],
+      warnings: [],
+    };
+    const siteMappings = new Map([['SITIO VACIO OP#0', 'group-vacio']]);
+    const validation: ValidationResult = {
+      isValid: true,
+      errors: [],
+      warnings: [],
+      summary: { totalSheets: 1, totalBlocks: 1, validBlocks: 1, blockedBlocks: 0 },
+    };
+    const payload = buildImportPayload(parsed, validation, siteMappings);
+    const site = payload.toUpsert.find((s) => s.groupId === 'group-vacio')!;
+    expect(site).toBeDefined();
+    expect(site.scopeData.operational_journals).toBeUndefined();
+  });
+
+  it('P4: no genera ni modifica ninguna estructura asociada a board_activity_standards', () => {
+    const parsed: ParseResult = {
+      sheets: [
+        {
+          sheetName: 'HOJA C',
+          blocks: [{ blockLabel: 'C', excelRow: 1, quantities: [{ scopeKey: 'arbustos', cantidad: 50, excelRow: 2 }], activityStandardsRaw: [] }],
+        },
+      ],
+      warnings: [],
+    };
+    const validation: ValidationResult = {
+      isValid: true,
+      errors: [],
+      warnings: [],
+      summary: { totalSheets: 1, totalBlocks: 1, validBlocks: 1, blockedBlocks: 0 },
+    };
+    const payload = buildImportPayload(parsed, validation, new Map([['HOJA C#0', 'group-c']]));
+    expect(payload.toUpsert[0]).not.toHaveProperty('standards');
+    expect(payload.toUpsert[0]).not.toHaveProperty('board_activity_standards');
   });
 });

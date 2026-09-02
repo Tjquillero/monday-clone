@@ -77,6 +77,17 @@ export function buildImportPayload(
       for (const q of block.quantities) {
         acc.scopeData[q.scopeKey] = q.cantidad;
       }
+      let blockOpJournals = 0;
+      for (const act of block.activityStandardsRaw) {
+        if (typeof act.cantJornalesMes === 'number' && act.cantJornalesMes > 0) {
+          blockOpJournals += act.cantJornalesMes;
+        } else if (act.cantidad && act.rendimiento && act.frecuencia && act.rendimiento > 0 && act.frecuencia > 0) {
+          blockOpJournals += (act.cantidad * 25) / (act.rendimiento * act.frecuencia);
+        }
+      }
+      if (blockOpJournals > 0) {
+        acc.scopeData.operational_journals = (acc.scopeData.operational_journals || 0) + blockOpJournals;
+      }
     });
   }
 

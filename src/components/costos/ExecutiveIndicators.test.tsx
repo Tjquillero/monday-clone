@@ -50,4 +50,11 @@ describe('ExecutiveIndicators', () => {
     fireEvent.click(screen.getByText('Sitio X'));
     expect(onSelectSite).toHaveBeenCalledWith('group-x');
   });
+
+  it('ADR-0010 P8: muestra de forma inequívoca la distinción entre JR Op y datos del ranking', () => {
+    const site = sitePlan('group-op', 'Sitio Con Op');
+    site.operationalJournals = 107.5;
+    render(<ExecutiveIndicators sites={[site]} onSelectSite={jest.fn()} isLoading={false} />);
+    expect(screen.getByText('107.5 JR Op')).toBeInTheDocument();
+  });
 });

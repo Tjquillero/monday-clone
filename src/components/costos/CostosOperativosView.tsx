@@ -114,7 +114,7 @@ export default function CostosOperativosView({ group, plan, costoJornal, isLoadi
       <p className="text-xs text-slate-500">Selecciona un sitio (o un sitio del ranking arriba) para ver su detalle de costos operativos.</p>
     );
   } else {
-    perSiteSection = <PerSiteDetail group={group} plan={plan} costoJornal={costoJornal} rows={rows} topKeys={topKeys} wageMissing={wageMissing} effectiveSortKey={effectiveSortKey} sortDir={sortDir} sortKey={sortKey} setSortKey={setSortKey} setSortDir={setSortDir} sorted={sorted} />;
+    perSiteSection = <PerSiteDetail group={group} plan={plan} costoJornal={costoJornal} rows={rows} topKeys={topKeys} wageMissing={wageMissing} effectiveSortKey={effectiveSortKey} sortDir={sortDir} sortKey={sortKey} setSortKey={setSortKey} setSortDir={setSortDir} sorted={sorted} boardSites={boardSites} />;
   }
 
   return (
@@ -124,7 +124,7 @@ export default function CostosOperativosView({ group, plan, costoJornal, isLoadi
           <DollarSign className="w-4 h-4 text-[#3B7EF8]" /> Costos Operativos
         </h2>
         <p className="text-[10px] text-slate-500 mt-0.5 uppercase tracking-widest">
-          {group ? `${group.title} — mano de obra teórica del Cronograma` : 'Todos los sitios — mano de obra teórica del Cronograma'}
+          {group ? `${group.title} — mano de obra teórica y dimensionamiento operativo (ADR-0010)` : 'Todos los sitios — mano de obra teórica y dimensionamiento operativo (ADR-0010)'}
         </p>
       </div>
 
@@ -153,19 +153,15 @@ interface PerSiteDetailProps {
   setSortKey: (k: SortKey) => void;
   setSortDir: React.Dispatch<React.SetStateAction<SortDirection>>;
   sorted: { activity: WeeklyPlanningContext['activities'][number]; costo: number; pctJr: number; pctCosto: number }[];
+  boardSites: BoardSitePlan[];
 }
 
-function PerSiteDetail({ group, plan, costoJornal, rows, topKeys, wageMissing, effectiveSortKey, sortKey, sortDir, setSortKey, setSortDir, sorted }: PerSiteDetailProps) {
+function PerSiteDetail({ group, plan, costoJornal, rows, topKeys, wageMissing, effectiveSortKey, sortKey, sortDir, setSortKey, setSortDir, sorted, boardSites }: PerSiteDetailProps) {
   const totalJornales = rows.reduce((s, r) => s + r.activity.theoretical_journals_month, 0);
   const totalCosto = totalJornales * costoJornal;
-  // "Utilización"/"Capacidad disponible"/"Déficit" son SIEMPRE semanales en
-  // toda la app (decisión de dominio, unifica la deuda técnica dejada por
-  // Fase 3): se leen directo de plan.capacity, la misma salida del motor
-  // que ya usa CapacitySummary.tsx (Cronograma) y el ranking ejecutivo —
-  // sin recalcular nada aparte. "JR mensuales"/"Costo mensual" siguen siendo
-  // mensuales a propósito (responden una pregunta distinta: cuánto va a
-  // costar el mes, no si esta semana hay sobrecarga), mismo patrón que
-  // PlanningTable ya usa (columnas JR/Mes y JR/Sem juntas).
+  const currentSitePlan = boardSites.find((s) => s.group.id === group.id);
+  const opJournals = currentSitePlan?.operationalJournals ?? null;
+
   const capacidadDisponible = plan?.capacity.weekly_available ?? 0;
   const utilizacion = capacidadDisponible > 0 ? Math.round(((plan?.capacity.weekly_required ?? 0) / capacidadDisponible) * 100) : 0;
   const deficit = plan?.capacity.deficit ?? 0;
@@ -196,8 +192,9 @@ function PerSiteDetail({ group, plan, costoJornal, rows, topKeys, wageMissing, e
 
       {/* ── Resumen superior ────────────────────────────────────── */}
       <div className="industrial-card rounded-xl border border-[var(--border-color)] p-4">
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-          <Metric label="JR mensuales" value={totalJornales.toFixed(1)} />
+        <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
+          <Metric label="JR Contractuales" value={totalJornales.toFixed(1)} />
+          <Metric label="JR Operativos (RA)" value={opJournals != null ? opJournals.toFixed(1) : 'N/A'} pending={opJournals == null} />
           <Metric label="Costo mensual" value={wageMissing ? 'Pendiente' : formatCurrency(totalCosto)} pending={wageMissing} />
           <Metric label="Costo / jornal" value={wageMissing ? 'Pendiente' : formatCurrency(costoJornal)} pending={wageMissing} />
           <Metric label="Capacidad disponible" value={`${capacidadDisponible.toFixed(0)} JR`} />

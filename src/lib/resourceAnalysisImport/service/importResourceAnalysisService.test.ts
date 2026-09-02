@@ -67,8 +67,8 @@ describe('importResourceAnalysisService — archivo real', () => {
     expect(countryDetail.status).toBe('updated');
     const countryUpsert = upserted.find((u) => u.groupId === PLAYA_DEL_COUNTRY)!;
     expect(countryUpsert.isNew).toBe(false);
-    // El scope_data pasado a upsert es el REPLACE completo (8 claves: 4 ZV + 4 playa).
-    expect(Object.keys(countryUpsert.scopeData)).toHaveLength(8);
+    // El scope_data pasado a upsert es el REPLACE completo (9 claves: 8 físicas + operational_journals).
+    expect(Object.keys(countryUpsert.scopeData)).toHaveLength(9);
   });
 
   it('devuelve importedBy tal cual se pasó, sin persistirlo (resource_analysis no tiene esa columna)', async () => {

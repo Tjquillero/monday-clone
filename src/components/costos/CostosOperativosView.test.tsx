@@ -161,4 +161,37 @@ describe('CostosOperativosView', () => {
       expect(thead).toHaveClass('sticky');
     });
   });
+
+  describe('ADR-0010 — Indicadores Duales en UI', () => {
+    it('P8: la UI diferencia de manera transparente e inequívoca JR Contractuales de JR Operativos (RA)', () => {
+      const boardSites = [
+        {
+          group: { id: 'zone-1', title: 'Zona Test' },
+          plan: basePlan(),
+          operationalJournals: 107.56,
+        },
+      ];
+      render(<CostosOperativosView {...baseProps({ boardSites })} />);
+
+      expect(screen.getByText('JR Contractuales')).toBeInTheDocument();
+      expect(screen.getByText('JR Operativos (RA)')).toBeInTheDocument();
+      expect(screen.getByText('107.6')).toBeInTheDocument(); // 107.56 toFixed(1)
+    });
+
+    it('P8: cuando un sitio no tiene Resource Analysis cargado, muestra N/A en JR Operativos sin alterar JR Contractuales', () => {
+      const boardSites = [
+        {
+          group: { id: 'zone-1', title: 'Zona Test' },
+          plan: basePlan(),
+          operationalJournals: null,
+        },
+      ];
+      render(<CostosOperativosView {...baseProps({ boardSites })} />);
+
+      expect(screen.getByText('JR Contractuales')).toBeInTheDocument();
+      expect(screen.getByText('JR Operativos (RA)')).toBeInTheDocument();
+      expect(screen.getByText('N/A')).toBeInTheDocument();
+      expect(screen.getByText('18.1')).toBeInTheDocument(); // JR Contractuales sum
+    });
+  });
 });

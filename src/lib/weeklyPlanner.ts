@@ -244,6 +244,7 @@ export function buildWeeklyPlanningContext(
 export interface BoardSitePlan {
   group: { id: string; title: string };
   plan: WeeklyPlanningContext;
+  operationalJournals?: number | null;
 }
 
 // Fan-out de buildWeeklyPlanningContext() a TODAS las zonas de un board — la
@@ -272,7 +273,8 @@ export function buildBoardPlanningContexts(
     const scopeQuantities = scopeDataBySite[group.id] ?? {};
     const plan = buildWeeklyPlanningContext(mergedStandards, scopeMappings, scopeQuantities, zone, week);
     if (plan.activities.length === 0) continue;
-    results.push({ group, plan });
+    const operationalJournals = typeof scopeQuantities.operational_journals === 'number' ? scopeQuantities.operational_journals : null;
+    results.push({ group, plan, operationalJournals });
   }
   return results;
 }

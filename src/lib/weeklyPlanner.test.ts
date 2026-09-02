@@ -403,4 +403,34 @@ describe('buildBoardPlanningContexts', () => {
   it('con 0 grupos devuelve un arreglo vacío', () => {
     expect(buildBoardPlanningContexts([], PLATEO_STD, catalog([poaEntry()]), PLATEO_MAP, {}, WEEK_1)).toEqual([]);
   });
+
+  it('ADR-0010 P7: mapea scopeQuantities.operational_journals a BoardSitePlan.operationalJournals (y null cuando no existe)', () => {
+    const results = buildBoardPlanningContexts(
+      [
+        { id: 'group-con-op', title: 'SITIO CON OP' },
+        { id: 'group-sin-op', title: 'SITIO SIN OP' },
+      ],
+      PLATEO_STD,
+      catalog([
+        poaEntry({
+          zones: new Map([
+            ['group-con-op', { poaActivityZoneId: 'paz-1', zoneId: 'group-con-op', cantidadContratada: 2295 }],
+            ['group-sin-op', { poaActivityZoneId: 'paz-2', zoneId: 'group-sin-op', cantidadContratada: 2295 }],
+          ]),
+        }),
+      ]),
+      PLATEO_MAP,
+      {
+        'group-con-op': { arbustos: 2295, operational_journals: 107.5 },
+        'group-sin-op': { arbustos: 2295 },
+      },
+      WEEK_1,
+    );
+    expect(results).toHaveLength(2);
+    const conOp = results.find((r) => r.group.id === 'group-con-op')!;
+    const sinOp = results.find((r) => r.group.id === 'group-sin-op')!;
+
+    expect(conOp.operationalJournals).toBe(107.5);
+    expect(sinOp.operationalJournals).toBeNull();
+  });
 });

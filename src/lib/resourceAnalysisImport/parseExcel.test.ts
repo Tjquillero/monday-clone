@@ -112,6 +112,23 @@ describe('parseResourceAnalysisExcel — archivo real', () => {
       const troncos = country1.blocks[1].activityStandardsRaw.find((a) => a.actividad === 'Corte de troncos');
       expect(troncos!.rendimiento).not.toBe(30);
     });
+
+    it('ADR-0010 P1 & P2: extrae cantJornalesMes correctamente del Excel y se conserva por actividad', () => {
+      const sheet = result.sheets.find((s) => s.sheetName === 'PLAZA PUERTO COLOMBIA')!;
+      const block = sheet.blocks[0]; // Zona Verde
+      expect(block.activityStandardsRaw.length).toBeGreaterThan(0);
+      for (const act of block.activityStandardsRaw) {
+        expect(act).toHaveProperty('cantJornalesMes');
+        if (act.cantJornalesMes !== null) {
+          expect(typeof act.cantJornalesMes).toBe('number');
+          expect(act.cantJornalesMes).toBeGreaterThan(0);
+        }
+      }
+      const oda = block.activityStandardsRaw.find((a) => a.actividad.toLowerCase().includes('poda'));
+      if (oda && oda.cantJornalesMes !== null) {
+        expect(oda.cantJornalesMes).toBeGreaterThan(0);
+      }
+    });
   });
 
   describe('warnings — descripciones no reconocidas', () => {
