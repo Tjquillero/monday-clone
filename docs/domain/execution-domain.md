@@ -1,6 +1,20 @@
-# Definición y Reglas del Dominio: Ejecución (Execution)
+# Definición y Reglas del Dominio: Ejecución y Certificación (Execution & Certification)
 
-**Estado: Propuesto — primera versión, alcance limitado a Jornadas y Estados de ejecución.**
+## Estado
+**Congelado v1 (2026-09-02).** El motor de ejecución, las jornadas de terreno, la verificación de evidencia y la frontera de elegibilidad de facturación quedan formalmente consolidados.
+
+## Frontera de Ejecución y Facturación
+- **Unidad de Verdad**: `weekly_plan_item_executions` es la fuente de verdad del evento de ejecución física en terreno (`executed_qty`, `unit`, `execution_date`, `crew_name`, `worker_count`).
+- **El Jornal y la Cantidad Ejecutada son Físicos, No Monetarios**: La ejecución registra trabajo físico e impresiones operativas (`executed_jr`). **No almacena ni congela precios unitarios o valores de dinero ($).**
+- **Elegibilidad para Facturación**: Una ejecución se vuelve elegible para cobro (`billing eligible`) si y solo si:
+  1. Su estado es `status = 'verified'` (aprobada por supervisor con evidencias/GPS).
+  2. Su plan semanal asociado está aprobado administrativamente (`weekly_plans.status IN ('confirmed', 'closed')`).
+  3. Su saldo facturable pendiente es mayor a cero ($executed\_qty - \sum cantidad\_consumida > 0$).
+
+## Comportamiento ante Actualizaciones del POA (POA v1 -> POA v2)
+1. **La Ejecución Física es Invariable**: Cambiar de versión activa del POA no altera la cantidad física ejecutada ($60\text{ m}^2$ ejecutados siguen siendo $60\text{ m}^2$).
+2. **Borrador Vivo (DRAFT)**: Un borrador de Acta en estado `draft` calcula el valor a cobrar proyectando la versión **activa** del POA vigente en el momento de generar el borrador. Si `POA v2` sube el precio a $\$12.000/\text{m}^2$, el borrador proyecta $\$12.000/\text{m}^2$.
+3. **Acta Emitida (ISSUED)**: Si un Acta ya fue emitida (`ISSUED`) bajo `POA v1` ($\$10.000/\text{m}^2$), su snapshot contractual permanece **100% INMUTABLE** ($\$600.000$). Ningún cambio o activación posterior del POA afecta la factura emitida.
 
 ## Introducción
 Este documento describe el subdominio de Ejecución de Mantenix. Deriva de la Programación ([`schedule-domain.md`](./schedule-domain.md), Propuesto) y, en última instancia, del dominio contractual del POA ([`poa-domain.md`](./poa-domain.md), Congelado v1), sin modificar ninguno de los dos. Se articula con el ciclo de estados del negocio ya congelado en [`workflow.md`](./workflow.md) (Máquina 2), del cual no duplica las transiciones — las referencia.
