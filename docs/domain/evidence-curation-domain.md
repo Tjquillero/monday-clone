@@ -72,13 +72,14 @@ $$\text{attachments} + \text{rules}(V_{\text{engine}}) \longrightarrow \text{mis
 - Toda recomendación almacena obligatoriamente `curation_engine_version = "deterministic-v1"`, `recommendation_score`, `recommendation_reasons` y `recommended_at`.
 - Si el motor evoluciona a IA en el futuro, los registros históricos conservan la versión del motor con la que fueron evaluados originalmente.
 
-### 4. Algoritmo Determinístico v1 (Scoring Contract)
+### 4. Algoritmo Determinístico v1 (Scoring Contract & Tie-Breaker)
 El motor determinístico v1 evalúa los adjuntos de una actividad bajo los siguientes criterios cuantitativos:
 1. **Deduplicación por SHA-256 (`file_hash`)**: Adjuntos con hash binario idéntico reciben penalización por redundancia (`redundant = true`).
 2. **Balance de Fase (`before` / `after`)**: Se otorga bonificación (+30 pts) al par coordinado de fotografías `before` y `after`.
 3. **Presencia de Georreferenciación (GPS)**: Coordenadas GPS válidas otorgan (+20 pts).
 4. **Nitidez / Calidad (`sharpness_score`)**: Puntuación de calidad fotográfica aporta de +0 a +25 pts.
 5. **Distribución Temporal**: Espaciamiento adecuado entre tomas otorga hasta +15 pts.
+6. **Regla de Desempate Determinístico Invariable (Tie-Breaker)**: Si dos fotografías obtienen la misma puntuación (`score_A == score_B`), el desempate se resuelve ordenando por el hash criptográfico binario `file_hash` de forma ascendente (`score DESC, file_hash ASC`), garantizando una reproducibilidad del 100% libre de ordenamientos estocásticos.
 
 ### 5. Capa de Selección Humana Consciente
 La recomendación del sistema **no constituye certificación ni selección automática**.
