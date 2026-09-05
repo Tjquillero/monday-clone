@@ -25,6 +25,19 @@ El motor de columnas de tableros (Board Engine v1) ha alcanzado un estado **esta
 - El procesamiento y la extracción de datos financieros de los ítems **debe** hacerse exclusivamente a través de la utilidad centralizada `getFinancialValues(item, columns)`.
 - Para ítems de actividad (tareas estándar), sí se utiliza el mapeo dinámico resolviendo la llave con `getColumnValueKey(column)`.
 
+## Cadena Arquitectónica Certificada (ADR-0007 → ADR-0012)
+ADR-0007 → ADR-0012 constituyen una cadena arquitectónica **congelada y certificada** (Audit 38.1 PASS, Baseline 2386465, 72/72 test suites, 0 errores TypeScript):
+- **ADR-0007**: 🟢 CLOSED / CERTIFIED
+- **ADR-0008**: 🟢 CLOSED / CERTIFIED
+- **ADR-0009**: 🟢 CLOSED / CERTIFIED
+- **ADR-0010**: 🟢 AUDITED / CERTIFIED
+- **ADR-0011**: 🟢 CLOSED / CERTIFIED
+- **ADR-0012**: 🟢 CLOSED / VERIFIED / CERTIFIED
+
+### Regla de Gobierno Arquitectónico:
+Las futuras extensiones deberán consumir los contratos expuestos por esta cadena y **no modificar retrospectivamente** sus fuentes de verdad ni sus invariantes congeladas:
+`POA (contractual) → WeeklyPlan (planificación) → ExecutionRecord (realidad física) → Verification (autoridad operacional) → Certification (reconocimiento contractual) → Acta (documento contractual) → Billing (resultado financiero)`
+
 ## Roadmap de Producto (Prioridades)
 
 > Lista original al momento de este documento. Dos entradas ya no reflejan el estado real del producto — se corrigen aquí en vez de dejarlas como una premisa falsa para quien lea este archivo:

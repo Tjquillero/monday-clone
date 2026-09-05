@@ -20,10 +20,12 @@ Este directorio registra las decisiones de arquitectura del proyecto: **por qué
 | [ADR-0004](./ADR-0004-poa-zone-catalog.md) | Catálogo de Zonas del POA y Mapeo Persistente con el Board | Aceptado |
 | [ADR-0005](./ADR-0005-poa-frecuencia-ausente.md) | Frecuencia Ausente como Estado de Negocio Válido | Aceptado |
 | [ADR-0006](./ADR-0006-execution-engine-consolidation.md) | Consolidación del Motor de Ejecución — `ExecutionView` deja de ser el motor operativo | Aceptado |
-| [ADR-0007](./ADR-0007-daily-execution-legacy-model.md) | Retiro progresivo de `daily_execution` como fuente operativa | Aceptado |
-| [ADR-0008](./ADR-0008-board-activity-standards-origin.md) | Origen y Reglas de Construcción de `board_activity_standards` | Aceptado |
-| [ADR-0009](./ADR-0009-theoretical-journals-frequency-scaling.md) | Qué representa `theoreticalJournals`: ¿jornales mensuales reales o una métrica escalada por frecuencia? | Reabierto y revertido (2026-07-21) |
-| [ADR-0010](./ADR-0010-dual-journals-indicators.md) | Jornales Contractuales y Jornales Operativos como indicadores independientes | Aceptado (implementación pendiente de diseño) |
+| [ADR-0007](./ADR-0007-daily-execution-legacy-model.md) | Retiro progresivo de `daily_execution` como fuente operativa | 🟢 Cerrado / Certificado |
+| [ADR-0008](./ADR-0008-board-activity-standards-origin.md) | Origen y Reglas de Construcción de `board_activity_standards` | 🟢 Cerrado / Certificado |
+| [ADR-0009](./ADR-0009-theoretical-journals-frequency-scaling.md) | Métrica de jornales teóricos y escalado por frecuencia | 🟢 Cerrado / Certificado |
+| [ADR-0010](./ADR-0010-dual-journals-indicators.md) | Jornales Contractuales y Jornales Operativos como indicadores independientes | 🟢 Auditado / Certificado |
+| [ADR-0011](./ADR-0011-evidence-verification-nucleus.md) | Núcleo de Evidencia Fotográfica y Verificación Operacional | 🟢 Cerrado / Certificado |
+| [ADR-0012](./ADR-0012-contractual-certification-actas.md) | Certificación Contractual y Mecanismo de Generación de Actas de Cobro | 🟢 Cerrado / Verificado / Certificado |
 
 ## Estados
 

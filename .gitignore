@@ -83,3 +83,5 @@ scripts/setup-db.mjs
 scripts/test-gemini.mjs
 tmp/
 *.xlsb
+*.xlsx
+scratch/

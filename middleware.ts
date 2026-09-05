@@ -47,8 +47,12 @@ export async function middleware(request: NextRequest) {
           },
         },
       })
-      const { data } = await supabase.auth.getSession()
-      session = data?.session ?? null
+      const { data, error } = await supabase.auth.getSession()
+      if (error) {
+        session = null
+      } else {
+        session = data?.session ?? null
+      }
     } catch (e) {
       console.warn('[middleware] Supabase getSession failed:', e instanceof Error ? e.message : String(e))
     }

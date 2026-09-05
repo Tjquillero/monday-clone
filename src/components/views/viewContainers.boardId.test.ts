@@ -33,4 +33,11 @@ describe('ViewContainers activos — deben propagar boardId a useBoard()', () =>
       expect(source).not.toMatch(/useBoard\(\)/);
     });
   }
+
+  it('ExecutionViewContainer instancía AgendaOperativaContainer y excluye ExecutionView legacy', () => {
+    const source = fs.readFileSync(path.join(VIEWS_DIR, 'ExecutionViewContainer.tsx'), 'utf8');
+    expect(source).toContain('AgendaOperativaContainer');
+    expect(source).not.toContain('@/components/ExecutionView');
+    expect(source).not.toContain('daily_execution');
+  });
 });

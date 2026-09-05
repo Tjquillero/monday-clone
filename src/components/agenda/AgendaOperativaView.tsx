@@ -8,6 +8,7 @@ import {
 import { BoardOperationalAgenda, BoardOperationalAgendaWeek } from '@/types/scheduler';
 import { SEMAPHORE_STYLE } from './semaphoreStyle';
 import AgendaSemanaBlock from './AgendaSemanaBlock';
+import LiveEvidenceGallery from './LiveEvidenceGallery';
 
 // Vista pura de la Agenda Operativa (ADR-0006). Fase 1 (Hoy) + Fase 2
 // (Semana, detrás de un toggle — mismo patrón de dos botones ya usado en
@@ -16,7 +17,7 @@ import AgendaSemanaBlock from './AgendaSemanaBlock';
 // siempre visibles, sin importar la pestaña activa. Estrictamente de solo
 // lectura: todo lo que hace un botón aquí es navegar, nunca mutar.
 
-export type AgendaTab = 'hoy' | 'semana';
+export type AgendaTab = 'hoy' | 'semana' | 'evidencia';
 
 interface Props {
   boardId: string;
@@ -82,10 +83,16 @@ export default function AgendaOperativaView({
           >
             Semana
           </button>
+          <button
+            onClick={() => onTabChange('evidencia')}
+            className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'evidencia' ? 'bg-[#3B7EF8] text-white shadow-lg shadow-[#3B7EF8]/20' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            Evidencia en Vivo
+          </button>
         </div>
       </div>
 
-      {activeTab === 'hoy' ? (
+      {activeTab === 'hoy' && (
         <>
           {/* ── Bloque Hoy ──────────────────────────────────────── */}
           <div className="industrial-card rounded-xl border border-[var(--border-color)] p-4">
@@ -121,7 +128,9 @@ export default function AgendaOperativaView({
             )}
           </div>
         </>
-      ) : (
+      )}
+
+      {activeTab === 'semana' && (
         <AgendaSemanaBlock
           boardId={boardId}
           isLoading={weekIsLoading}
@@ -129,6 +138,10 @@ export default function AgendaOperativaView({
           error={weekError}
           week={weekAgenda}
         />
+      )}
+
+      {activeTab === 'evidencia' && (
+        <LiveEvidenceGallery boardId={boardId} />
       )}
 
       {/* ── Bloque Acciones ─────────────────────────────────────── */}

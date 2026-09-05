@@ -4,11 +4,9 @@ import { useState, useEffect, useMemo, Fragment } from 'react';
 import { Group, ActivityTemplate, EfficiencyRow, ResourceAnalysisDBRow } from '@/types/monday';
 import { Database, AlertCircle, Table, MapPin, DollarSign } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
-import { useContractStandards, useScopeMappings } from '@/hooks/useActivityStandards';
-import { usePoaActiveCatalog } from '@/hooks/usePoaActivities';
+import { useOperationalStandards, useOperationalScopeMappings } from '@/hooks/useOperationalStandards';
 import { calculateTheoreticalJournals, WORKING_DAYS_MONTH } from '@/lib/schedulerMath';
-import { SchedulerMigrationMissingError, ActivityStandardWithFrecuencia } from '@/types/scheduler';
-import { buildActivityMappings, ActivityRule } from '@/lib/schedulerAdapter';
+import { buildOperationalActivityMappings, OperationalActivityRule } from '@/lib/operationalStandards';
 
 interface ResourceEfficiencyWidgetProps {
   boardId: string | null;
@@ -58,45 +56,28 @@ export default function ResourceEfficiencyWidget({ boardId, groups, activityTemp
   // State: Map<SiteId, Wage>
   const [wageInputs, setWageInputs] = useState<Record<string, number>>({});
 
-  // Standards — source of truth from Supabase (replaces STANDARD_MAPPINGS)
+  const activeSiteTitle = useMemo(() => {
+    return groups.find(g => g.id === activeSiteId)?.title || 'Plaza Puerto Colombia';
+  }, [groups, activeSiteId]);
+
+  // Catálogo Operativo V3 desacoplado del POA (ADR-0010)
   const {
-    data: contractStandards,
+    data: operationalStandards,
     isLoading: standardsLoading,
     isError: standardsIsError,
     error: standardsErr,
-  } = useContractStandards(boardId ?? undefined);
+  } = useOperationalStandards(activeSiteTitle);
 
   const {
     data: scopeMappings,
     isLoading: mappingsLoading,
     isError: mappingsIsError,
     error: mappingsErr,
-  } = useScopeMappings();
+  } = useOperationalScopeMappings(activeSiteTitle);
 
-  // Fuente contractual (ADR-0002): frecuencia vive en la versión activa del POA,
-  // no en board_activity_standards. La frecuencia es única por actividad,
-  // independientemente de la zona (poa-domain.md), así que no requiere merge por sitio.
-  const { data: poaCatalog } = usePoaActiveCatalog(boardId ?? undefined);
-
-  const standardsWithFrecuencia = useMemo<ActivityStandardWithFrecuencia[]>(() => {
-    if (!contractStandards || !poaCatalog) return [];
-    const merged: ActivityStandardWithFrecuencia[] = [];
-    for (const s of contractStandards) {
-      const poaActivity = poaCatalog.get(s.activity_key);
-      if (!poaActivity) continue; // sin actividad vigente en el POA: se excluye del análisis
-      const firstZone = poaActivity.zones.values().next().value;
-      merged.push({
-        ...s,
-        frecuencia: poaActivity.frecuencia,
-        poa_activity_zone_id: firstZone?.poaActivityZoneId ?? '',
-      });
-    }
-    return merged;
-  }, [contractStandards, poaCatalog]);
-
-  const activityMappings = useMemo<Record<string, ActivityRule[]>>(
-    () => buildActivityMappings(standardsWithFrecuencia, scopeMappings ?? []),
-    [standardsWithFrecuencia, scopeMappings],
+  const activityMappings = useMemo<Record<string, OperationalActivityRule[]>>(
+    () => buildOperationalActivityMappings(operationalStandards, scopeMappings, activeSiteTitle),
+    [operationalStandards, scopeMappings, activeSiteTitle],
   );
 
   // Initialize active site
@@ -333,13 +314,10 @@ export default function ResourceEfficiencyWidget({ boardId, groups, activityTemp
   if (!mounted) return null;
 
   // Tres estados de los estándares — distintos del error de resource_analysis
-  const isMigrationMissing =
-    (standardsIsError && standardsErr instanceof SchedulerMigrationMissingError) ||
-    (mappingsIsError && mappingsErr instanceof SchedulerMigrationMissingError);
-  const isStandardsQueryError = (standardsIsError || mappingsIsError) && !isMigrationMissing;
+  const isStandardsQueryError = standardsIsError || mappingsIsError;
   const hasNoStandards =
     !standardsLoading && !mappingsLoading && !standardsIsError && !mappingsIsError &&
-    (contractStandards?.length ?? 0) === 0;
+    (operationalStandards?.length ?? 0) === 0;
 
   return (
     <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 flex flex-col gap-8 font-sans">
@@ -360,13 +338,7 @@ export default function ResourceEfficiencyWidget({ boardId, groups, activityTemp
                         <span>Respaldo Activado: {dbError === 'relation "resource_analysis" does not exist' ? 'Tabla no encontrada en Supabase' : 'Offline'}</span>
                     </div>
                 )}
-                {isMigrationMissing && (
-                    <div className="mt-4 flex items-center gap-2 bg-rose-50 text-rose-700 px-4 py-2 rounded-xl border border-rose-200 text-[11px] font-bold uppercase tracking-wider shadow-sm">
-                        <AlertCircle size={14} />
-                        <span>Migración pendiente — Aplica 20260708_scheduler_engine.sql en Supabase Dashboard</span>
-                    </div>
-                )}
-                {isStandardsQueryError && !isMigrationMissing && (
+                {isStandardsQueryError && (
                     <div className="mt-4 flex items-center gap-2 bg-rose-50 text-rose-700 px-4 py-2 rounded-xl border border-rose-200 text-[11px] font-bold uppercase tracking-wider shadow-sm">
                         <AlertCircle size={14} />
                         <span>Error al cargar estándares de actividad</span>
