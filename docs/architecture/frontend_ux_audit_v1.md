@@ -1,83 +1,96 @@
 # Frontend UX Audit v1 — Mantenix
 
 **Fecha:** 2026-09-05  
-**Estado:** Documento de Auditoría, Guardrails y Plan de Certificación UX (Sin modificaciones de código)  
+**Estado:** Inventario Técnico de Navegación, Guardrails y Criterios de Certificación (Fase 0 Aprobada)  
 **Compatibilidad:** 100% compatible con Baseline Arquitectónica Certificada 2386465 (ADR-0007 → ADR-0012)
 
 ---
 
-## 1. Resumen Ejecutivo y Corrección Metodológica
+## 1. Resumen Ejecutivo y Marco Normativo de Gobernanza
 
-Mantenix ha alcanzado una solidez backend certificada. No obstante, **“0% de impacto en la Baseline de Base de Datos” NO significa “Riesgo Cero”**. Una modificación exclusivamente frontend puede vulnerar invariantes operativas, romper la matriz de permisos (`usePermissions`), alterar la sincronización offline (`OfflineSyncContext`) o interrumpir secuencias de usuario clave sin tocar una sola tabla o API.
+Mantenix ha alcanzado la certificación completa en su backend. Para la capa de usuario, se adopta la norma: **“0% de impacto en la Baseline de Base de Datos” NO implica “Riesgo Cero”**. Una modificación puramente frontend puede vulnerar invariantes operativas, alterar permisos (`usePermissions`), corromper la sincronización offline (`OfflineSyncContext`) o interrumpir secuencias de usuario clave sin tocar Postgres.
 
-Este documento establece el marco normativo de experiencia de usuario, los **Guardrails UX (Fase 0)**, el mapa de prioridades P0/P1/P2 y la matriz de certificación multi-dispositivo y multi-rol (Fase 4).
+La **Fase 0 (Guardrail UX)** establece el inventario exhaustivo de rutas, roles, servicios, parámetros y secuencias de usuario antes de permitir cualquier modificación de código en la Fase 1.
 
 ### Regla UX Rector Inviolable
-> **"La interfaz debe expresar el lenguaje operacional del usuario y ocultar la complejidad técnica del dominio, salvo cuando dicha complejidad sea necesaria para tomar una decisión."**  
-> *El usuario no debe necesitar conocer `ExecutionRecord`, `WeeklyPlanItem`, `occurrence_key` ni `ActaItemSource` para operar Mantenix con fluidez y naturalidad.*
+> **"La interfaz debe expresar el lenguaje operacional del usuario y ocultar la complejidad técnica del dominio, salvo cuando dicha complejidad sea necesaria para tomar una decisión."**
 
 ---
 
-## 2. Matriz de Priorización Experta (P0, P1, P2)
+## 2. Inventario Técnico de Navegación y Contratos de Ruta (Guardrail UX-01)
 
-| Nivel | Prioridad | Hallazgos UX | Enfoque y Justificación |
-|---|---|---|---|
-| 🔴 **P0** | **Operación Real & Bloqueos** | **UX-02, UX-07, UX-08, UX-09, UX-10** | Resolver primero la fricción crítica del Líder de Campo en `/my-work`, la falta de feedback asíncrono, la incertidumbre en la sincronización offline y las tablas densas inmanejables. |
-| 🟠 **P1** | **Comprensión & Supervisión** | **UX-03, UX-05, UX-06, UX-01** | Agilizar la verificación del Supervisor en `/verification`, erradicar la microcopia técnica/inglés y limpiar la navegación provisional en `navigation.ts`. |
-| 🟡 **P2** | **Dashboard & Refinamiento** | **UX-04, UX-11, UX-12** | Implementar las KPI Cards ejecutivas limpias en `/dashboard`, estados vacíos contextuales y coherencia responsive completa. |
+| Ruta `src/app/` | Rol Autorizado (`usePermissions`) | Entrada de Navegación | Query Params Válidos | Datos Consumidos | Acciones Permitidas | Destino Posterior a Acción |
+|---|---|---|---|---|---|---|
+| `/` | Público / Todos | Raíz `/` | Ninguno | Ninguno | Ver Landing, Ir a Login | `/login` |
+| `/login` | Público / Invitado | Botón Login / Logout | `?signedout=true` | Credenciales Auth | Iniciar Sesión | `/dashboard` |
+| `/dashboard` | `ADMIN`, `PROJECT_MANAGER`, `MEMBER` | Menú Lateral "Inicio" / Slim Logo | `?boardId=`, `?view=`, `?groupId=` | Board, Columns, Groups, Items | Seleccionar Vista/Sitio, Filtrar, Buscar | Permanece en `/dashboard` con `?view=` actualizado |
+| `/projects` | `ADMIN`, `PROJECT_MANAGER` | Menú Lateral "Planificación" | `?id=` | Proyectos, Personal, Asignaciones | Crear Board, Gestionar Cuadrillas | `/dashboard?boardId=` o modal |
+| `/my-work` | `MEMBER` (Líder), `PROJECT_MANAGER`, `ADMIN` | Menú Lateral "Mis actividades" | `?date=` | Plan Semanal Publicado, Tareas | Reportar Avance, Adjuntar Foto Evidencia | Notificación de envío + Permanece en `/my-work` |
+| `/verification` | `SUPERVISOR`, `PROJECT_MANAGER`, `ADMIN` | Menú Lateral "Verificación" | `?status=`, `?site=` | Ejecuciones `reported`, Evidencias | Aprobar (`verified`), Observar (`rejected`) | Actualización de lista `reported` en `/verification` |
+| `/documentos` | Todos con acceso a Board | Menú Lateral "Documentos" | `?boardId=`, `?tab=` | Actas, POA, Resource Analysis | Generar Borrador Acta, Emitir Acta | `/documentos?tab=actas` con PDF generado |
+| `/okrs` | Todos | Menú Lateral "Objetivos" | Ninguno | Objetivos estratégicos | Consultar KPIs | `/okrs` |
+| `/poa` | `ADMIN`, `PROJECT_MANAGER` | Acceso secundario | `?versionId=` | Versiones POA, Zonas, Precios | Importar Excel POA, Activar Versión | `/dashboard?view=planner` |
 
 ---
 
-## 3. Plan de Implementación Fasedo (Fase 0 → Fase 4)
+## 3. Matriz de Guardrails Estrictos de Fase 0
 
-### 🛡️ Fase 0: Guardrail UX (Prerrequisito de Seguridad)
-Antes de escribir cualquier línea de código de UI:
-1. **Inventario de rutas y componentes:** Cartografía exacta de `src/app/` y `src/components/`.
-2. **Matriz de roles y permisos:** Mapeo de capacidades por rol (`ADMIN`, `SUPERVISOR`, `LEADER`, `EXECUTIVE`) según `usePermissions.ts`.
-3. **Identificación de servicios consumidos:** Asegurar que cada vista consuma estrictamente los servicios certificados (`routineScheduler`, `weeklyPlanService`, `executionService`, `verificationService`, `actaService`).
-4. **Criterios de Aceptación UX & Baseline Funcional de Regresión:** Distinguir mediante pruebas que *"la pantalla se ve diferente"* pero **NO** *"la aplicación se comporta diferente"*.
+### Guardrail UX-01: Contratos de Navegación
+- Ningún parámetro de URL (`?boardId=`, `?view=`, `?groupId=`) será eliminado o alterado si cumple una función de *deep-linking* o resolutor de membresía (`resolveBoardNavigation`).
 
-### 🧹 Fase 1: Limpieza de Superficie y Feedback (Mayor Retorno / Bajo Riesgo)
-- Reorganizar el menú lateral en `src/config/navigation.ts` (eliminar rutas fantasma como *"Insumos"* $\rightarrow$ `/dashboard`, visibilizar módulos clave).
-- Eliminar la exposición de query params innecesarios en la navegación primaria.
-- Traducir y estandarizar el 100% de la microcopia al español operacional (`Pendiente`, `En Proceso`, `Completado`, `Bloqueado`).
-- Implementar `Skeleton` loaders en operaciones asíncronas y tarjetas de Estado Vacío (*Empty States*).
-- Reforzar el indicador flotante de sincronización offline (`SyncToast.tsx` / `OfflineIndicator.tsx`) con conteo de evidencias locales pendientes.
+### Guardrail UX-02: Permisos Reales (UI no es Seguridad)
+- La interfaz representa visualmente las capacidades de `usePermissions()` y Supabase RLS. Ocultar o deshabilitar un botón en el cliente **NO** reemplaza el control de acceso en la API.
 
-### 👷 Fase 2: Rediseño Operativo (Campo + Supervisor)
-- **Líder / Campo (`/my-work`):** Transformar la vista de tabla en un modo **Mobile First** de Tarjetas de Jornada:
-  ```
-  [Hoy: 8 Actividades | 3 Pendientes | 4 Ejecutadas | 1 Observada]
-  └─ [Actividad: Cortar césped · Zona 04 | Cantidad: 1.250 m²]
-      └─ Botón Primario: [REGISTRAR AVANCE & EVIDENCIA FOTO]
-  ```
-- **Supervisor (`/verification`):** Diseñar el **Visor de Inspección Supervisora** con panel dividido (Evidencia Fotográfica + Coordenadas a la izquierda, Métricas Certificables y Aprobación/Observación directa a la derecha).
+### Guardrail UX-03: Sincronización Offline Derivada de Fuente Real
+- El contador de evidencias locales pendientes en `SyncToast.tsx` y `OfflineIndicator.tsx` debe derivarse estrictamente de la cola IndexedDB de `OfflineSyncContext`. Está prohibido manejar contadores o estados paralelos en memoria UI.
 
-### 📊 Fase 3: Dashboard Ejecutivo Consolidado
-- Implementar la jerarquía ejecutiva en `/dashboard`:
-  1. **Estado Contractual:** KPI Cards de Avance Físico Certificado (m²), Avance Financiero ($) y Actas Pendientes.
-  2. **Identificación de Desviaciones:** Sitios con alertas de retraso o ejecuciones observadas.
-  3. **Detalle Progresivo:** Evitar paredes saturadas de gráficos redundantes.
+### Guardrail UX-04: Regresión de Comportamiento (ANTES vs. DESPUÉS)
+- Para cada sub-bloque de la Fase 1, se validará que:
+  $$\text{Permisos} \land \text{Servicios} \land \text{Payloads} \land \text{Estados DB} \land \text{Offline} = \text{IDÉNTICOS}$$
+  La única diferencia autorizada es la presentación visual, la navegación refinada y el feedback UX.
 
-### 🧪 Fase 4: Matriz de Certificación UX
-Cada fase concluirá con una verificación formal sobre la matriz de regresión UX:
+---
+
+## 4. Plan de Descomposición Atómica de Fase 1 (Sub-bloques F1.1 → F1.4)
 
 ```
-                  MATRIZ DE CERTIFICACIÓN UX
-┌──────────────────────┬─────────┬────────┬────────┬─────────┐
-│ Criterio / Rol       │ Líder   │ Super. │ Admin  │ Ejecut. │
-├──────────────────────┼─────────┼────────┼────────┼─────────┤
-│ Desktop (1440px+)    │   ✓     │   ✓    │   ✓    │    ✓    │
-│ Tablet (768px - 1024)│   ✓     │   ✓    │   ✓    │    ✓    │
-│ Mobile (375px - 430) │  [P0]   │  [P1]  │   ✓    │    ✓    │
-│ Offline / Sync       │  [P0]   │   N/A  │   N/A  │   N/A   │
-│ Feedback / Loading   │   ✓     │   ✓    │   ✓    │    ✓    │
-│ Permisos & RLS       │   ✓     │   ✓    │   ✓    │    ✓    │
-└──────────────────────┴─────────┴────────┴────────┴─────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ BLOQUE F1.1 — Navegación y Rutas                                         │
+├──────────────────────────────────────────────────────────────────────────┤
+│ • Limpiar src/config/navigation.ts (eliminar enlace provisional "Insumos"│
+│   que apunta a /dashboard).                                              │
+│ • Visibilizar deep-links clave sin alterar la resolución de boardId.     │
+│ ▶ CRITERIO DE VERIFICACIÓN: Navegación limpia en desktop y móvil.        │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ BLOQUE F1.2 — Microcopy y Lenguaje Operacional                           │
+├──────────────────────────────────────────────────────────────────────────┤
+│ • Normalizar el 100% de los estados a español operacional:               │
+│   'Not Started' -> 'Pendiente' | 'Working on it' -> 'En Proceso'         │
+│   'Done' -> 'Completado'     | 'Stuck' -> 'Bloqueado'                    │
+│ • Ocultar variables de DB (occurrence_key, contractually_certifiable_qty)│
+│ ▶ CRITERIO DE VERIFICACIÓN: Ningún término técnico visible al usuario.  │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ BLOQUE F1.3 — Loading, Empty States y Feedback Asíncrono                │
+├──────────────────────────────────────────────────────────────────────────┤
+│ • Incorporar Skeleton loaders en modales y tablas al cargar datos.       │
+│ • Tarjetas contextuales para estados vacíos (Empty States).              │
+│ ▶ CRITERIO DE VERIFICACIÓN: Feedback visual en < 100ms en cada clic.     │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ BLOQUE F1.4 — Feedback Offline Basado en IndexedDB                       │
+├──────────────────────────────────────────────────────────────────────────┤
+│ • Reforzar SyncToast.tsx derivando el conteo directo de IndexedDB.       │
+│ ▶ CRITERIO DE VERIFICACIÓN: Conexión intermitente probada sin pérdida.   │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 4. Cadena de Valor del Producto
+## 5. Matriz de Cierre y Certificación de Fase 1
 
-$$\mathbf{BASELINE\ ARQUITECTÓNICA\ 2386465} \longrightarrow \mathbf{CONTRATO\ PRESERVADO} \longrightarrow \mathbf{FRONTEND\ UX\ INCREMENTADO} \longrightarrow \mathbf{REGRESIÓN\ FUNCIONAL} \longrightarrow \mathbf{CERTIFICACIÓN\ UX}$$
+$$\text{F1.1} \longrightarrow \text{F1.2} \longrightarrow \text{F1.3} \longrightarrow \text{F1.4} \longrightarrow \begin{cases} \text{Tests 72/72} & \text{PASS} \\ \text{tsc --noEmit} & \text{0 errors} \\ \text{Permisos & RLS} & \text{OK} \\ \text{Offline Sync} & \text{OK} \\ \text{Contratos DB} & \text{OK} \end{cases} \longrightarrow \mathbf{FASE\ 1\ CERTIFICADA}$$
