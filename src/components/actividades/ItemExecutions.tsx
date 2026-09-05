@@ -257,74 +257,77 @@ export default function ItemExecutions({ planId, groupId, planItemId, unit }: Pr
         return (
           <div
             key={exec.id}
-            className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white border border-slate-200 rounded-lg px-4 py-3"
+            className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-200 rounded-xl px-4 py-3.5 shadow-xs"
           >
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-600 min-w-0">
-              <span className="font-semibold text-slate-800">{exec.execution_date}</span>
-              {exec.crew_name && <span className="truncate">{exec.crew_name}</span>}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-slate-600 min-w-0">
+              <span className="font-bold text-slate-900">{exec.execution_date}</span>
+              {exec.crew_name && <span className="font-medium text-slate-700 truncate">· {exec.crew_name}</span>}
               <span className="flex items-center gap-1 text-slate-500">
-                <Users className="w-3.5 h-3.5" /> {exec.worker_count}
+                <Users className="w-4 h-4 text-slate-400" /> {exec.worker_count}
               </span>
               <span className="flex items-center gap-1 text-slate-500">
-                <Clock className="w-3.5 h-3.5" /> {clockTime(exec.started_at)}–{clockTime(exec.finished_at)}
+                <Clock className="w-4 h-4 text-slate-400" /> {clockTime(exec.started_at)}–{clockTime(exec.finished_at)}
               </span>
-              <span>
-                <span className="font-semibold text-slate-800">{formatNumber(exec.executed_qty)}</span> {unit}
+              <span className="bg-slate-50 px-2 py-0.5 rounded border border-slate-100 font-semibold text-slate-800">
+                {formatNumber(exec.executed_qty)} <span className="font-normal text-slate-500">{unit}</span>
               </span>
               <span className="text-slate-500">{formatNumber(exec.executed_jr)} JR</span>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              <span className={`inline-block px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wide ${chip.cls}`}>
+            <div className="flex flex-wrap items-center gap-2 shrink-0 pt-1 sm:pt-0">
+              <span className={`inline-block px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wide ${chip.cls}`}>
                 {chip.text}
               </span>
+
               <button
                 onClick={() => setEvidenceExecId(exec.id)}
                 disabled={busy}
-                className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-60"
+                className="min-h-[44px] sm:min-h-[36px] flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-60 active:scale-[0.98]"
               >
-                <Camera className="w-3 h-3" /> Evidencias
+                <Camera className="w-4 h-4 text-slate-500" /> <span>Evidencias</span>
                 {attachPendingTotal > 0 && (
                   <span
                     title={`${attachSummary?.pending ?? 0} pendiente(s), ${attachSummary?.syncing ?? 0} sincronizando, ${attachSummary?.conflict ?? 0} en conflicto`}
-                    className={`flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-white text-[9px] font-bold ${attachBadgeCls}`}
+                    className={`flex items-center justify-center min-w-[18px] h-4 px-1 rounded-full text-white text-[10px] font-bold ${attachBadgeCls}`}
                   >
                     {attachPendingTotal}
                   </span>
                 )}
               </button>
+
               {exec.status === 'draft' && syncStatus && (() => {
                 const badge = SYNC_BADGE[syncStatus];
                 return (
-                  <span className={`flex items-center gap-1 px-2.5 py-1 text-xs font-semibold border rounded-lg ${badge.cls}`}>
-                    <badge.Icon className={`w-3 h-3 ${syncStatus === 'sincronizando' ? 'animate-spin' : ''}`} /> {badge.text}
+                  <span className={`min-h-[44px] sm:min-h-[36px] flex items-center gap-1.5 px-3 py-2 text-xs font-semibold border rounded-lg ${badge.cls}`}>
+                    <badge.Icon className={`w-4 h-4 ${syncStatus === 'sincronizando' ? 'animate-spin' : ''}`} /> {badge.text}
                   </span>
                 );
               })()}
+
               {exec.status === 'draft' && !syncStatus && (
                 <>
                   <button
                     onClick={() => { setActionError(null); setFormMode(exec.id); }}
                     disabled={busy}
-                    className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-60"
+                    className="min-h-[44px] sm:min-h-[36px] flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-60 active:scale-[0.98]"
                   >
-                    <Pencil className="w-3 h-3" /> Editar
+                    <Pencil className="w-3.5 h-3.5 text-slate-500" /> Editar
                   </button>
                   <button
                     onClick={() => handleReport(exec.id)}
                     disabled={busy}
-                    className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-60"
+                    className="min-h-[44px] sm:min-h-[36px] flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-60 shadow-xs active:scale-[0.98]"
                   >
                     {reportExecution.isPending
-                      ? <Loader2 className="w-3 h-3 animate-spin" />
-                      : <Send className="w-3 h-3" />} Reportar
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Send className="w-3.5 h-3.5" />} Reportar
                   </button>
                 </>
               )}
             </div>
 
             {exec.status === 'rejected' && exec.rejection_notes && (
-              <p className="w-full text-xs text-red-500 sm:pl-1">Motivo del rechazo: {exec.rejection_notes}</p>
+              <p className="w-full text-xs text-red-500 sm:pl-1 font-medium">Motivo del rechazo: {exec.rejection_notes}</p>
             )}
           </div>
         );
@@ -342,8 +345,8 @@ export default function ItemExecutions({ planId, groupId, planItemId, unit }: Pr
 
       {actionError && <p className="text-xs font-semibold text-red-500">{actionError}</p>}
       {queuedNotice && (
-        <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-600">
-          <CloudOff className="w-3.5 h-3.5" /> {queuedNotice}
+        <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+          <CloudOff className="w-4 h-4 shrink-0" /> {queuedNotice}
         </p>
       )}
 
@@ -351,9 +354,9 @@ export default function ItemExecutions({ planId, groupId, planItemId, unit }: Pr
         <button
           onClick={() => { setActionError(null); setFormMode('new'); }}
           disabled={busy}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 border border-blue-200 bg-blue-50/50 rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-60"
+          className="w-full sm:w-auto min-h-[48px] px-4 py-3 text-sm font-semibold text-blue-700 border border-blue-200/80 bg-blue-50/70 hover:bg-blue-100/80 rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-60 active:scale-[0.99]"
         >
-          <Plus className="w-3.5 h-3.5" /> Registrar jornada
+          <Plus className="w-4 h-4 text-blue-600" /> Registrar jornada
         </button>
       )}
 

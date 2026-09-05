@@ -38,59 +38,116 @@ function ItemRow({ item, planId, groupId }: { item: PublishedWeekPlanItem; planI
     : 0;
 
   return (
-    <div>
-    <button
-      onClick={() => setExpanded((v) => !v)}
-      className="w-full text-left grid grid-cols-[1fr] md:grid-cols-[1fr_110px_140px_140px_160px_32px] px-4 md:px-6 py-4 items-center gap-2 md:gap-0 hover:bg-slate-50/80 transition-colors"
-    >
-      <div className="min-w-0 pr-4">
-        <p className="text-sm font-semibold text-slate-800 truncate">
-          {item.standard?.name ?? item.activity_key}
-        </p>
-        {item.standard?.category && (
-          <p className="text-[11px] text-slate-400 uppercase tracking-wide">{item.standard.category}</p>
-        )}
-      </div>
-
-      <div>
-        <span className={`inline-block px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wide ${priority.cls}`}>
-          {priority.text}
-        </span>
-      </div>
-
-      <div className="text-sm text-slate-600">
-        <span className="font-semibold text-slate-800">{formatNumber(item.planned_qty)}</span>
-        {' '}{item.unit}
-        <p className="text-[11px] text-slate-400">planificado</p>
-      </div>
-
-      <div className="text-sm text-slate-600">
-        <span className="font-semibold text-slate-800">{formatNumber(item.executed_qty)}</span>
-        {' '}{item.unit}
-        <p className="text-[11px] text-slate-400">ejecutado</p>
-      </div>
-
-      <div className="pr-1">
-        <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
-          <span>{formatNumber(item.executed_jr)} / {formatNumber(item.planned_jr)} JR</span>
-          <span className="font-semibold">{progress}%</span>
+    <div className="border-b border-slate-100 last:border-b-0">
+      {/* Visualización Desktop (>= 768px): Tabla estructurada */}
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full text-left hidden md:grid grid-cols-[1fr_110px_140px_140px_160px_32px] px-6 py-4 items-center gap-0 hover:bg-slate-50/80 transition-colors"
+      >
+        <div className="min-w-0 pr-4">
+          <p className="text-sm font-semibold text-slate-800 truncate">
+            {item.standard?.name ?? item.activity_key}
+          </p>
+          {item.standard?.category && (
+            <p className="text-[11px] text-slate-400 uppercase tracking-wide">{item.standard.category}</p>
+          )}
         </div>
-        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all ${progress >= 100 ? 'bg-emerald-500' : 'bg-blue-500'}`}
-            style={{ width: `${progress}%` }}
-          />
+
+        <div>
+          <span className={`inline-block px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wide ${priority.cls}`}>
+            {priority.text}
+          </span>
         </div>
+
+        <div className="text-sm text-slate-600">
+          <span className="font-semibold text-slate-800">{formatNumber(item.planned_qty)}</span>
+          {' '}{item.unit}
+          <p className="text-[11px] text-slate-400">planificado</p>
+        </div>
+
+        <div className="text-sm text-slate-600">
+          <span className="font-semibold text-slate-800">{formatNumber(item.executed_qty)}</span>
+          {' '}{item.unit}
+          <p className="text-[11px] text-slate-400">ejecutado</p>
+        </div>
+
+        <div className="pr-1">
+          <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
+            <span>{formatNumber(item.executed_jr)} / {formatNumber(item.planned_jr)} JR</span>
+            <span className="font-semibold">{progress}%</span>
+          </div>
+          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${progress >= 100 ? 'bg-emerald-500' : 'bg-blue-500'}`}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end">
+          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        </div>
+      </button>
+
+      {/* Visualización Móvil (< 768px): Tarjeta de Jornada / Campo */}
+      <div className="block md:hidden p-4 space-y-3 bg-white">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="text-base font-bold text-slate-900 leading-snug">
+              {item.standard?.name ?? item.activity_key}
+            </h3>
+            {item.standard?.category && (
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                {item.standard.category}
+              </span>
+            )}
+          </div>
+          <span className={`shrink-0 inline-block px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wide ${priority.cls}`}>
+            {priority.text}
+          </span>
+        </div>
+
+        {/* Métricas clave en tarjeta */}
+        <div className="grid grid-cols-2 gap-2 bg-slate-50/80 p-3 rounded-lg border border-slate-100 text-xs">
+          <div>
+            <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wide">Planificado</span>
+            <span className="font-bold text-slate-800 text-sm">{formatNumber(item.planned_qty)}</span>{' '}
+            <span className="text-slate-500">{item.unit}</span>
+          </div>
+          <div>
+            <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wide">Ejecutado</span>
+            <span className="font-bold text-slate-800 text-sm">{formatNumber(item.executed_qty)}</span>{' '}
+            <span className="text-slate-500">{item.unit}</span>
+          </div>
+        </div>
+
+        {/* Barra de avance visual */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs text-slate-600">
+            <span className="font-medium">{formatNumber(item.executed_jr)} / {formatNumber(item.planned_jr)} JR</span>
+            <span className="font-bold text-slate-900">{progress}%</span>
+          </div>
+          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${progress >= 100 ? 'bg-emerald-500' : 'bg-blue-500'}`}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Botón de acción táctil (>= 48px target) */}
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="w-full min-h-[48px] px-4 py-3 text-sm font-semibold text-blue-700 bg-blue-50/80 hover:bg-blue-100/80 border border-blue-200/60 rounded-xl flex items-center justify-between transition-colors active:scale-[0.99]"
+        >
+          <span>{expanded ? 'Ocultar jornadas' : 'Registrar avance / Ver jornadas'}</span>
+          <ChevronDown className={`w-5 h-5 text-blue-600 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        </button>
       </div>
 
-      <div className="hidden md:flex justify-end">
-        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-      </div>
-    </button>
-
-    {expanded && (
-      <ItemExecutions planId={planId} groupId={groupId} planItemId={item.id} unit={item.unit} />
-    )}
+      {expanded && (
+        <ItemExecutions planId={planId} groupId={groupId} planItemId={item.id} unit={item.unit} />
+      )}
     </div>
   );
 }
