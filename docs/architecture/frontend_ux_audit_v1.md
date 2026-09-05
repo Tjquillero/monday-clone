@@ -1,43 +1,42 @@
 # Frontend UX Audit v1 — Mantenix
 
 **Fecha:** 2026-09-05  
-**Estado:** Inventario F1.3 (Skeletons & Async States), Guardrails y Matriz Before/After (F0 y F1.1 y F1.2 Certificados)  
+**Estado:** Inventario F1.4 (Offline Sync), Guardrails y Matriz Before/After (F0, F1.1, F1.2 y F1.3 Certificados)  
 **Compatibilidad:** 100% compatible con Baseline Arquitectónica Certificada 2386465 (ADR-0007 → ADR-0012)
 
 ---
 
-## 1. Resumen Ejecutivo y Marco Normativo de F1.3
+## 1. Resumen Ejecutivo y Marco Normativo de F1.4
 
-Mantenix mantiene certificadas sus invariantes backend (72/72 test suites, 0 errores TypeScript, Baseline 2386465, commits `ac6771c` y `5411a1d`).
+Mantenix mantiene certificadas sus invariantes backend y de UI (commits `ac6771c`, `5411a1d`, `e5cf13e`).
 
-Para el **Sub-bloque F1.3 (Loading, Skeletons & Empty States)**, se aplica el principio estricto de gobernanza asíncrona:
-> **"Un estado de carga o vacío NO debe mentir al usuario. Los estados Loading, Empty, Error, Ready y Submitting son disjuntos y nunca deben solaparse ni asumir data undefined como ausencia de datos."**
-
----
-
-## 2. Invariante de Separación de Estados Asíncronos
-
-$$\text{Loading} \neq \text{Empty} \neq \text{Error} \neq \text{Ready} \neq \text{Submitting}$$
-
-1. `isLoading = true` $\rightarrow$ Renderizar **Skeleton Structure** (Estructura visual idéntica a la vista final en estado pulso). NUNCA mostrar Empty State ni Error.
-2. `isError = true` $\rightarrow$ Renderizar **Error State Contextual** con opción de reintento.
-3. `!isLoading && !isError && length === 0` $\rightarrow$ Renderizar **Contextual Empty State** especificando qué está vacío, por qué y qué acción puede tomar el usuario.
-4. `submitting = true` $\rightarrow$ Preservar deshabilitación de controles e indicador inline (`Loader2 animate-spin`) sin desmontar el componente ni perder el foco.
+Para el **Sub-bloque F1.4 (Feedback Offline basado en IndexedDB)**, se aplica la norma inquebrantable de fuente única:
+> **"La fuente de verdad del estado de sincronización es única: IndexedDB → OfflineSyncContext → OfflineIndicator / SyncToast → UI. Prohibido crear estados o contadores de pendientes paralelos en memoria UI."**
 
 ---
 
-## 3. Inventario de Superficies Asíncronas y Matriz Before / After (F1.3)
+## 2. Invariante de Fuente Única y Estados Reales
 
-| Vista / Componente | Hook / Servicio Consumido | Estados Distinguidos | Comportamiento Anterior (Before) | Propuesta F1.3 (After) | Clasificación Técnico-UX |
-|---|---|---|---|---|---|
-| **`/my-work`** (`ActividadesContainer.tsx`) | `usePublishedWeekPlans` | `isLoading`, `isError`, `plans.length === 0`, `Ready` | Box punteado plano con spinner simple `Loader2`. | Skeleton de Tarjetas de Jornada (3 tarjetas en pulso). | Presentación UI local |
-| **`/verification`** (`VerificationContainer.tsx`) | `useVerificationQueue`, `useWeeklyPlanMutations` | `isLoading`, `isError`, `queue.length === 0`, `Ready`, `isPending` | Spinner simple en box plano. | Skeleton de Tarjeta Supervisora con indicador inline de verificación. | Presentación UI local |
-| **`/documentos`** (`OperationalDocumentsContainer.tsx`) | `useOperationalDocuments`, `useDocumentTypes` | `isLoading`, `isError`, `documents.length === 0`, `isUploading` | Indicador de carga plano. | Skeleton de Tabla Documental (4 columnas en pulso). | Presentación UI local |
-| **`/dashboard`** (`DashboardContent` en `page.tsx`) | `useBoard`, `useUserBoards` | `boardLoading`, `boardError`, `userBoardsLoading`, `Ready` | Pantalla en blanco con spinner central. | Skeleton de Ribbon + Tabla de Actividades. | Presentación UI local |
+$$\text{IndexedDB} \longrightarrow \text{OfflineSyncContext} \longrightarrow \begin{cases} \text{pendingCount} = \text{mutations} + \text{commands} + \text{attachments} \\ \text{conflictCount} = \text{commands}_{\text{conflicto}} + \text{attachments}_{\text{conflicto}} \\ \text{syncProgress} = \{\text{done}, \text{total}\} \\ \text{lastSyncResult} = \{\text{synced}, \text{conflicts}\} \end{cases} \longrightarrow \text{UI}$$
 
 ---
 
-## 4. Criterios de Certificación F1.3
+## 3. Inventario de Estados Offline y Matriz Before / After (F1.4)
+
+| Estado Real (IndexedDB / `OfflineSyncContext`) | Propiedad del Contexto | Feedback Visible Anterior (Before) | Refinamiento UX Propuesto (After F1.4) | Clasificación Técnico-UX |
+|---|---|---|---|---|
+| Online + Cola vacía (`pendingCount === 0`) | `isOnline=true`, `syncStatus='synced'`, `pendingCount=0` | Oculto o `Sincronizado` | Indicador discreto `Conectado` / Oculto | Presentación UI pura |
+| Offline + Cola vacía (`pendingCount === 0`) | `isOnline=false`, `pendingCount=0` | `Sin conexión · 0 guardados` | `Sin conexión · Sin pendientes` | Presentación UI pura |
+| Offline + N pendientes (`pendingCount > 0`) | `isOnline=false`, `pendingCount=N` | `Sin conexión · N guardados` | `Sin conexión · N pendientes por sincronizar` | Presentación UI pura |
+| Online + Sincronizando (`syncProgress != null`) | `isOnline=true`, `syncStatus='syncing'`, `syncProgress={done, total}` | `Sincronizando x/N...` + bar | `Sincronizando x/N (x%)` + bar en pulso | Presentación UI pura |
+| Online + Error (`syncStatus === 'error'`) | `isOnline=true`, `syncStatus='error'`, `pendingCount=N` | `Error · N pendientes` | `Error al sincronizar · N pendientes [Reintentar]` | Presentación UI pura |
+| Conflictos en cola (`conflictCount > 0`) | `conflictCount=C` | Badge rosa de conflicto | Badge de alerta + acceso directo a tray de resolución | Presentación UI pura |
+| Cierre de Sincronización (`lastSyncResult != null`) | `lastSyncResult={synced, conflicts}` | Toast en bottom-right | Toast accesible en bottom-right con auto-dismiss | Presentación UI pura |
+
+---
+
+## 4. Criterios de Certificación F1.4 y Cierre de Fase 1
 - **TypeScript:** 0 errores (`npx tsc --noEmit`).
 - **Suites de Pruebas:** 72/72 PASS (540/540 tests).
-- **Invariantes:** Permisos, RLS, IndexedDB, servicios de dominio y contratos POA $\rightarrow$ Billing 100% intocados.
+- **Fuente de Verdad:** 100% derivada de IndexedDB a través de `OfflineSyncContext`.
+- **Invariantes:** Cero modificaciones a `OfflineSyncContext.tsx`, `offlineDB.ts`, RLS o servicios de dominio.
