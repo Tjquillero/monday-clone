@@ -53,18 +53,17 @@ export default function OfflineIndicator() {
 
   if (!isOnline) {
     Icon = WifiOff;
-    text = `Sin conexión · ${pendingCount} guardados`;
+    text = pendingCount === 0 ? "Sin conexión · Sin pendientes" : `Sin conexión · ${pendingCount} pendientes por sincronizar`;
     colorClass = "bg-amber-500/10 text-amber-400 border-amber-500/20";
   } else if (syncStatus === 'syncing') {
     Icon = RefreshCw;
-    // Progreso real (Incremento 4c) en vez de un spinner ciego: si ya se
-    // conoce cuántos ítems hay que procesar, mostrar x/N.
+    // Progreso real (Incremento 4c) derivado exclusivamente de IndexedDB vía OfflineSyncContext
     text = syncProgress ? `Sincronizando ${syncProgress.done}/${syncProgress.total}...` : "Sincronizando...";
     colorClass = "bg-blue-500/10 text-blue-400 border-blue-500/20";
     iconClass = "animate-spin";
   } else if (syncStatus === 'error') {
     Icon = AlertTriangle;
-    text = `Error · ${pendingCount} pendientes`;
+    text = `Error al sincronizar · ${pendingCount} pendientes`;
     colorClass = "bg-rose-500/10 text-rose-400 border-rose-500/20";
   }
 
