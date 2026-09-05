@@ -217,6 +217,7 @@ export default function WeeklyPlannerView({
               <PlanningTable
                 activities={plan.activities}
                 weeklyAvailable={plan.capacity.weekly_available}
+                weekStartStr={selectorProps.weekStart}
               />
               <CapacitySummary plan={plan} />
             </>

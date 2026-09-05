@@ -126,6 +126,8 @@ export interface PlanningActivity {
   theoretical_journals_month: number;
   theoretical_journals_week: number;
   rules: Array<{ rule_type: string; rule_value: Record<string, unknown> }>;
+  status?: string;
+  is_manual_override?: boolean;
 }
 
 export interface WeeklyPlanningContext {
