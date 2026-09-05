@@ -115,9 +115,6 @@ export const SIDEBAR_ITEMS: readonly SidebarItem[] = [
   { icon: CheckSquare, label: 'Mis actividades', path: '/my-work' },
   { icon: ShieldCheck, label: 'Verificación', path: '/verification' },
   { icon: Target, label: 'Objetivos', path: '/okrs' },
-  // Insumos aún no tiene módulo propio; apunta al dashboard de forma
-  // provisional hasta que exista su ruta.
-  { icon: Layout, label: 'Insumos', path: '/dashboard' },
   // Documentos (2026-07-20) — Biblioteca Documental de Mantenix Fase 1, ver
   // docs/operacion/README.md. Módulo propio con ruta propia (no un ?view=
   // dentro del dashboard) porque su alcance va a crecer (Contratos, Actas,
