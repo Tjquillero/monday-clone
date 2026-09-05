@@ -18,10 +18,10 @@ interface KanbanViewProps {
 }
 
 const STATUS_CONFIG: Record<string, { label: string, color: string, icon: any, bgColor: string }> = {
-  'Done': { label: 'Listo', color: '#00c875', icon: CheckCircle2, bgColor: '#e6fff4' },
-  'Working on it': { label: 'En proceso', color: '#fdab3d', icon: Clock, bgColor: '#fff7ed' },
-  'Stuck': { label: 'Detenido', color: '#e2445c', icon: AlertCircle, bgColor: '#fff1f2' },
-  'Not Started': { label: 'Sin iniciar', color: '#c4c4c4', icon: MoreHorizontal, bgColor: '#f8fafc' },
+  'Done': { label: 'Completado', color: '#00c875', icon: CheckCircle2, bgColor: '#e6fff4' },
+  'Working on it': { label: 'En Proceso', color: '#fdab3d', icon: Clock, bgColor: '#fff7ed' },
+  'Stuck': { label: 'Bloqueado', color: '#e2445c', icon: AlertCircle, bgColor: '#fff1f2' },
+  'Not Started': { label: 'Pendiente', color: '#c4c4c4', icon: MoreHorizontal, bgColor: '#f8fafc' },
 };
 
 function KanbanCard({ item, onOpenItem }: { item: Item, onOpenItem: (groupId: string, item: any) => void }) {
