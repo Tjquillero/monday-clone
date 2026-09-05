@@ -7,6 +7,7 @@
 
 import { useMemo } from 'react';
 import { Loader2, CalendarX2, AlertTriangle } from 'lucide-react';
+import { CardSkeleton } from '@/components/ui/Skeleton';
 import { usePublishedWeekPlans } from '@/hooks/useWeeklyPlans';
 import { getMonday, getWeekBounds, getBogotaToday } from '@/lib/weeklyPlanner';
 import ActividadesView from './ActividadesView';
@@ -33,9 +34,10 @@ export default function ActividadesContainer() {
       </p>
 
       {isLoading && (
-        <div className="flex flex-col items-center justify-center py-20 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200">
-          <Loader2 className="w-8 h-8 text-blue-500 animate-spin mb-4" />
-          <p className="text-slate-500 font-medium">Cargando el plan de la semana…</p>
+        <div className="space-y-4">
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
         </div>
       )}
 

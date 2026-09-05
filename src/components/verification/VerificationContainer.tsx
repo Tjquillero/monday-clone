@@ -9,6 +9,7 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, CalendarX2, AlertTriangle, Check, TriangleAlert, Camera, Users, Clock } from 'lucide-react';
+import { CardSkeleton } from '@/components/ui/Skeleton';
 import { useVerificationQueue, VerificationQueueItem } from '@/hooks/useVerificationQueue';
 import { useWeeklyPlanMutations } from '@/hooks/useWeeklyPlanMutations';
 import { useExecutionAttachments } from '@/hooks/useExecutionAttachments';
@@ -62,9 +63,10 @@ export default function VerificationContainer() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200">
-        <Loader2 className="w-8 h-8 text-blue-500 animate-spin mb-4" />
-        <p className="text-slate-500 font-medium">Cargando pendientes…</p>
+      <div className="space-y-4">
+        <CardSkeleton />
+        <CardSkeleton />
+        <CardSkeleton />
       </div>
     );
   }
