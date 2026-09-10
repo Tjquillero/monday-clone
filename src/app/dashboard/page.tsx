@@ -380,7 +380,7 @@ function DashboardContent() {
           <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="fixed z-[300] bg-[var(--bg-secondary)] border border-[var(--border-color)] shadow-2xl rounded-xl p-1 w-64" style={{ top: '55px', right: '180px' }}>
              <button onClick={() => { setSelectedGroupId(null); setIsLocationMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 hover:bg-slate-500/5 rounded-lg text-left text-xs font-black uppercase tracking-widest text-[#3B7EF8]">Global Coverage</button>
              <div className="h-px bg-slate-500/5 my-1" />
-             {groups?.map((g, locIdx) => (
+             {groups?.filter(g => !g.title.toUpperCase().includes('PRESUPUESTO')).map((g, locIdx) => (
                 <button key={g.id || `loc-site-${locIdx}`} onClick={() => { setSelectedGroupId(g.id); setIsLocationMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 hover:bg-slate-500/5 rounded-lg text-left text-xs font-medium"><div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: g.color }} /> {g.title}</button>
              ))}
           </motion.div>

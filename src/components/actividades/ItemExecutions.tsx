@@ -10,7 +10,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Loader2, Pencil, Send, Users, Clock, Camera, CloudOff, RefreshCw, AlertOctagon } from 'lucide-react';
 import { useWeeklyPlanExecutions } from '@/hooks/useWeeklyPlans';
 import { useWeeklyPlanMutations } from '@/hooks/useWeeklyPlanMutations';
-import { useExecutionAttachments } from '@/hooks/useExecutionAttachments';
+import { useExecutionAttachments, EvidencePhase } from '@/hooks/useExecutionAttachments';
 import { useExecutionSyncStatuses, useAttachmentSyncSummaries } from '@/hooks/useSyncState';
 import { PendingAttachment } from '@/lib/offlineDB';
 import { ExecutionStatus } from '@/types/scheduler';
@@ -156,7 +156,7 @@ export default function ItemExecutions({ planId, groupId, planItemId, unit }: Pr
   // selector nunca se autocorrige, así que esta es la única red de
   // seguridad). Tanto synced como pending ya traen `phase` en su registro.
   const galleryPhases = useMemo(() => {
-    const map: Record<string, 'before' | 'after' | null> = {};
+    const map: Record<string, EvidencePhase | null> = {};
     for (const entry of galleryEntries) {
       map[entry.url] = entry.kind === 'synced' ? entry.attachment.phase : entry.pending.phase;
     }

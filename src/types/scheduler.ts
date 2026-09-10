@@ -199,6 +199,9 @@ export interface WeeklyPlanItem {
   plan_id: string;
   planned_sequence: number;
   activity_key: string;
+  name?: string;
+  zone?: string;
+  planned_date?: string;          // ISO date YYYY-MM-DD
   poa_activity_zone_id: string;
   planned_rendimiento: number;    // snapshot del estándar al planificar
   planned_frecuencia: number;

@@ -23,7 +23,7 @@ interface PhotoVerificationModalProps {
   // el comportamiento original (blob local, no persiste) — no rompe a los
   // consumidores existentes que todavía no pasan esta prop. `phase` solo se
   // envía cuando `capturePhase` está activo (ver abajo).
-  onUpload?: (file: File, phase?: 'before' | 'after') => Promise<string>;
+  onUpload?: (file: File, phase?: 'before' | 'during' | 'after') => Promise<string>;
   // Muestra el selector "Antes"/"Después" antes de capturar — concepto de
   // dominio (execution_attachments.phase), no algo genérico de este modal.
   // Los consumidores que no lo necesitan (ItemModal, VerificationContainer)
@@ -42,7 +42,7 @@ interface PhotoVerificationModalProps {
   // necesaria para poder advertir en "Confirmar" si toda la evidencia quedó
   // en una sola fase (ver phaseGap más abajo). Solo tiene efecto junto con
   // capturePhase; si se omite, no hay advertencia (ningún consumidor rompe).
-  galleryPhases?: Record<string, 'before' | 'after' | null>;
+  galleryPhases?: Record<string, 'before' | 'during' | 'after' | null>;
 }
 
 export default function PhotoVerificationModal({

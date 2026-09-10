@@ -27,17 +27,19 @@ export const isHolidayOrRestDay = (date: Date) => {
     return holidays.includes(dateStr);
 };
 
-export const getSiteCapacity = (siteName: string, date: Date) => {
+export const getSiteCapacity = (siteName: string, date: Date, overrideBaseCapacity?: number) => {
   const isHoliday = isHolidayOrRestDay(date);
   if (isHoliday) return { daily_capacity: 0, base_capacity: 0, target_efficiency: 0, is_rest_day: true };
 
-  const n = siteName.toUpperCase();
-  let baseCapacity = 5;
+  let baseCapacity = typeof overrideBaseCapacity === 'number' ? Math.max(0, overrideBaseCapacity) : 5;
   let targetEfficiency = 0.90;
 
-  if (n.includes('ZONAS VERDES')) { baseCapacity = 10; targetEfficiency = 0.95; }
-  else if (n.includes('ZONAS DURAS')) { baseCapacity = 6; targetEfficiency = 0.90; }
-  else if (n.includes('CLUB HOUSE') || n.includes('EDIFICIO')) { baseCapacity = 4; targetEfficiency = 0.98; }
+  if (typeof overrideBaseCapacity !== 'number') {
+    const n = siteName.toUpperCase();
+    if (n.includes('ZONAS VERDES')) { baseCapacity = 10; targetEfficiency = 0.95; }
+    else if (n.includes('ZONAS DURAS')) { baseCapacity = 6; targetEfficiency = 0.90; }
+    else if (n.includes('CLUB HOUSE') || n.includes('EDIFICIO')) { baseCapacity = 4; targetEfficiency = 0.98; }
+  }
 
   // REGLA TÁCTICA COLOMBIA: Sábados solo 3 horas (de 8) = factor 0.375
   const dayOfWeek = date.getDay();

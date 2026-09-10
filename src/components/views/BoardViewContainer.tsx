@@ -90,7 +90,7 @@ export default function BoardViewContainer({ boardId, searchQuery, selectedGroup
             return matchesSearch && matchesStatus && matchesPriority && matchesPerson;
           }),
       }))
-      .filter(g => g.items.length > 0 || (searchQuery === '' && filters.status.length === 0 && filters.priority.length === 0 && !selectedGroupId));
+      .filter(g => g.items.length > 0 || (!!selectedGroupId && g.id === selectedGroupId));
   }, [groups, columns, searchQuery, selectedGroupId, filters]);
 
   // View engine: filter + sort from useBoardView on top of baseGroups

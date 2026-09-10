@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { offlineDB } from '@/lib/offlineDB';
 import { isNetworkError } from './useBoardData';
 import { WeeklyPlan, WeeklyPlanItem, WeeklyPlanItemExecution, WeeklyPlanConfirmationSummary } from '@/types/scheduler';
+import { ensureWeeklyPlanMaterialized } from '@/lib/scheduleMaterializationService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Query keys
@@ -110,6 +111,53 @@ export interface PublishedWeekPlan extends WeeklyPlan {
   items: PublishedWeekPlanItem[];
 }
 
+function addDaysISO(iso: string, days: number): string {
+  const parts = iso.split('-').map(Number);
+  if (parts.length !== 3) return iso;
+  const date = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + days));
+  const yS = date.getUTCFullYear();
+  const mS = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const dS = String(date.getUTCDate()).padStart(2, '0');
+  return `${yS}-${mS}-${dS}`;
+}
+
+function resolvePlannedDate(item: PublishedWeekPlanItem, actOccurrenceIndex: number, weekStartISO: string): string {
+  if (item.planned_date) return item.planned_date;
+  const freq = Number(item.planned_frecuencia || 1);
+
+  if (freq === 1) {
+    // Daily routine: Mon..Sat (offsets 0..5)
+    const offsets = [0, 1, 2, 3, 4, 5];
+    return addDaysISO(weekStartISO, offsets[actOccurrenceIndex % 6]);
+  }
+  if (Math.abs(freq - 2.083) < 0.1 || freq === 3) {
+    // 3x/week: Mon, Wed, Fri
+    const offsets = [0, 2, 4];
+    return addDaysISO(weekStartISO, offsets[actOccurrenceIndex % 3]);
+  }
+  if (freq === 2) {
+    // 2x/week: Mon, Thu
+    const offsets = [0, 3];
+    return addDaysISO(weekStartISO, offsets[actOccurrenceIndex % 2]);
+  }
+  if (freq === 4) {
+    // 4x/week: Mon, Tue, Thu, Fri
+    const offsets = [0, 1, 3, 4];
+    return addDaysISO(weekStartISO, offsets[actOccurrenceIndex % 4]);
+  }
+  if (freq === 5) {
+    // 5x/week: Mon..Fri
+    const offsets = [0, 1, 2, 3, 4];
+    return addDaysISO(weekStartISO, offsets[actOccurrenceIndex % 5]);
+  }
+  if (freq >= 6) {
+    // 6x/week: Mon..Sat
+    const offsets = [0, 1, 2, 3, 4, 5];
+    return addDaysISO(weekStartISO, offsets[actOccurrenceIndex % 6]);
+  }
+  return addDaysISO(weekStartISO, 0);
+}
+
 export function usePublishedWeekPlans(weekStartISO: string | undefined) {
   return useQuery<PublishedWeekPlan[]>({
     queryKey: weeklyPlanKeys.publishedWeek(weekStartISO!),
@@ -121,7 +169,7 @@ export function usePublishedWeekPlans(weekStartISO: string | undefined) {
       // + board_id (dos boards pueden compartir el mismo activity_key) en vez de por
       // una relación de FK.
       try {
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from('weekly_plans')
           .select(`
             *,
@@ -134,7 +182,49 @@ export function usePublishedWeekPlans(weekStartISO: string | undefined) {
 
         if (error) throw error;
 
-        const plans = (data ?? []) as PublishedWeekPlan[];
+        let plans = (data ?? []) as PublishedWeekPlan[];
+
+        // Gatillo Independiente de Superficie: Si no existen planes para la semana,
+        // garantizar la materialización determinística e idempotente para todos los sitios/boards.
+        if (plans.length === 0) {
+          const { data: boards } = await supabase.from('boards').select('id');
+          const { data: groups } = await supabase.from('groups').select('id, title, board_id');
+
+          if (boards && boards.length > 0) {
+            for (const b of boards) {
+              const bGroups = (groups || []).filter(
+                (g: any) => g.board_id === b.id && !(g.title || '').toUpperCase().includes('PRESUPUESTO GENERAL')
+              );
+              if (bGroups.length > 0) {
+                for (const g of bGroups) {
+                  await ensureWeeklyPlanMaterialized(supabase, b.id, (g as any).id, weekStartISO!);
+                }
+              }
+            }
+          }
+
+          const refetched = await supabase
+            .from('weekly_plans')
+            .select(`
+              *,
+              group:groups(*),
+              board:boards(*),
+              items:weekly_plan_items(*)
+            `)
+            .eq('week_start', weekStartISO!)
+            .in('status', ['published', 'in_progress']);
+
+          if (refetched.error) throw refetched.error;
+          plans = (refetched.data ?? []) as PublishedWeekPlan[];
+        }
+
+        // Filtro Estricto de Dominio Operacional:
+        // Excluir grupos financieros (PRESUPUESTO GENERAL) y planes vacíos sin actividades operativas.
+        plans = plans.filter((plan) => {
+          const groupTitle = (plan.group?.title || '').toUpperCase().trim();
+          if (groupTitle.includes('PRESUPUESTO GENERAL')) return false;
+          return (plan.items || []).length > 0;
+        });
 
         const boardIds = [...new Set(plans.map((p) => p.board_id))];
         const activityKeys = [...new Set(plans.flatMap((p) => p.items.map((i) => i.activity_key)))];
@@ -154,8 +244,15 @@ export function usePublishedWeekPlans(weekStartISO: string | undefined) {
 
         for (const plan of plans) {
           plan.items.sort((a, b) => a.planned_sequence - b.planned_sequence);
+          const actCounters = new Map<string, number>();
+
           for (const item of plan.items) {
             item.standard = standardsByKey.get(`${plan.board_id}|${item.activity_key}`) ?? null;
+            if (!item.planned_date) {
+              const count = actCounters.get(item.activity_key) ?? 0;
+              actCounters.set(item.activity_key, count + 1);
+              item.planned_date = resolvePlannedDate(item, count, plan.week_start);
+            }
           }
         }
 
@@ -201,13 +298,17 @@ export function usePublishedWeekPlans(weekStartISO: string | undefined) {
           );
 
           return filteredPlans.map((p: any) => {
+            const actCounters = new Map<string, number>();
             const items = localItems
               .filter((i: any) => String(i.plan_id) === String(p.id))
               .sort((a: any, b: any) => a.planned_sequence - b.planned_sequence)
               .map((i: any) => {
+                const count = actCounters.get(i.activity_key) ?? 0;
+                actCounters.set(i.activity_key, count + 1);
                 const std = standardsByKey.get(`${p.board_id}|${i.activity_key}`);
                 return {
                   ...i,
+                  planned_date: i.planned_date || resolvePlannedDate(i, count, p.week_start),
                   standard: std ? { name: std.name, category: std.category, unit: std.unit } : null,
                 };
               });

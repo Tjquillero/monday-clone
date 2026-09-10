@@ -39,7 +39,7 @@ const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 // se necesita una corrección administrativa algún día, debe ser una
 // capacidad aparte con permisos específicos, no agregar aquí un
 // updateAttachment silencioso.
-export type EvidencePhase = 'before' | 'after';
+export type EvidencePhase = 'before' | 'during' | 'after';
 
 export interface ExecutionAttachment {
   id: string;

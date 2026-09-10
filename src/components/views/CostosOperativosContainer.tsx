@@ -36,7 +36,9 @@ export default function CostosOperativosContainer({ boardId, selectedGroupId, gr
   }, [selectedGroupId, groups]);
 
   const boardGroups = useMemo(
-    () => (groups ?? []).map((g) => ({ id: g.id, title: g.title })),
+    () => (groups ?? [])
+      .filter((g) => !g.title.toUpperCase().includes('PRESUPUESTO'))
+      .map((g) => ({ id: g.id, title: g.title })),
     [groups],
   );
 

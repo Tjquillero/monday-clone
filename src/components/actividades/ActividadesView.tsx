@@ -1,15 +1,15 @@
 'use client';
 
 // Superficie del LÍDER — actividades del plan publicado/en ejecución de cada
-// sitio para la semana activa. Cada fila se expande para ver y registrar
-// jornadas (ItemExecutions); verificar/rechazar pertenece al Supervisor y
-// vive fuera de esta vista.
+// sitio para la semana activa. Proyección UX operacional por día calendario
+// (Sitio -> Semana -> Día -> Actividad). Consume planned_date persistido.
 
 import { useState } from 'react';
 import { MapPin, ClipboardCheck, ChevronDown } from 'lucide-react';
 import { PublishedWeekPlan, PublishedWeekPlanItem } from '@/hooks/useWeeklyPlans';
 import { ActivityPriority, PlanStatus } from '@/types/scheduler';
 import ItemExecutions from './ItemExecutions';
+import DaySection from './DaySection';
 
 interface Props {
   plans: PublishedWeekPlan[];
@@ -30,51 +30,78 @@ function formatNumber(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-function ItemRow({ item, planId, groupId }: { item: PublishedWeekPlanItem; planId: string; groupId: string }) {
+function getWeekDays(weekStartISO: string): string[] {
+  const parts = weekStartISO.split('-');
+  if (parts.length !== 3) return [];
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+
+  const days: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(year, month, day + i);
+    const yStr = d.getFullYear();
+    const mStr = String(d.getMonth() + 1).padStart(2, '0');
+    const dStr = String(d.getDate()).padStart(2, '0');
+    days.push(`${yStr}-${mStr}-${dStr}`);
+  }
+  return days;
+}
+
+export function ItemRow({ item, planId, groupId }: { item: PublishedWeekPlanItem; planId: string; groupId: string }) {
   const [expanded, setExpanded] = useState(false);
   const priority = PRIORITY_LABEL[item.priority] ?? PRIORITY_LABEL.flexible;
   const progress = item.planned_qty > 0
     ? Math.min(100, Math.round((item.executed_qty / item.planned_qty) * 100))
     : 0;
 
+  const name = item.standard?.name ?? item.name ?? item.activity_key;
+  const category = item.standard?.category ?? item.zone;
+
   return (
-    <div className="border-b border-slate-100 last:border-b-0">
-      {/* Visualización Desktop (>= 768px): Tabla estructurada */}
-      <button
+    <div className="border-b border-slate-100 last:border-b-0 bg-white hover:bg-slate-50/60 transition-colors">
+      <div
         onClick={() => setExpanded((v) => !v)}
-        className="w-full text-left hidden md:grid grid-cols-[1fr_110px_140px_140px_160px_32px] px-6 py-4 items-center gap-0 hover:bg-slate-50/80 transition-colors"
+        className="w-full text-left p-4 md:px-6 md:py-4 cursor-pointer select-none flex flex-col md:grid md:grid-cols-[1fr_110px_140px_140px_160px_32px] md:items-center gap-3 md:gap-0"
       >
-        <div className="min-w-0 pr-4">
-          <p className="text-sm font-semibold text-slate-800 truncate">
-            {item.standard?.name ?? item.activity_key}
-          </p>
-          {item.standard?.category && (
-            <p className="text-[11px] text-slate-400 uppercase tracking-wide">{item.standard.category}</p>
+        <div className="min-w-0 md:pr-4">
+          <div className="flex items-start justify-between md:justify-start gap-2">
+            <p className="text-sm md:text-base font-semibold text-slate-800 leading-snug truncate">
+              {name}
+            </p>
+            <span className={`md:hidden shrink-0 inline-block px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wide ${priority.cls}`}>
+              {priority.text}
+            </span>
+          </div>
+          {category && (
+            <p className="text-[11px] text-slate-400 uppercase tracking-wide mt-0.5">
+              {category}
+            </p>
           )}
         </div>
 
-        <div>
+        <div className="hidden md:block">
           <span className={`inline-block px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wide ${priority.cls}`}>
             {priority.text}
           </span>
         </div>
 
-        <div className="text-sm text-slate-600">
+        <div className="text-xs md:text-sm text-slate-600">
           <span className="font-semibold text-slate-800">{formatNumber(item.planned_qty)}</span>
           {' '}{item.unit}
-          <p className="text-[11px] text-slate-400">planificado</p>
+          <span className="text-[11px] text-slate-400 block">planificado</span>
         </div>
 
-        <div className="text-sm text-slate-600">
+        <div className="text-xs md:text-sm text-slate-600">
           <span className="font-semibold text-slate-800">{formatNumber(item.executed_qty)}</span>
           {' '}{item.unit}
-          <p className="text-[11px] text-slate-400">ejecutado</p>
+          <span className="text-[11px] text-slate-400 block">ejecutado</span>
         </div>
 
-        <div className="pr-1">
+        <div className="md:pr-1">
           <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
             <span>{formatNumber(item.executed_jr)} / {formatNumber(item.planned_jr)} JR</span>
-            <span className="font-semibold">{progress}%</span>
+            <span className="font-semibold text-slate-700">{progress}%</span>
           </div>
           <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
             <div
@@ -84,69 +111,18 @@ function ItemRow({ item, planId, groupId }: { item: PublishedWeekPlanItem; planI
           </div>
         </div>
 
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between md:justify-end pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
+          <span className="text-xs font-semibold text-blue-600 md:hidden">
+            {expanded ? 'Ocultar jornadas' : 'Registrar avance / Ver jornadas'}
+          </span>
           <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
         </div>
-      </button>
-
-      {/* Visualización Móvil (< 768px): Tarjeta de Jornada / Campo */}
-      <div className="block md:hidden p-4 space-y-3 bg-white">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h3 className="text-base font-bold text-slate-900 leading-snug">
-              {item.standard?.name ?? item.activity_key}
-            </h3>
-            {item.standard?.category && (
-              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                {item.standard.category}
-              </span>
-            )}
-          </div>
-          <span className={`shrink-0 inline-block px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wide ${priority.cls}`}>
-            {priority.text}
-          </span>
-        </div>
-
-        {/* Métricas clave en tarjeta */}
-        <div className="grid grid-cols-2 gap-2 bg-slate-50/80 p-3 rounded-lg border border-slate-100 text-xs">
-          <div>
-            <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wide">Planificado</span>
-            <span className="font-bold text-slate-800 text-sm">{formatNumber(item.planned_qty)}</span>{' '}
-            <span className="text-slate-500">{item.unit}</span>
-          </div>
-          <div>
-            <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wide">Ejecutado</span>
-            <span className="font-bold text-slate-800 text-sm">{formatNumber(item.executed_qty)}</span>{' '}
-            <span className="text-slate-500">{item.unit}</span>
-          </div>
-        </div>
-
-        {/* Barra de avance visual */}
-        <div className="space-y-1">
-          <div className="flex items-center justify-between text-xs text-slate-600">
-            <span className="font-medium">{formatNumber(item.executed_jr)} / {formatNumber(item.planned_jr)} JR</span>
-            <span className="font-bold text-slate-900">{progress}%</span>
-          </div>
-          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all ${progress >= 100 ? 'bg-emerald-500' : 'bg-blue-500'}`}
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Botón de acción táctil (>= 48px target) */}
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className="w-full min-h-[48px] px-4 py-3 text-sm font-semibold text-blue-700 bg-blue-50/80 hover:bg-blue-100/80 border border-blue-200/60 rounded-xl flex items-center justify-between transition-colors active:scale-[0.99]"
-        >
-          <span>{expanded ? 'Ocultar jornadas' : 'Registrar avance / Ver jornadas'}</span>
-          <ChevronDown className={`w-5 h-5 text-blue-600 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-        </button>
       </div>
 
       {expanded && (
-        <ItemExecutions planId={planId} groupId={groupId} planItemId={item.id} unit={item.unit} />
+        <div className="p-4 bg-slate-50/50 border-t border-slate-100">
+          <ItemExecutions planId={planId} groupId={groupId} planItemId={item.id} unit={item.unit} />
+        </div>
       )}
     </div>
   );
@@ -154,23 +130,49 @@ function ItemRow({ item, planId, groupId }: { item: PublishedWeekPlanItem; planI
 
 export default function ActividadesView({ plans }: Props) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {plans.map((plan) => {
         const status = PLAN_STATUS_LABEL[plan.status];
+        const weekDays = getWeekDays(plan.week_start);
+        const weekDaySet = new Set(weekDays);
+
+        // Agrupar items por planned_date (preservando orden determinista)
+        const itemsByDay = new Map<string, PublishedWeekPlanItem[]>();
+        const contingencyItems: PublishedWeekPlanItem[] = [];
+
+        for (const item of plan.items) {
+          const pDate = item.planned_date?.trim();
+          if (pDate && weekDaySet.has(pDate)) {
+            const list = itemsByDay.get(pDate) ?? [];
+            list.push(item);
+            itemsByDay.set(pDate, list);
+          } else {
+            contingencyItems.push(item);
+          }
+        }
+
+        const totalPlannedJr = plan.items.reduce((acc, i) => acc + (i.planned_jr || 0), 0);
+
         return (
           <section key={plan.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-              <div className="flex items-center gap-2 min-w-0">
-                <MapPin className="w-4 h-4 shrink-0" style={{ color: plan.group?.color ?? '#3B7EF8' }} />
-                <h2 className="text-sm font-bold text-slate-800 truncate">
-                  {plan.group?.title ?? 'Sitio'}
-                </h2>
-                <span className="text-[11px] text-slate-400 truncate">· {plan.board?.name ?? 'Tablero'}</span>
+            {/* Header del Sitio */}
+            <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 md:px-6 py-4 border-b border-slate-200 bg-slate-50/70">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <MapPin className="w-5 h-5 shrink-0" style={{ color: plan.group?.color ?? '#3B7EF8' }} />
+                <div>
+                  <h2 className="text-base font-bold text-slate-800 truncate">
+                    {plan.group?.title ?? 'Sitio'}
+                  </h2>
+                  <p className="text-xs text-slate-500 truncate">{plan.board?.name ?? 'Tablero Principal'}</p>
+                </div>
               </div>
+
               <div className="flex items-center gap-3 shrink-0">
-                <span className="text-[11px] text-slate-400">
-                  {plan.items.length} {plan.items.length === 1 ? 'actividad' : 'actividades'}
-                </span>
+                <div className="text-right text-xs">
+                  <span className="font-semibold text-slate-700">{plan.items.length} actividades</span>
+                  <span className="text-slate-300 mx-1.5">•</span>
+                  <span className="font-bold text-blue-600">{formatNumber(totalPlannedJr)} JR total</span>
+                </div>
                 {status && (
                   <span className={`inline-block px-2.5 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wide ${status.cls}`}>
                     {status.text}
@@ -179,25 +181,33 @@ export default function ActividadesView({ plans }: Props) {
               </div>
             </header>
 
-            <div className="hidden md:grid grid-cols-[1fr_110px_140px_140px_160px_32px] border-b border-slate-100 px-6 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-              <div>Actividad</div>
-              <div>Prioridad</div>
-              <div>Planificado</div>
-              <div>Ejecutado</div>
-              <div>Avance (JR)</div>
-              <div />
-            </div>
+            {/* Proyección Desglose Semanal por Día (Lunes a Domingo) */}
+            <div className="p-4 md:p-6 space-y-4 bg-slate-50/30">
+              {weekDays.map((dayISO) => (
+                <DaySection
+                  key={dayISO}
+                  dateStr={dayISO}
+                  items={itemsByDay.get(dayISO) ?? []}
+                  planId={plan.id}
+                  groupId={plan.group_id}
+                  renderItemRow={(item, pId, gId) => (
+                    <ItemRow key={item.id} item={item} planId={pId} groupId={gId} />
+                  )}
+                />
+              ))}
 
-            <div className="divide-y divide-slate-100">
-              {plan.items.length > 0 ? (
-                plan.items.map((item) => (
-                  <ItemRow key={item.id} item={item} planId={plan.id} groupId={plan.group_id} />
-                ))
-              ) : (
-                <div className="px-6 py-8 text-center text-sm text-slate-400">
-                  <ClipboardCheck className="w-6 h-6 mx-auto mb-2 text-slate-300" />
-                  El plan de este sitio no tiene actividades.
-                </div>
+              {/* Contingencia: Ocurrencias con fecha fuera de rango o nula */}
+              {contingencyItems.length > 0 && (
+                <DaySection
+                  dateStr="CONTINGENCY"
+                  items={contingencyItems}
+                  planId={plan.id}
+                  groupId={plan.group_id}
+                  renderItemRow={(item, pId, gId) => (
+                    <ItemRow key={item.id} item={item} planId={pId} groupId={gId} />
+                  )}
+                  isContingency={true}
+                />
               )}
             </div>
           </section>

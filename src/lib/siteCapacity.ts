@@ -1,10 +1,94 @@
 /**
- * Worker capacity per site/group, extracted from:
- * "CRONOGRAMA OPERACION 2025 V-2 SEGUIMIENTO EJECUCION" → sheet "DETALLE DE GRUPO"
- * 
- * daily_capacity = total workers available per working day (= max jornales per day)
- * zv = Zonas Verdes workers, zd = Zonas Duras workers, zp = Zona Playa workers
+ * Motor de Resolución Dinámica de Capacidad Operativa de Sitio (Módulo 3)
+ *
+ * Principios de Dominio:
+ * 1. `groups` (Master Catalog de los 26 grupos) es la fuente de VERDAD de Identidad de Sitio.
+ * 2. `personnel_site_assignments` es la fuente de VERDAD de Capacidad (Y = conteo de personas adscritas).
+ * 3. `resource_analysis` es la fuente de VERDAD de Demanda Teórica (JR_mes y X).
+ * 4. Sitio existente en `groups` con 0 personal adscrito -> Resultado Operacional Válido (daily_capacity = 0).
+ * 5. Sitio inexistente en `groups` -> Error de Resolución (RESOLUTION_ERROR), NUNCA 0 JR silenciosamente válido.
  */
+
+export interface SiteGroup {
+  id: string;
+  title: string;
+}
+
+export interface SiteIdentity {
+  id: string;
+  title: string;
+}
+
+export interface DynamicSiteCapacity {
+  siteId: string;
+  siteTitle: string;
+  assignedPersonnelCount: number; // Y_pers
+  daily_capacity: number; // Y_pers JR/día
+  weekly_capacity: number; // Y_pers * dias_habiles_reales
+  status: 'VALID' | 'RESOLUTION_ERROR';
+  source: 'PERSONNEL_ASSIGNMENTS';
+}
+
+/**
+ * Resuelve la identidad de un sitio contra el catálogo maestro `groups`.
+ * Retorna null si el sitio no existe en `groups`.
+ */
+export function resolveSiteIdentity(
+  siteIdOrTitle: string,
+  masterGroups: SiteGroup[]
+): SiteIdentity | null {
+  if (!siteIdOrTitle || !masterGroups || masterGroups.length === 0) return null;
+  const target = siteIdOrTitle.trim();
+  const targetUpper = target.toUpperCase();
+
+  // 1. Coincidencia exacta por ID (UUID)
+  const byId = masterGroups.find((g) => g.id === target);
+  if (byId) return { id: byId.id, title: byId.title };
+
+  // 2. Coincidencia exacta por Título (case insensitive)
+  const byTitleExact = masterGroups.find((g) => g.title.toUpperCase().trim() === targetUpper);
+  if (byTitleExact) return { id: byTitleExact.id, title: byTitleExact.title };
+
+  return null;
+}
+
+/**
+ * Resuelve la capacidad dinámica a partir de un sitio con identidad validada y su conteo de adscripciones reales.
+ */
+export function resolveSiteCapacity(
+  identity: SiteIdentity | null,
+  assignedPersonnelCount: number,
+  workingDays: number = 5
+): DynamicSiteCapacity {
+  if (!identity) {
+    return {
+      siteId: '',
+      siteTitle: '',
+      assignedPersonnelCount: 0,
+      daily_capacity: 0,
+      weekly_capacity: 0,
+      status: 'RESOLUTION_ERROR',
+      source: 'PERSONNEL_ASSIGNMENTS',
+    };
+  }
+
+  const count = Math.max(0, assignedPersonnelCount);
+  const effectiveDays = Math.max(0, workingDays);
+
+  return {
+    siteId: identity.id,
+    siteTitle: identity.title,
+    assignedPersonnelCount: count,
+    daily_capacity: count,
+    weekly_capacity: count * effectiveDays,
+    status: 'VALID',
+    source: 'PERSONNEL_ASSIGNMENTS',
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPATIBILIDAD CON LEGADO (2025 Hardcoded SITE_CAPACITY Map)
+// ─────────────────────────────────────────────────────────────────────────────
 
 export interface SiteCapacity {
   zv: number;   // green zone workers
@@ -13,6 +97,7 @@ export interface SiteCapacity {
   daily_capacity: number; // total jornales available per day
 }
 
+/** @deprecated Mantener solo para fixtures de tests descontextualizados */
 export const SITE_CAPACITY: Record<string, SiteCapacity> = {
   'PLAZA PUERTO COLOMBIA':   { zv: 1,   zd: 3, zp: 4,   daily_capacity: 8  },
   'PLAYA MANGLARES':         { zv: 0.3, zd: 0, zp: 3.7, daily_capacity: 4  },
@@ -31,33 +116,18 @@ export const SITE_CAPACITY: Record<string, SiteCapacity> = {
   'SENDERO SANTA VERONICA':  { zv: 1,   zd: 2, zp: 0,   daily_capacity: 3  },
 };
 
-/**
- * Get capacity for a site group title (case-insensitive, partial match).
- */
+/** @deprecated Usar resolveSiteIdentity + resolveSiteCapacity */
 export function getSiteCapacity(groupTitle: string): SiteCapacity | null {
   const upper = groupTitle.toUpperCase().trim();
-  // Exact match first
   for (const [key, val] of Object.entries(SITE_CAPACITY)) {
     if (key.toUpperCase() === upper) return val;
   }
-  // Partial match
   for (const [key, val] of Object.entries(SITE_CAPACITY)) {
     if (upper.includes(key.toUpperCase()) || key.toUpperCase().includes(upper)) return val;
   }
   return null;
 }
 
-/**
- * Given a list of items (activities) and the site capacity,
- * compute the total jornales required for today (based on FREC and working day),
- * and determine which activities can be done today vs need redistribution.
- * 
- * Algorithm:
- *  1. Filter items due today (FREC-based)
- *  2. Sort by jornal requirement (smallest first, to fit as many as possible)
- *  3. Assign activities until daily_capacity is filled
- *  4. Remaining activities are "deferred to next available day"
- */
 export function planDailyActivities(
   items: Array<{ id: string | number; name: string; values: Record<string, any> }>,
   siteCapacity: SiteCapacity,
@@ -69,18 +139,15 @@ export function planDailyActivities(
   capacityUsed: number;
   overloaded: boolean;
 } {
-  // Calculate jornales for each item
   const withJornales = items.map(item => {
     const cant = parseFloat(item.values['cant']) || 0;
     const rend = parseFloat(item.values['rend']) || 1;
     const frec = parseFloat(item.values['frec']) || 25;
     const totalJornales = rend > 0 ? cant / rend : 0;
-    // Daily jornales = total / (frequency in 25 days) or total if daily
     const jornalesPerOccurrence = frec >= 25 ? totalJornales / 25 : totalJornales / Math.max(1, frec);
     return { ...item, jornalesPerOccurrence };
   });
 
-  // Sort: items with fewer jornales needed first (greedy approach to maximize activities done)
   const sorted = [...withJornales].sort((a, b) => a.jornalesPerOccurrence - b.jornalesPerOccurrence);
 
   const capacity = siteCapacity.daily_capacity;
@@ -91,7 +158,7 @@ export function planDailyActivities(
 
   for (const item of sorted) {
     totalRequired += item.jornalesPerOccurrence;
-    if (capacityUsed + item.jornalesPerOccurrence <= capacity + 0.5) { // 0.5 tolerance
+    if (capacityUsed + item.jornalesPerOccurrence <= capacity + 0.5) {
       scheduledToday.push(item);
       capacityUsed += item.jornalesPerOccurrence;
     } else {

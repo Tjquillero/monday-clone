@@ -9,45 +9,14 @@ import { buildWeeklyPlanningContext, calculateContractWeek, mergeStandardsForZon
 import { WORKING_DAYS_WEEK } from '@/lib/schedulerMath';
 import { useContractStandards, useScopeMappings, useMissingBoardActivityStandards } from './useActivityStandards';
 import { usePoaActiveCatalog, useActivePoaVersionId } from './usePoaActivities';
+import { ensureWeeklyPlanMaterialized } from '@/lib/scheduleMaterializationService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // useWeeklyPlan
 //
-// Orquesta cinco fuentes de datos + el motor puro para producir un
-// WeeklyPlanningContext completamente determinista:
-//
-//   useContractStandards(boardId)              → catálogo técnico (rendimiento, priority)
-//   usePoaActiveCatalog(boardId)                → frecuencia/precio de la versión POA activa
-//   useScopeMappings()                          → activity_key → scope_key
-//   resource_analysis (scope_data)              → cantidades por scope type del sitio
-//   getSiteCapacity(group.title)                 → capacidad diaria del sitio (v1: hardcoded)
-//   useMissingBoardActivityStandards(board, poa) → actividades contratadas sin catálogo técnico
-//        │
-//        ▼
-//   merge (por activity_key + zona) → buildWeeklyPlanningContext() → WeeklyPlanningContext
-//
-// El merge descarta actividades del catálogo técnico que no tengan cobertura
-// vigente en el POA para esta zona (Regla 13, poa-domain.md: origen exclusivo
-// de actividades) — no se planifica algo que no está en el contrato activo.
-//
-// Generación parcial (2026-07-19, decisión de negocio que reemplaza el
-// bloqueo total del 2026-07-18): si existen actividades contratadas sin
-// catálogo técnico (missingStandards), el hook SÍ construye el plan con las
-// que sí tienen catálogo — el merge ya las excluye naturalmente (nunca
-// entran a `standards`, que viene de board_activity_standards). El
-// consumidor debe mostrar `missingStandards` como advertencia informativa
-// junto al plan (nunca en su lugar) y marcar el plan como parcial en la UI.
-// El bloqueo real ya no vive aquí: se movió a confirm_weekly_plan() (ERRCODE
-// MTCFG), que es donde corresponde certificar cumplimiento contractual —
-// "parcial" es un estado derivado en vivo del catálogo técnico, nunca una
-// bandera guardada en el plan, así que completar el catálogo después de
-// generar el plan permite confirmarlo sin recrearlo.
-//
-// El hook no conoce nada de componentes visuales.
-// El resultado es idempotente: la misma (boardId, group, weekStart) siempre
-// produce el mismo plan.
-//
-// TODO v2: reemplazar getSiteCapacity() por query a group_capacities table.
+// Orquesta las fuentes de datos + el motor puro para producir un
+// WeeklyPlanningContext completamente determinista y materializar las
+// ocurrencias reales en PostgreSQL (`weekly_plan_items`).
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface UseWeeklyPlanResult {
@@ -88,9 +57,6 @@ export function useWeeklyPlan(
     error: mapErr,
   } = useScopeMappings();
 
-  // Separación de fases: id de la versión activa del POA — necesario para
-  // comparar contra get_missing_board_activity_standards(), que compara por
-  // versión específica, no por "el board" en general.
   const { data: activePoaVersionId } = useActivePoaVersionId(boardId);
 
   const {
@@ -127,28 +93,48 @@ export function useWeeklyPlan(
     refetchOnWindowFocus: false,
   });
 
-  // El plan se deriva de los datos ya cacheados — no necesita su propio useQuery
+  // Personal adscrito al sitio desde Módulo 2 (personnel_site_assignments)
+  const { data: assignmentsCount } = useQuery({
+    queryKey: ['personnel_site_assignments_count', group?.id],
+    queryFn: async () => {
+      if (!group?.id) return 0;
+      const { count, error } = await supabase
+        .from('personnel_site_assignments')
+        .select('*', { count: 'exact', head: true })
+        .eq('site_id', group.id);
+      if (error) return 0;
+      return count ?? 0;
+    },
+    enabled: !!group?.id,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  // Gatillo Determinístico de Materialización e Inserción Idempotente SQL (weekly_plan_items)
+  const weekStartStr = weekStart.toISOString().slice(0, 10);
+  useQuery({
+    queryKey: ['materialize_weekly_plan', boardId, group?.id, weekStartStr],
+    queryFn: async () => {
+      if (!boardId || !group?.id) return null;
+      return await ensureWeeklyPlanMaterialized(supabase, boardId, group.id, weekStart);
+    },
+    enabled: !!boardId && !!group?.id && !!standards && !!poaCatalog,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  // El plan se deriva de los datos ya cacheados
   const plan = useMemo<WeeklyPlanningContext | null>(() => {
     if (!standards || !poaCatalog || !scopeMappings || analysisRow === undefined || !group) return null;
-    // Generación parcial (ver comentario de cabecera): ya no se bloquea el
-    // plan completo por actividades sin catálogo técnico — solo se espera a
-    // que missingStandards termine de cargar (undefined = todavía cargando),
-    // nunca a que esté vacía.
     if (missingStandards === undefined) return null;
 
-    // Merge Catálogo Técnico + Actividad del POA (frecuencia/precio) por
-    // activity_key, filtrando por cobertura vigente en esta zona.
     const mergedStandards = mergeStandardsForZone(standards, poaCatalog, group.id);
-
     const scopeQuantities: Record<string, number> = analysisRow?.scope_data ?? {};
-
-    // Capacidad del sitio — desde SITE_CAPACITY hardcodeado (v1)
-    // Si el nombre del grupo no coincide, usa fallback de 0 (plan marcado infactible)
-    const siteCapacity = group ? getSiteCapacity(group.title) : null;
+    const dailyCapacity = assignmentsCount ?? 0;
     const zone = {
       id: group?.id ?? '',
       name: group?.title ?? '',
-      daily_capacity: siteCapacity?.daily_capacity ?? 0,
+      daily_capacity: dailyCapacity,
     };
 
     const week = {
@@ -158,11 +144,10 @@ export function useWeeklyPlan(
     };
 
     return buildWeeklyPlanningContext(mergedStandards, scopeMappings, scopeQuantities, zone, week);
-  }, [standards, poaCatalog, scopeMappings, analysisRow, group, weekStart, missingStandards]);
+  }, [standards, poaCatalog, scopeMappings, analysisRow, group, weekStart, missingStandards, assignmentsCount]);
 
   const isLoading = stdLoading || poaLoading || mapLoading || qtyLoading || missingLoading;
 
-  // Errores — preservar la instancia para que el consumidor pueda usar instanceof
   const error = (stdErr ?? poaErr ?? mapErr ?? qtyErr ?? missingErr) as Error | null;
   const isError = stdError || poaError || mapError || qtyError || missingError;
 

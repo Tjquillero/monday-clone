@@ -14,7 +14,7 @@ import {
   calculateWeeklyDistribution,
   calculateCapacityUsage,
 } from './schedulerMath';
-import { getSiteCapacity } from './siteCapacity';
+import { getSiteCapacity, resolveSiteIdentity, resolveSiteCapacity } from './siteCapacity';
 import type { PoaActiveCatalog } from '@/hooks/usePoaActivities';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -260,14 +260,25 @@ export function buildBoardPlanningContexts(
   scopeMappings: ScopeMapping[],
   scopeDataBySite: Record<string, Record<string, number>>,
   week: WeekInfo,
+  assignedPersonnelBySite?: Record<string, number>,
 ): BoardSitePlan[] {
   const results: BoardSitePlan[] = [];
   for (const group of groups) {
-    const siteCapacity = getSiteCapacity(group.title);
+    if ((group.title || '').toUpperCase().includes('PRESUPUESTO')) continue;
+    let dailyCapacity = 0;
+
+    if (assignedPersonnelBySite) {
+      dailyCapacity = assignedPersonnelBySite[group.id] ?? assignedPersonnelBySite[group.title] ?? 0;
+    } else {
+      const identity = resolveSiteIdentity(group.id, groups);
+      const cap = identity ? resolveSiteCapacity(identity, 0, week.workingDays) : null;
+      dailyCapacity = cap?.status === 'VALID' ? cap.daily_capacity : (getSiteCapacity(group.title)?.daily_capacity ?? 0);
+    }
+
     const zone: ZoneInfo = {
       id: group.id,
       name: group.title,
-      daily_capacity: siteCapacity?.daily_capacity ?? 0,
+      daily_capacity: dailyCapacity,
     };
     const mergedStandards = mergeStandardsForZone(standards, poaCatalog, group.id);
     const scopeQuantities = scopeDataBySite[group.id] ?? {};
