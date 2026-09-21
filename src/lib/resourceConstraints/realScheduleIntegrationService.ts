@@ -20,7 +20,7 @@ import { evaluateScheduleFeasibility } from './feasibilityEvaluator';
 import { evaluateScheduleObjectiveScore } from './objectiveEvaluator';
 import { exploreCandidateSearchSpace } from './searchSpaceExplorer';
 import type { SearchExplorationLimits, ExploredSearchSpaceResult } from './searchSpaceTypes';
-import type { TemporalSchedulePayload } from '../temporalScheduleImport/types';
+import type { TemporalSchedulePayload, TemporalPayloadActivity } from '../temporalScheduleImport/types';
 
 export interface ActivityConservationVerification {
   readonly itemId: string;
@@ -48,8 +48,8 @@ export interface EndToEndValidationReport {
   readonly initialPlanP0: ScheduleCandidatePlan;
   readonly conservationVerifications: ReadonlyArray<ActivityConservationVerification>;
   readonly isGlobalConservationMatched: boolean;
-  readonly feasibilityP0: ReturnType<typeof evaluateCandidateFeasibility>;
-  readonly objectiveP0: ReturnType<typeof evaluateScheduleObjective>;
+  readonly feasibilityP0: ReturnType<typeof evaluateScheduleFeasibility>;
+  readonly objectiveP0: ReturnType<typeof evaluateScheduleObjectiveScore>;
   readonly searchSpaceH7?: ExploredSearchSpaceResult;
 }
 
@@ -91,10 +91,12 @@ export function convertPayloadToCanonicalPlanP0(
       unmappedSitesCount++;
     }
 
+    const activityNp = activity.allocations[0]?.origin?.np ?? null;
+
     const stableItemId = generateStableActivityItemId(
       activity.group_id || 'UNMAPPED',
       activity.activity_key,
-      activity.np,
+      activityNp,
       activity.excel_row
     );
 
@@ -105,16 +107,13 @@ export function convertPayloadToCanonicalPlanP0(
     for (const alloc of activity.allocations) {
       // R-E2E-08: Se conservan todos los registros incluyendo 0.00 explícito
       const cant = alloc.quantity != null ? alloc.quantity : 0;
-      const jor = alloc.jornales != null ? alloc.jornales : 0;
+      const opJor = alloc.operator_jornales != null ? alloc.operator_jornales : 0;
+      const maqJor = alloc.machinery_jornales != null ? alloc.machinery_jornales : 0;
+      const totalJor = alloc.total_jornales != null ? alloc.total_jornales : (opJor + maqJor);
 
       sumCant += cant;
-      if (alloc.resource_type === 'operator') {
-        sumOpJornales += jor;
-      } else if (alloc.resource_type === 'machinery') {
-        sumMaqJornales += jor;
-      } else {
-        sumOpJornales += jor;
-      }
+      sumOpJornales += opJor;
+      sumMaqJornales += maqJor;
 
       // Resolver ID de recurso a partir del catálogo soberano o usar ID de reserva
       const siteGroup = catalog.find((s) => s.siteGroupId === activity.group_id);
@@ -154,33 +153,41 @@ export function convertPayloadToCanonicalPlanP0(
           endTime: '17:00',
         },
         quantity: cant,
-        jornales: jor,
-        origin: alloc.origin,
+        jornales: totalJor,
+        origin: {
+          sourceSheet: alloc.origin.sourceSheet,
+          sourceRow: alloc.origin.sourceRow,
+          colOpLetter: alloc.origin.colOpLetter,
+          colCantLetter: alloc.origin.colCantLetter,
+          siteName: alloc.origin.siteName,
+          np: alloc.origin.np != null ? String(alloc.origin.np) : undefined,
+          activityDescription: alloc.origin.activityDescription,
+        },
       });
     }
 
     // R-E2E-03: Verificación Granular Actividad por Actividad
-    const expectedCant = activity.totals?.cantHeader != null ? activity.totals.cantHeader : (activity.sum_quantity != null ? activity.sum_quantity : sumCant);
-    const expectedJornales = activity.totals?.jornalesHeader != null ? activity.totals.jornalesHeader : (activity.sum_total_jornales != null ? activity.sum_total_jornales : (sumOpJornales + sumMaqJornales));
+    const expectedCant = activity.sum_quantity != null ? activity.sum_quantity : sumCant;
+    const expectedOpJornales = activity.sum_operator_jornales != null ? activity.sum_operator_jornales : sumOpJornales;
+    const expectedMaqJornales = activity.sum_machinery_jornales != null ? activity.sum_machinery_jornales : sumMaqJornales;
 
     const isCantMatched = Math.abs(sumCant - expectedCant) <= 0.001;
-    // Se compara contra la suma o headers esperados
-    const isOpJorMatched = true; 
-    const isMaqJorMatched = true;
+    const isOpJorMatched = Math.abs(sumOpJornales - expectedOpJornales) <= 0.001;
+    const isMaqJorMatched = Math.abs(sumMaqJornales - expectedMaqJornales) <= 0.001;
 
     conservationVerifications.push({
       itemId: stableItemId,
       activityKey: activity.activity_key,
       groupId: activity.group_id || 'UNMAPPED',
       siteName: activity.excel_site_name,
-      np: activity.np,
+      np: activityNp,
       expectedCantPoa: expectedCant,
       sumTemporalCant: sumCant,
       isCantMatched,
-      expectedOperatorJornales: sumOpJornales,
+      expectedOperatorJornales: expectedOpJornales,
       sumOperatorJornales: sumOpJornales,
       isOperatorJornalesMatched: isOpJorMatched,
-      expectedMachineryJornales: sumMaqJornales,
+      expectedMachineryJornales: expectedMaqJornales,
       sumMachineryJornales: sumMaqJornales,
       isMachineryJornalesMatched: isMaqJorMatched,
       isFullyPreserved: isCantMatched && isOpJorMatched && isMaqJorMatched,
