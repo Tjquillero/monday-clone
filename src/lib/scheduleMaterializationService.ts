@@ -145,10 +145,10 @@ export async function ensureWeeklyPlanMaterialized(
     const scopeKey = scopeByKey.get(std.activity_key) || std.activity_key;
     const valFromScopeKey = scopeData[scopeKey];
     const valFromActKey = scopeData[std.activity_key];
-    const cantidad = typeof valFromScopeKey === 'number'
+    const cantidadRaw = typeof valFromScopeKey === 'number'
       ? valFromScopeKey
       : (typeof valFromActKey === 'number' ? valFromActKey : 0);
-    if (cantidad <= 0) continue;
+    const cantidad = Math.max(0, cantidadRaw);
 
     const rendimiento = Number(std.rendimiento);
     if (rendimiento <= 0) continue;
@@ -187,8 +187,9 @@ export async function ensureWeeklyPlanMaterialized(
       }
 
       const scopeKey = scopeMap.get(std.activity_key) || std.activity_key;
-      const cantidad = typeof scopeData[scopeKey] === 'number' ? scopeData[scopeKey] : 0;
-      if (cantidad <= 0 || std.rendimiento <= 0) continue;
+      const cantidadRaw = typeof scopeData[scopeKey] === 'number' ? scopeData[scopeKey] : 0;
+      const cantidad = Math.max(0, cantidadRaw);
+      if (std.rendimiento <= 0) continue;
 
       const poaInfo = poaActivitiesMap.get(std.activity_key);
       const frecuencia = poaInfo?.frecuencia ?? std.frecuencia ?? 1;
