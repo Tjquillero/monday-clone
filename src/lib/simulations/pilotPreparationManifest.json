@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "manifest_id": "ops01b-pilot-preparation-manifest-v1.0-factual",
+  "manifest_status": "FACTUAL_FROZEN",
+  "environment": "QA_REMOTE_HTTPS",
+  "qa_base_url": "https://qa-app.mantenix.net",
+  "site": {
+    "board_id": "3ea0326f-6ff7-409f-848a-1f296e6e3cc8",
+    "group_id": "98153f4c-18b9-4bff-abda-39d62db8a931",
+    "site_name": "Plaza Puerto Colombia",
+    "planning_week": "2026-09-14"
+  },
+  "resolution_audit": {
+    "A_identities": "PASS (Real DB Verified: auth.users + board_members)",
+    "B_activities": "PASS (Real DB Verified: weekly_plan_items)",
+    "C_crew": "PASS (Real DB Verified: personnel + personnel_site_assignments)",
+    "D_qa_url": "PASS (Real Mobile HTTPS PWA Verified)"
+  },
+  "identities": {
+    "field_leader": {
+      "user_id": "9e1ed244-eb69-4f14-99e3-adfa628d8935",
+      "email": "admin@example.com",
+      "role": "admin",
+      "authorized_surface": "/my-work"
+    },
+    "field_inspector": {
+      "user_id": "c8077a3d-3b52-4467-b52e-503487bebf52",
+      "email": "supervisor@example.com",
+      "can_verify_execution": true,
+      "authorized_surface": "/verification"
+    },
+    "site_supervisor": {
+      "user_id": "9e1ed244-eb69-4f14-99e3-adfa628d8935",
+      "email": "admin@example.com",
+      "role": "admin",
+      "authorized_surface": "/financial"
+    }
+  },
+  "activities": [
+    {
+      "item_key": "ACT-PLAZA-01",
+      "weekly_plan_item_id": "285fc8ec-b8e7-4092-a3a8-ae1b6a3da3e5",
+      "activity_key": "2.01",
+      "description": "Poda y Mantenimiento de Zonas Verdes",
+      "unit": "M2",
+      "planned_qty": 1850.0,
+      "target_test_quantity_online": 1850.0,
+      "target_test_quantity_offline_b": 500.0
+    },
+    {
+      "item_key": "ACT-PLAZA-02",
+      "weekly_plan_item_id": "8ea02b1e-9d92-429c-8232-3ac97b6f89e8",
+      "activity_key": "1.09",
+      "description": "Mantenimiento de Luminarias y Arbolado",
+      "unit": "UN",
+      "planned_qty": 350.0,
+      "target_test_quantity_offline_a": 10.0
+    }
+  ],
+  "crew": {
+    "leader_personnel_id": "88d11174-be57-4f1f-acbd-927e16dad3b2",
+    "leader_name": "CESAR AUGUSTO TERAN CASTELLAR",
+    "worker_count": 4,
+    "members": [
+      "88d11174-be57-4f1f-acbd-927e16dad3b2",
+      "b9526eed-4dd4-4a8c-9942-c7b6779486de",
+      "efa247a3-dba3-484b-9ae9-020d00cb8119",
+      "d31af1e1-a1ca-4d85-8d9b-6967ec2053f6"
+    ]
+  },
+  "evidence_rules": {
+    "max_before_attachments": 2,
+    "max_after_attachments": 2,
+    "max_total_curated_evidence": 4,
+    "temporal_rule": "execution_attachments.created_at <= actas.issued_at"
+  },
+  "pilot_constraints": {
+    "issue_acta_allowed": false,
+    "ddl_changes_allowed": false,
+    "new_rpc_allowed": false,
+    "occ_changes_allowed": false,
+    "contract_mutations_allowed": false
+  }
+}

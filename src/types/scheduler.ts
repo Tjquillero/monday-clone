@@ -201,6 +201,8 @@ export interface WeeklyPlanItem {
   activity_key: string;
   name?: string;
   zone?: string;
+  crew_id?: string | null;
+  machinery_id?: string | null;
   planned_date?: string;          // ISO date YYYY-MM-DD
   poa_activity_zone_id: string;
   planned_rendimiento: number;    // snapshot del estándar al planificar

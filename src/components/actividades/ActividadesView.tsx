@@ -1,18 +1,35 @@
 'use client';
 
-// Superficie del LÍDER — actividades del plan publicado/en ejecución de cada
-// sitio para la semana activa. Proyección UX operacional por día calendario
-// (Sitio -> Semana -> Día -> Actividad). Consume planned_date persistido.
+// Superficie del LÍDER — Nivel 2: Vista del Sitio Seleccionado (/my-work)
+// Aislamiento de contexto por sitio. Actividades ordenadas por prioridad de estado:
+// 1. 🔴 PENDIENTES  2. 🟠 EN EJECUCIÓN  3. 🟢 COMPLETADAS
+// Acción explícita "📷 REGISTRAR EJECUCIÓN" con touch target >= 44px para operarios en campo.
 
 import { useState } from 'react';
-import { MapPin, ClipboardCheck, ChevronDown } from 'lucide-react';
+import {
+  ArrowLeft,
+  MapPin,
+  Camera,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  ChevronDown,
+  Calendar,
+} from 'lucide-react';
 import { PublishedWeekPlan, PublishedWeekPlanItem } from '@/hooks/useWeeklyPlans';
-import { ActivityPriority, PlanStatus } from '@/types/scheduler';
+import { ActivityPriority } from '@/types/scheduler';
 import ItemExecutions from './ItemExecutions';
-import DaySection from './DaySection';
+import DailyActivityExecutionModal from './DailyActivityExecutionModal';
+import { FieldReportResult } from '@/lib/fieldWorkflowExecutionService';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 interface Props {
   plans: PublishedWeekPlan[];
+  selectedGroupId?: string | null;
+  onBackToSites?: () => void;
+  userId?: string;
+  supabaseClient?: SupabaseClient;
+  onExecutionSuccess?: (result: FieldReportResult) => void;
 }
 
 const PRIORITY_LABEL: Record<ActivityPriority, { text: string; cls: string }> = {
@@ -21,195 +38,366 @@ const PRIORITY_LABEL: Record<ActivityPriority, { text: string; cls: string }> = 
   flexible: { text: 'Flexible', cls: 'bg-slate-50 text-slate-500 border-slate-200' },
 };
 
-const PLAN_STATUS_LABEL: Partial<Record<PlanStatus, { text: string; cls: string }>> = {
-  published: { text: 'Publicado', cls: 'bg-blue-50 text-blue-600 border-blue-200' },
-  in_progress: { text: 'En ejecución', cls: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
-};
-
 function formatNumber(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-function getWeekDays(weekStartISO: string): string[] {
-  const parts = weekStartISO.split('-');
-  if (parts.length !== 3) return [];
+function formatDayName(dateIso?: string): string {
+  if (!dateIso || dateIso.length < 10) return 'Sin fecha';
+  const parts = dateIso.split('-');
+  if (parts.length !== 3) return dateIso;
   const year = parseInt(parts[0], 10);
   const month = parseInt(parts[1], 10) - 1;
   const day = parseInt(parts[2], 10);
+  const date = new Date(year, month, day);
 
-  const days: string[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(year, month, day + i);
-    const yStr = d.getFullYear();
-    const mStr = String(d.getMonth() + 1).padStart(2, '0');
-    const dStr = String(d.getDate()).padStart(2, '0');
-    days.push(`${yStr}-${mStr}-${dStr}`);
-  }
-  return days;
+  const days = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
+  const months = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+
+  const dayOfWeek = days[date.getDay()] || '';
+  const monthStr = months[month] || '';
+  return `${dayOfWeek} ${day} ${monthStr}`;
 }
 
-export function ItemRow({ item, planId, groupId }: { item: PublishedWeekPlanItem; planId: string; groupId: string }) {
+export function SingleActivityCard({
+  item,
+  planId,
+  boardId,
+  groupId,
+  userId,
+  supabaseClient,
+  onExecutionSuccess,
+}: {
+  item: PublishedWeekPlanItem;
+  planId: string;
+  boardId: string;
+  groupId: string;
+  userId?: string;
+  supabaseClient?: SupabaseClient;
+  onExecutionSuccess?: (result: FieldReportResult) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
-  const priority = PRIORITY_LABEL[item.priority] ?? PRIORITY_LABEL.flexible;
-  const progress = item.planned_qty > 0
-    ? Math.min(100, Math.round((item.executed_qty / item.planned_qty) * 100))
-    : 0;
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const name = item.standard?.name ?? item.name ?? item.activity_key;
   const category = item.standard?.category ?? item.zone;
+  const priority = PRIORITY_LABEL[item.priority] ?? PRIORITY_LABEL.flexible;
+
+  const plannedQty = item.planned_qty || 0;
+  const executedQty = item.executed_qty || 0;
+  const progress = plannedQty > 0 ? Math.min(100, Math.round((executedQty / plannedQty) * 100)) : 0;
+
+  const status: 'pending' | 'in_progress' | 'completed' =
+    executedQty === 0 ? 'pending' : executedQty < plannedQty ? 'in_progress' : 'completed';
+
+  const handleModalSuccess = (result: FieldReportResult) => {
+    if (onExecutionSuccess) {
+      onExecutionSuccess(result);
+    }
+  };
 
   return (
-    <div className="border-b border-slate-100 last:border-b-0 bg-white hover:bg-slate-50/60 transition-colors">
-      <div
-        onClick={() => setExpanded((v) => !v)}
-        className="w-full text-left p-4 md:px-6 md:py-4 cursor-pointer select-none flex flex-col md:grid md:grid-cols-[1fr_110px_140px_140px_160px_32px] md:items-center gap-3 md:gap-0"
-      >
-        <div className="min-w-0 md:pr-4">
-          <div className="flex items-start justify-between md:justify-start gap-2">
-            <p className="text-sm md:text-base font-semibold text-slate-800 leading-snug truncate">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs hover:shadow-xs transition-all overflow-hidden">
+      <div className="p-4 sm:p-5 space-y-3">
+        {/* Cabecera de la Actividad: Título + Badges */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <h4 className="text-base sm:text-lg font-bold text-slate-900 leading-snug break-words">
               {name}
-            </p>
-            <span className={`md:hidden shrink-0 inline-block px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wide ${priority.cls}`}>
+            </h4>
+            {category && (
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mt-0.5">
+                {category}
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wide ${priority.cls}`}>
               {priority.text}
             </span>
           </div>
-          {category && (
-            <p className="text-[11px] text-slate-400 uppercase tracking-wide mt-0.5">
-              {category}
-            </p>
-          )}
         </div>
 
-        <div className="hidden md:block">
-          <span className={`inline-block px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wide ${priority.cls}`}>
-            {priority.text}
-          </span>
-        </div>
-
-        <div className="text-xs md:text-sm text-slate-600">
-          <span className="font-semibold text-slate-800">{formatNumber(item.planned_qty)}</span>
-          {' '}{item.unit}
-          <span className="text-[11px] text-slate-400 block">planificado</span>
-        </div>
-
-        <div className="text-xs md:text-sm text-slate-600">
-          <span className="font-semibold text-slate-800">{formatNumber(item.executed_qty)}</span>
-          {' '}{item.unit}
-          <span className="text-[11px] text-slate-400 block">ejecutado</span>
-        </div>
-
-        <div className="md:pr-1">
-          <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
-            <span>{formatNumber(item.executed_jr)} / {formatNumber(item.planned_jr)} JR</span>
-            <span className="font-semibold text-slate-700">{progress}%</span>
+        {/* Info Operativa: Fecha Programada & Avance Físico */}
+        <div className="flex flex-wrap items-center justify-between text-xs text-slate-600 gap-2 pt-1">
+          <div className="flex items-center gap-1.5 text-slate-500 font-medium">
+            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+            <span>Programada: {formatDayName(item.planned_date)}</span>
           </div>
-          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+
+          <div className="text-right">
+            <span className="font-bold text-slate-800">{formatNumber(executedQty)}</span> /{' '}
+            <span className="font-semibold text-slate-600">{formatNumber(plannedQty)}</span>{' '}
+            <span className="text-slate-400">{item.unit}</span>
+          </div>
+        </div>
+
+        {/* Barra de Progreso Físico */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-[11px] text-slate-400">
+            <span>Avance de obra</span>
+            <span className="font-bold text-slate-700">{progress}%</span>
+          </div>
+          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all ${progress >= 100 ? 'bg-emerald-500' : 'bg-blue-500'}`}
+              className={`h-full rounded-full transition-all ${
+                status === 'completed' ? 'bg-emerald-500' : status === 'in_progress' ? 'bg-amber-500' : 'bg-[#3B7EF8]'
+              }`}
               style={{ width: `${progress}%` }}
             />
           </div>
         </div>
 
-        <div className="flex items-center justify-between md:justify-end pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
-          <span className="text-xs font-semibold text-blue-600 md:hidden">
-            {expanded ? 'Ocultar jornadas' : 'Registrar avance / Ver jornadas'}
-          </span>
-          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        {/* BOTÓN PRINCIPAL DE ACCIÓN (Touch target >= 44px) */}
+        <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 border-t border-slate-100">
+          {status === 'pending' && (
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(true)}
+              className="w-full min-h-[48px] px-4 py-3 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm active:scale-[0.99] touch-manipulation"
+            >
+              <Camera className="w-5 h-5 shrink-0" />
+              <span>REGISTRAR EJECUCIÓN</span>
+            </button>
+          )}
+
+          {status === 'in_progress' && (
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(true)}
+              className="w-full min-h-[48px] px-4 py-3 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm active:scale-[0.99] touch-manipulation"
+            >
+              <Camera className="w-5 h-5 shrink-0" />
+              <span>CONTINUAR REGISTRO</span>
+            </button>
+          )}
+
+          {status === 'completed' && (
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(true)}
+              className="w-full min-h-[44px] px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.99] touch-manipulation"
+            >
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>VER REGISTRO</span>
+            </button>
+          )}
+
+          {/* Toggle para ver historial secundario */}
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="self-center sm:self-auto py-1 px-2 text-xs font-semibold text-slate-400 hover:text-slate-600 flex items-center gap-1 select-none"
+          >
+            <span>{expanded ? 'Ocultar historial' : 'Historial'}</span>
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          </button>
         </div>
       </div>
 
+      {/* Historial Plegable de Jornadas Previas */}
       {expanded && (
-        <div className="p-4 bg-slate-50/50 border-t border-slate-100">
+        <div className="p-4 bg-slate-50 border-t border-slate-100">
           <ItemExecutions planId={planId} groupId={groupId} planItemId={item.id} unit={item.unit} />
         </div>
       )}
+
+      {/* Modal de Registro de Ejecución y Evidencia */}
+      <DailyActivityExecutionModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={handleModalSuccess}
+        item={item}
+        boardId={boardId}
+        groupId={groupId}
+        userId={userId}
+        supabase={supabaseClient}
+      />
     </div>
   );
 }
 
-export default function ActividadesView({ plans }: Props) {
+export default function ActividadesView({
+  plans,
+  selectedGroupId,
+  onBackToSites,
+  userId,
+  supabaseClient,
+  onExecutionSuccess,
+}: Props) {
+  // Filtrar planes al grupo/sitio seleccionado si existe
+  const targetPlans = selectedGroupId
+    ? plans.filter((p) => p.group_id === selectedGroupId)
+    : plans;
+
+  if (targetPlans.length === 0 && selectedGroupId) {
+    return (
+      <div className="space-y-4">
+        {onBackToSites && (
+          <button
+            type="button"
+            onClick={onBackToSites}
+            className="min-h-[44px] px-3.5 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold flex items-center gap-1.5 hover:bg-slate-200 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Mis sitios</span>
+          </button>
+        )}
+        <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200">
+          <p className="text-sm font-semibold text-slate-600">No se encontraron actividades para este sitio.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-8">
-      {plans.map((plan) => {
-        const status = PLAN_STATUS_LABEL[plan.status];
-        const weekDays = getWeekDays(plan.week_start);
-        const weekDaySet = new Set(weekDays);
+    <div className="space-y-6 max-w-full overflow-x-hidden">
+      {targetPlans.map((plan) => {
+        const siteName = plan.group?.title ?? 'Sitio General';
+        const items = plan.items || [];
 
-        // Agrupar items por planned_date (preservando orden determinista)
-        const itemsByDay = new Map<string, PublishedWeekPlanItem[]>();
-        const contingencyItems: PublishedWeekPlanItem[] = [];
+        // Agrupar actividades por estado estricto:
+        // 1. Pendientes  2. En ejecución  3. Completadas
+        const pendingItems: PublishedWeekPlanItem[] = [];
+        const inProgressItems: PublishedWeekPlanItem[] = [];
+        const completedItems: PublishedWeekPlanItem[] = [];
 
-        for (const item of plan.items) {
-          const pDate = item.planned_date?.trim();
-          if (pDate && weekDaySet.has(pDate)) {
-            const list = itemsByDay.get(pDate) ?? [];
-            list.push(item);
-            itemsByDay.set(pDate, list);
+        for (const item of items) {
+          const plannedQty = item.planned_qty || 0;
+          const executedQty = item.executed_qty || 0;
+
+          if (executedQty === 0) {
+            pendingItems.push(item);
+          } else if (executedQty < plannedQty) {
+            inProgressItems.push(item);
           } else {
-            contingencyItems.push(item);
+            completedItems.push(item);
           }
         }
 
-        const totalPlannedJr = plan.items.reduce((acc, i) => acc + (i.planned_jr || 0), 0);
-
         return (
-          <section key={plan.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            {/* Header del Sitio */}
-            <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 md:px-6 py-4 border-b border-slate-200 bg-slate-50/70">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <MapPin className="w-5 h-5 shrink-0" style={{ color: plan.group?.color ?? '#3B7EF8' }} />
-                <div>
-                  <h2 className="text-base font-bold text-slate-800 truncate">
-                    {plan.group?.title ?? 'Sitio'}
+          <section key={plan.id} className="space-y-6">
+            {/* ENCABEZADO DEL NIVEL 2: Volver + Nombre del Sitio */}
+            <header className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                {onBackToSites && (
+                  <button
+                    type="button"
+                    onClick={onBackToSites}
+                    className="min-h-[44px] px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 active:scale-95 touch-manipulation"
+                    aria-label="Volver a lista de sitios"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span className="hidden sm:inline">Mis sitios</span>
+                  </button>
+                )}
+
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 text-xs text-slate-400 font-semibold uppercase tracking-wider">
+                    <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+                    <span>Sitio Seleccionado</span>
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 leading-tight truncate">
+                    {siteName}
                   </h2>
-                  <p className="text-xs text-slate-500 truncate">{plan.board?.name ?? 'Tablero Principal'}</p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 shrink-0">
-                <div className="text-right text-xs">
-                  <span className="font-semibold text-slate-700">{plan.items.length} actividades</span>
-                  <span className="text-slate-300 mx-1.5">•</span>
-                  <span className="font-bold text-blue-600">{formatNumber(totalPlannedJr)} JR total</span>
-                </div>
-                {status && (
-                  <span className={`inline-block px-2.5 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wide ${status.cls}`}>
-                    {status.text}
-                  </span>
-                )}
+              <div className="flex items-center gap-2 self-start sm:self-auto text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200/70">
+                <span>{items.length} actividades totales</span>
               </div>
             </header>
 
-            {/* Proyección Desglose Semanal por Día (Lunes a Domingo) */}
-            <div className="p-4 md:p-6 space-y-4 bg-slate-50/30">
-              {weekDays.map((dayISO) => (
-                <DaySection
-                  key={dayISO}
-                  dateStr={dayISO}
-                  items={itemsByDay.get(dayISO) ?? []}
-                  planId={plan.id}
-                  groupId={plan.group_id}
-                  renderItemRow={(item, pId, gId) => (
-                    <ItemRow key={item.id} item={item} planId={pId} groupId={gId} />
-                  )}
-                />
-              ))}
+            {/* SECCIÓN 1: 🔴 PENDIENTES (Primero) */}
+            {pendingItems.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 px-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-red-700 flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4 text-red-600" />
+                    <span>Pendientes ({pendingItems.length})</span>
+                  </h3>
+                </div>
 
-              {/* Contingencia: Ocurrencias con fecha fuera de rango o nula */}
-              {contingencyItems.length > 0 && (
-                <DaySection
-                  dateStr="CONTINGENCY"
-                  items={contingencyItems}
-                  planId={plan.id}
-                  groupId={plan.group_id}
-                  renderItemRow={(item, pId, gId) => (
-                    <ItemRow key={item.id} item={item} planId={pId} groupId={gId} />
-                  )}
-                  isContingency={true}
-                />
-              )}
-            </div>
+                <div className="space-y-3">
+                  {pendingItems.map((item) => (
+                    <SingleActivityCard
+                      key={item.id}
+                      item={item}
+                      planId={plan.id}
+                      boardId={plan.board_id}
+                      groupId={plan.group_id}
+                      userId={userId}
+                      supabaseClient={supabaseClient}
+                      onExecutionSuccess={onExecutionSuccess}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* SECCIÓN 2: 🟠 EN EJECUCIÓN (Segundo) */}
+            {inProgressItems.length > 0 && (
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center gap-2 px-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-amber-700 flex items-center gap-1.5">
+                    <Clock className="w-4 h-4 text-amber-600" />
+                    <span>En Ejecución ({inProgressItems.length})</span>
+                  </h3>
+                </div>
+
+                <div className="space-y-3">
+                  {inProgressItems.map((item) => (
+                    <SingleActivityCard
+                      key={item.id}
+                      item={item}
+                      planId={plan.id}
+                      boardId={plan.board_id}
+                      groupId={plan.group_id}
+                      userId={userId}
+                      supabaseClient={supabaseClient}
+                      onExecutionSuccess={onExecutionSuccess}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* SECCIÓN 3: 🟢 COMPLETADAS (Al Final) */}
+            {completedItems.length > 0 && (
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center gap-2 px-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Completadas ({completedItems.length})</span>
+                  </h3>
+                </div>
+
+                <div className="space-y-3">
+                  {completedItems.map((item) => (
+                    <SingleActivityCard
+                      key={item.id}
+                      item={item}
+                      planId={plan.id}
+                      boardId={plan.board_id}
+                      groupId={plan.group_id}
+                      userId={userId}
+                      supabaseClient={supabaseClient}
+                      onExecutionSuccess={onExecutionSuccess}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {items.length === 0 && (
+              <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200">
+                <p className="text-sm font-semibold text-slate-500">Este sitio no tiene actividades en esta semana.</p>
+              </div>
+            )}
           </section>
         );
       })}

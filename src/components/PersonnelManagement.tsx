@@ -4,18 +4,19 @@ import { useState } from 'react';
 import { Personnel } from '@/types/monday';
 import { 
     User, Search, Plus, Trash2, Edit2, 
-    Save, X, DollarSign, Briefcase, Users, Layers, ShieldCheck 
+    Save, X, DollarSign, Briefcase, Users, Layers, ShieldCheck, Truck, Wrench 
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { usePersonnel, usePersonnelMutations } from '@/hooks/usePersonnel';
 import { useCrews, usePersonnelAssignments, useCrewMutations } from '@/hooks/useCrews';
+import { useMachinery, useMachineryMutations, useMachineryAvailability } from '@/hooks/useMachinery';
 
 interface Props {
   boardId?: string;
 }
 
 export default function PersonnelManagement({ boardId }: Props) {
-    const [activeTab, setActiveTab] = useState<'personnel' | 'assignments' | 'crews'>('personnel');
+    const [activeTab, setActiveTab] = useState<'personnel' | 'assignments' | 'crews' | 'machinery'>('personnel');
 
     // Personnel query & mutations
     const { data: personnel = [], isLoading: loadingPersonnel } = usePersonnel();
@@ -25,6 +26,11 @@ export default function PersonnelManagement({ boardId }: Props) {
     const { data: crews = [], isLoading: loadingCrews } = useCrews(boardId);
     const { data: assignments = [], isLoading: loadingAssignments } = usePersonnelAssignments(boardId);
     const crewMutations = useCrewMutations(boardId);
+
+    // Machinery & Qualifications (requires boardId)
+    const { data: machineryList = [], isLoading: loadingMachinery } = useMachinery(boardId);
+    const { data: availabilityList = [] } = useMachineryAvailability(boardId);
+    const machineryMutations = useMachineryMutations(boardId);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [isEditing, setIsEditing] = useState<string | null>(null);
@@ -46,6 +52,33 @@ export default function PersonnelManagement({ boardId }: Props) {
       zone: 'ZV',
       dedication_percentage: 100,
     });
+
+    // New Machinery State
+    const [isCreatingMachinery, setIsCreatingMachinery] = useState(false);
+    const [newMachinery, setNewMachinery] = useState({
+      code: '',
+      name: '',
+      category: 'EQUIPO_MENOR' as 'TRACTOR' | 'VOLQUETA' | 'MINICARGADOR' | 'GUADAÑA' | 'EQUIPO_MENOR',
+      operator_required_role: 'TRACTORISTA',
+      simultaneous_limit: 1,
+    });
+
+    const handleCreateMachinery = async () => {
+      if (!newMachinery.code || !newMachinery.name || !boardId) return;
+      machineryMutations.createMachinery.mutate({
+        board_id: boardId,
+        code: newMachinery.code,
+        name: newMachinery.name,
+        category: newMachinery.category,
+        operator_required_role: newMachinery.operator_required_role || null,
+        simultaneous_limit: newMachinery.simultaneous_limit || 1,
+      }, {
+        onSuccess: () => {
+          setIsCreatingMachinery(false);
+          setNewMachinery({ code: '', name: '', category: 'EQUIPO_MENOR', operator_required_role: 'TRACTORISTA', simultaneous_limit: 1 });
+        }
+      });
+    };
 
     const handleCreatePersonnel = async () => {
         if (!newPerson.name) return;
@@ -132,6 +165,11 @@ export default function PersonnelManagement({ boardId }: Props) {
                             <Plus size={16} /> Nueva Cuadrilla
                         </Button>
                     )}
+                    {activeTab === 'machinery' && boardId && (
+                        <Button onClick={() => setIsCreatingMachinery(true)} className="font-bold gap-2">
+                            <Plus size={16} /> Nueva Maquinaria
+                        </Button>
+                    )}
                 </div>
 
                 {/* Sub-navigation Tabs */}
@@ -165,6 +203,16 @@ export default function PersonnelManagement({ boardId }: Props) {
                         }`}
                     >
                         <Users size={16} /> Cuadrillas Operativas
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('machinery')}
+                        className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
+                            activeTab === 'machinery'
+                                ? 'border-blue-600 text-blue-600'
+                                : 'border-transparent text-slate-500 hover:text-slate-700'
+                        }`}
+                    >
+                        <Truck size={16} /> Maquinaria y Operadores
                     </button>
                 </div>
             </div>
@@ -489,8 +537,128 @@ export default function PersonnelManagement({ boardId }: Props) {
                                                 </div>
                                             </div>
                                         )}
+                                     </div>
+                                 ))}
+                             </div>
+                         </>
+                     )}
+                 </div>
+             )}
+
+            {/* Active Tab: Machinery */}
+            {activeTab === 'machinery' && (
+                <div className="p-6">
+                    {!boardId ? (
+                        <div className="text-center py-8 text-slate-500">Selecciona un sitio para gestionar su maquinaria.</div>
+                    ) : (
+                        <>
+                            {isCreatingMachinery && (
+                                <div className="mb-6 p-4 bg-blue-50/50 border border-blue-200 rounded-xl space-y-3">
+                                    <h4 className="font-bold text-sm text-blue-900">Registrar Nueva Maquinaria</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <input
+                                            type="text"
+                                            placeholder="Código (ej. TR-001)"
+                                            value={newMachinery.code}
+                                            onChange={e => setNewMachinery({ ...newMachinery, code: e.target.value })}
+                                            className="px-3 py-1.5 text-sm border border-slate-300 rounded bg-white"
+                                        />
+                                        <input
+                                            type="text"
+                                            placeholder="Nombre (ej. Tractor Agrícola 1)"
+                                            value={newMachinery.name}
+                                            onChange={e => setNewMachinery({ ...newMachinery, name: e.target.value })}
+                                            className="px-3 py-1.5 text-sm border border-slate-300 rounded bg-white"
+                                        />
+                                        <select
+                                            value={newMachinery.category}
+                                            onChange={e => setNewMachinery({ ...newMachinery, category: e.target.value as any })}
+                                            className="px-3 py-1.5 text-sm border border-slate-300 rounded bg-white"
+                                        >
+                                            <option value="TRACTOR">Tractor</option>
+                                            <option value="VOLQUETA">Volqueta</option>
+                                            <option value="MINICARGADOR">Minicargador</option>
+                                            <option value="GUADAÑA">Guadaña</option>
+                                            <option value="EQUIPO_MENOR">Equipo Menor</option>
+                                        </select>
+                                        <select
+                                            value={newMachinery.operator_required_role}
+                                            onChange={e => setNewMachinery({ ...newMachinery, operator_required_role: e.target.value })}
+                                            className="px-3 py-1.5 text-sm border border-slate-300 rounded bg-white"
+                                        >
+                                            <option value="TRACTORISTA">Rol Operador: Tractorista</option>
+                                            <option value="CONDUCTOR_VOLQUETA">Rol Operador: Conductor Volqueta</option>
+                                            <option value="GUADAÑADOR">Rol Operador: Guadañador</option>
+                                            <option value="">Sin requerimiento especializado</option>
+                                        </select>
                                     </div>
-                                ))}
+                                    <div className="flex gap-2">
+                                        <Button onClick={handleCreateMachinery} className="px-4 text-xs font-bold">
+                                            Guardar Maquinaria
+                                        </Button>
+                                        <Button onClick={() => setIsCreatingMachinery(false)} variant="outline" className="px-3">
+                                            <X size={18} />
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {loadingMachinery ? (
+                                    <div className="col-span-2 text-center py-8 text-slate-400">Cargando maquinaria...</div>
+                                ) : machineryList.length === 0 ? (
+                                    <div className="col-span-2 text-center py-8 text-slate-400">No hay maquinaria registrada para este sitio.</div>
+                                ) : machineryList.map(m => {
+                                    const avail = availabilityList.find(a => a.machineryId === m.id);
+                                    const isAvailable = m.isAvailable;
+                                    const statusText = !isAvailable
+                                        ? 'FUERA DE SERVICIO'
+                                        : avail?.effectiveStatus === 'FULLY_AVAILABLE'
+                                        ? 'PLENAMENTE DISPONIBLE'
+                                        : avail?.effectiveStatus === 'UNAVAILABLE_OPERATOR'
+                                        ? 'FALTA OPERADOR HABILITADO'
+                                        : 'DISPONIBLE';
+
+                                    return (
+                                        <div key={m.id} className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 hover:shadow-xs transition-all">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div>
+                                                    <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                                                        <Truck size={16} className="text-blue-600" /> {m.name}
+                                                    </h3>
+                                                    <span className="text-xs text-slate-400 font-mono">[{m.code}]</span>
+                                                </div>
+                                                <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
+                                                    !isAvailable 
+                                                        ? 'bg-red-100 text-red-800' 
+                                                        : avail?.effectiveStatus === 'FULLY_AVAILABLE' 
+                                                        ? 'bg-emerald-100 text-emerald-800' 
+                                                        : 'bg-amber-100 text-amber-800'
+                                                }`}>
+                                                    {statusText}
+                                                </span>
+                                            </div>
+
+                                            <div className="text-xs text-slate-600 space-y-1 mb-3">
+                                                <div><strong>Categoría:</strong> {m.category}</div>
+                                                <div><strong>Rol Operador Requerido:</strong> {m.operatorRequirement?.requiredRole || 'Ninguno (Libre)'}</div>
+                                                {avail?.reason && <div className="text-[11px] text-slate-500 italic mt-1">{avail.reason}</div>}
+                                            </div>
+
+                                            <div className="mt-3 pt-2 border-t border-slate-200 flex justify-between items-center">
+                                                <span className="text-xs text-slate-500">Retiro Operacional (Soft-Retirement):</span>
+                                                <Button
+                                                    size="sm"
+                                                    variant={isAvailable ? "outline" : "default"}
+                                                    className="text-xs"
+                                                    onClick={() => machineryMutations.setAvailability.mutate({ machineryId: m.id, isAvailable: !isAvailable })}
+                                                >
+                                                    {isAvailable ? 'Retirar de Operación' : 'Reactivar'}
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </>
                     )}

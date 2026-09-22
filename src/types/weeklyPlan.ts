@@ -6,7 +6,7 @@ import { DailyRoutineAssignment } from '../lib/routineScheduler';
 
 export type SourceType = 'ROUTINE' | 'INCIDENT' | 'MANUAL';
 export type ItemLifecycleStatus = 'planned' | 'in_progress' | 'completed' | 'cancelled';
-export type PlanHeaderStatus = 'draft' | 'published' | 'in_progress' | 'ready_for_confirmation' | 'confirmed' | 'closed';
+export type PlanHeaderStatus = 'draft' | 'published' | 'in_progress' | 'ready_for_confirmation' | 'confirmed' | 'closed' | 'cancelled';
 
 export interface WeeklyPlan {
   id: string;

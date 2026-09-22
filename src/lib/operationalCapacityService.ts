@@ -60,9 +60,11 @@ export interface DailyCrewWorkload {
   plannedDate: string; // YYYY-MM-DD
   assignedItemsCount: number;
   totalPlannedJournals: number; // Suma theoretical_jr para esa fecha
-  applicableDailyCapacity: number; // Capacidad aplicable por día
-  utilizationRate: number; // totalPlannedJournals / applicableDailyCapacity
-  status: 'NORMAL' | 'SOBRECARGA';
+  applicableDailyCapacity?: number; // Capacidad aplicable por día
+  utilizationRate?: number; // totalPlannedJournals / applicableDailyCapacity
+  calendarStatus?: CalendarStatus;
+  capacityStatus?: CapacityStatus;
+  status: 'NORMAL' | 'SOBRECARGA' | CapacityStatus;
   items: Array<{
     id: string;
     activityName: string;
@@ -70,6 +72,19 @@ export interface DailyCrewWorkload {
     theoretical_jr: number;
   }>;
 }
+
+export type CalendarStatus = 'WORKING_DAY' | 'NON_WORKING_DAY';
+
+export type CapacityStatus =
+  | 'NON_WORKING_NO_DEMAND'
+  | 'INVALID_WORKING_CALENDAR_DAY'
+  | 'NO_DEMAND'
+  | 'NO_CAPACITY_NO_DEMAND'
+  | 'UNDETERMINED_CAPACITY'
+  | 'CAPACITY_ZERO'
+  | 'OVERLOADED'
+  | 'UNDERUTILIZED'
+  | 'BALANCED';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mapeo Auxiliar de Zonas
@@ -223,9 +238,158 @@ export function calculateOperationalGap(
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers de Calendario Soberano H4.9
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Determina el estado del calendario soberano para una fecha dada (YYYY-MM-DD).
+ * Por defecto, los domingos son NON_WORKING_DAY (días no laborables).
+ */
+export function getSovereignCalendarStatus(plannedDate: string): CalendarStatus {
+  const date = new Date(plannedDate + 'T00:00:00');
+  const dayOfWeek = date.getDay(); // 0 = Domingo, 1 = Lunes ... 6 = Sábado
+  return dayOfWeek === 0 ? 'NON_WORKING_DAY' : 'WORKING_DAY';
+}
+
+/**
+ * Evalúa la factibilidad y diagnóstico determinístico de carga por cuadrilla y fecha
+ * bajo la taxonomía estricta H4.9 (v5).
+ */
+export function evaluateCrewWorkloadV5(params: {
+  crewId: string;
+  crewName: string;
+  plannedDate: string;
+  items: WeeklyPlanItem[];
+  crewMembers?: Array<{ personnel_assignment_id: string }>;
+  allCrews?: Crew[];
+  allCrewMembersMap?: Map<string, string[]>; // crewId -> personnel_assignment_id[]
+  allSiteAssignmentsMap?: Map<string, PersonnelSiteAssignment>;
+  dailyCapacityOverride?: number;
+}): DailyCrewWorkload {
+  const { crewId, crewName, plannedDate, items, crewMembers, allCrews, allCrewMembersMap, allSiteAssignmentsMap, dailyCapacityOverride } = params;
+
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
+  // 1. Demanda Total en theoretical_jr (ADR-0008)
+  const D_demanda = items.reduce((sum, i) => sum + (i.theoretical_jr ?? 0), 0);
+
+  // 2. Evaluar Calendario Soberano
+  const calendarStatus = getSovereignCalendarStatus(plannedDate);
+
+  // 3. Determinar Oferta nominal (S_nominal) y detección de K_p > 1 (Shared Personnel)
+  let isUndetermined = false;
+  let S_nominal: number | undefined = undefined;
+
+  if (dailyCapacityOverride !== undefined) {
+    S_nominal = dailyCapacityOverride;
+  } else if (crewMembers && allCrews && allCrewMembersMap && allSiteAssignmentsMap) {
+    const targetCrew = allCrews.find((c) => c.id === crewId);
+    const activeCrewsInBoard = allCrews.filter((c) => c.board_id === targetCrew?.board_id && c.is_active);
+    const activeCrewIdsInBoard = new Set(activeCrewsInBoard.map((c) => c.id));
+
+    // Conteo de membresías activas por asignación en el mismo board_id
+    const kpCountMap = new Map<string, number>();
+    for (const [cId, memberAssignmentIds] of allCrewMembersMap.entries()) {
+      if (!activeCrewIdsInBoard.has(cId)) continue;
+      for (const aId of memberAssignmentIds) {
+        kpCountMap.set(aId, (kpCountMap.get(aId) ?? 0) + 1);
+      }
+    }
+
+    let calculatedNominal = 0;
+    for (const m of crewMembers) {
+      const aId = m.personnel_assignment_id;
+      const K_p = kpCountMap.get(aId) ?? 1;
+      if (K_p > 1) {
+        isUndetermined = true;
+        break;
+      }
+      const assignment = allSiteAssignmentsMap.get(aId);
+      const dedicationPct = assignment?.dedication_percentage ?? 100;
+      calculatedNominal += dedicationPct / 100;
+    }
+
+    if (!isUndetermined) {
+      S_nominal = calculatedNominal;
+    }
+  } else if (dailyCapacityOverride === undefined) {
+    // Si no se proveen miembros ni override, default nominal = 1.0 (o 0 si crewMembers está explícitamente vacío [])
+    S_nominal = crewMembers && crewMembers.length === 0 ? 0.0 : 1.0;
+  }
+
+  // 4. Factor de Calendario
+  const factorCalendario = calendarStatus === 'WORKING_DAY' ? 1.0 : 0.0;
+  const S_efectiva = S_nominal !== undefined ? S_nominal * factorCalendario : undefined;
+
+  // 5. Cascada Determinística con Precedencia Absoluta de D = 0
+  let capacityStatus: CapacityStatus;
+  let utilizationRate: number | undefined = undefined;
+
+  if (calendarStatus === 'NON_WORKING_DAY') {
+    if (D_demanda > 0) {
+      capacityStatus = 'INVALID_WORKING_CALENDAR_DAY';
+    } else {
+      capacityStatus = 'NON_WORKING_NO_DEMAND';
+    }
+  } else {
+    // WORKING_DAY
+    if (D_demanda === 0) {
+      if (S_efectiva === 0) {
+        capacityStatus = 'NO_CAPACITY_NO_DEMAND';
+      } else {
+        capacityStatus = 'NO_DEMAND';
+      }
+    } else {
+      // D_demanda > 0
+      if (isUndetermined || S_efectiva === undefined) {
+        capacityStatus = 'UNDETERMINED_CAPACITY';
+        utilizationRate = undefined; // NUNCA divide D/S en capacidad indeterminada
+      } else if (S_efectiva === 0) {
+        capacityStatus = 'CAPACITY_ZERO';
+      } else {
+        const excessOverload = Math.round((D_demanda - S_efectiva) * 1e6) / 1e6;
+        if (excessOverload > 0.05) {
+          capacityStatus = 'OVERLOADED';
+          utilizationRate = round2(D_demanda / S_efectiva);
+        } else if (D_demanda / S_efectiva < 0.70) {
+          capacityStatus = 'UNDERUTILIZED';
+          utilizationRate = round2(D_demanda / S_efectiva);
+        } else {
+          // D_demanda <= S_efectiva + 0.05
+          capacityStatus = 'BALANCED';
+          utilizationRate = round2(D_demanda / S_efectiva);
+        }
+      }
+    }
+  }
+
+  const legacyStatus =
+    capacityStatus === 'OVERLOADED' ? 'SOBRECARGA' : capacityStatus === 'BALANCED' ? 'NORMAL' : capacityStatus;
+
+  return {
+    crewId,
+    crewName,
+    plannedDate,
+    assignedItemsCount: items.length,
+    totalPlannedJournals: round1(D_demanda),
+    applicableDailyCapacity: S_efectiva,
+    utilizationRate,
+    calendarStatus,
+    capacityStatus,
+    status: legacyStatus,
+    items: items.map((i) => ({
+      id: i.id,
+      activityName: i.name,
+      zone: i.zone,
+      theoretical_jr: i.theoretical_jr,
+    })),
+  };
+}
+
 /**
  * Calcula el Análisis Micro de Carga por Cuadrilla.
- *
  * Agrupa los ítems asignados a cuadrillas por fecha y determina si existe sobrecarga.
  */
 export function calculateCrewWorkloads(
@@ -250,40 +414,22 @@ export function calculateCrewWorkloads(
   }
 
   const results: DailyCrewWorkload[] = [];
-  const round1 = (n: number) => Math.round(n * 10) / 10;
 
   for (const [key, items] of grouped.entries()) {
     const [crewId, plannedDate] = key.split('__');
     const crew = crewMap.get(crewId);
     const crewName = crew?.name ?? 'Cuadrilla Desconocida';
+    const overrideCapacity = dailyCapacityByCrew?.[crewId];
 
-    const totalPlannedJournals = items.reduce((sum, i) => sum + (i.theoretical_jr ?? 0), 0);
-    // Capacidad por defecto: 1.0 jornal por cuadrilla si no se especifica
-    const applicableDailyCapacity = dailyCapacityByCrew?.[crewId] ?? 1.0;
-    const utilizationRate = applicableDailyCapacity > 0 
-      ? Math.round((totalPlannedJournals / applicableDailyCapacity) * 100) / 100
-      : 0;
-
-    const status: 'NORMAL' | 'SOBRECARGA' = totalPlannedJournals > applicableDailyCapacity + 0.05
-      ? 'SOBRECARGA'
-      : 'NORMAL';
-
-    results.push({
+    const workload = evaluateCrewWorkloadV5({
       crewId,
       crewName,
       plannedDate,
-      assignedItemsCount: items.length,
-      totalPlannedJournals: round1(totalPlannedJournals),
-      applicableDailyCapacity,
-      utilizationRate,
-      status,
-      items: items.map((i) => ({
-        id: i.id,
-        activityName: i.name,
-        zone: i.zone,
-        theoretical_jr: i.theoretical_jr,
-      })),
+      items,
+      dailyCapacityOverride: overrideCapacity,
     });
+
+    results.push(workload);
   }
 
   // Ordenar por fecha y cuadrilla

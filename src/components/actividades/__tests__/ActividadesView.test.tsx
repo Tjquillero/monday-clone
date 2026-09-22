@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { render, screen } from '@testing-library/react';
 import ActividadesView from '../ActividadesView';
 import { PublishedWeekPlan } from '@/hooks/useWeeklyPlans';
@@ -10,7 +10,7 @@ jest.mock('../ItemExecutions', () => {
   };
 });
 
-describe('WEEKLY PLAN DAY PROJECTION V1 (ActividadesView Unit Tests)', () => {
+describe('SITE ACTIVITIES VIEW LEVEL 2 (ActividadesView Unit Tests)', () => {
   const mockPlan: PublishedWeekPlan = {
     id: 'plan-123',
     board_id: 'board-1',
@@ -43,7 +43,7 @@ describe('WEEKLY PLAN DAY PROJECTION V1 (ActividadesView Unit Tests)', () => {
         planned_qty: 850,
         unit: 'm2',
         planned_jr: 4.25,
-        executed_qty: 0,
+        executed_qty: 0, // PENDIENTE 🔴
         executed_jr: 0,
         planned_date: '2026-09-07', // Lunes
         created_at: '2026-09-01T00:00:00Z',
@@ -62,9 +62,9 @@ describe('WEEKLY PLAN DAY PROJECTION V1 (ActividadesView Unit Tests)', () => {
         planned_qty: 850,
         unit: 'm2',
         planned_jr: 4.25,
-        executed_qty: 0,
+        executed_qty: 0, // PENDIENTE 🔴
         executed_jr: 0,
-        planned_date: '2026-09-09', // Miércoles (Misma actividad, fecha distinta)
+        planned_date: '2026-09-09', // Miércoles
         created_at: '2026-09-01T00:00:00Z',
         updated_at: '2026-09-01T00:00:00Z',
         standard: { name: 'Corte de césped', category: 'ZONA VERDE', unit: 'm2' },
@@ -81,9 +81,9 @@ describe('WEEKLY PLAN DAY PROJECTION V1 (ActividadesView Unit Tests)', () => {
         planned_qty: 394,
         unit: 'm2',
         planned_jr: 2.0,
-        executed_qty: 0,
-        executed_jr: 0,
-        planned_date: '2026-09-07', // Lunes (Segunda actividad en el mismo día)
+        executed_qty: 100, // EN EJECUCIÓN 🟠
+        executed_jr: 0.5,
+        planned_date: '2026-09-07',
         created_at: '2026-09-01T00:00:00Z',
         updated_at: '2026-09-01T00:00:00Z',
         standard: { name: 'Limpieza zona dura', category: 'ZONA DURA', unit: 'm2' },
@@ -100,9 +100,9 @@ describe('WEEKLY PLAN DAY PROJECTION V1 (ActividadesView Unit Tests)', () => {
         planned_qty: 10,
         unit: 'unid',
         planned_jr: 1.0,
-        executed_qty: 0,
-        executed_jr: 0,
-        planned_date: '2026-10-15', // Fuera de rango semanal
+        executed_qty: 10, // COMPLETADA 🟢
+        executed_jr: 1.0,
+        planned_date: '2026-10-15',
         created_at: '2026-09-01T00:00:00Z',
         updated_at: '2026-09-01T00:00:00Z',
         standard: { name: 'Actividad Huérfana', category: 'GENERAL', unit: 'unid' },
@@ -110,44 +110,38 @@ describe('WEEKLY PLAN DAY PROJECTION V1 (ActividadesView Unit Tests)', () => {
     ],
   };
 
-  it('Caso 1: debe proyectar encabezados de los 7 días de la semana activa (Lunes a Domingo)', () => {
-    render(<ActividadesView plans={[mockPlan]} />);
-    expect(screen.getByText('LUNES 07 SEP')).toBeInTheDocument();
-    expect(screen.getByText('MARTES 08 SEP')).toBeInTheDocument();
-    expect(screen.getByText('MIÉRCOLES 09 SEP')).toBeInTheDocument();
-    expect(screen.getByText('JUEVES 10 SEP')).toBeInTheDocument();
-    expect(screen.getByText('VIERNES 11 SEP')).toBeInTheDocument();
-    expect(screen.getByText('SÁBADO 12 SEP')).toBeInTheDocument();
-    expect(screen.getByText('DOMINGO 13 SEP')).toBeInTheDocument();
+  it('Caso 1: debe renderizar la cabecera del sitio aislado con el total de actividades', () => {
+    render(<ActividadesView plans={[mockPlan]} selectedGroupId="group-1" />);
+    expect(screen.getByText('PLAZA PUERTO COLOMBIA')).toBeInTheDocument();
+    expect(screen.getByText('4 actividades totales')).toBeInTheDocument();
   });
 
-  it('Caso 2: debe preservar la individualidad de actividades recurrentes en días distintos (Corte de césped en Lunes y Miércoles)', () => {
-    render(<ActividadesView plans={[mockPlan]} />);
-    const itemsCorte = screen.getAllByText('Corte de césped');
-    // 2 occurrences x 2 layout representations (desktop + mobile) = 4
-    expect(itemsCorte.length).toBeGreaterThanOrEqual(2);
+  it('Caso 2: debe ordenar y clasificar las actividades en 3 secciones estrictas: Pendientes, En Ejecución, Completadas', () => {
+    render(<ActividadesView plans={[mockPlan]} selectedGroupId="group-1" />);
+    expect(screen.getByText('Pendientes (2)')).toBeInTheDocument();
+    expect(screen.getByText('En Ejecución (1)')).toBeInTheDocument();
+    expect(screen.getByText('Completadas (1)')).toBeInTheDocument();
   });
 
-  it('Caso 3: debe agrupar múltiples actividades asignadas a la misma fecha dentro de su día (Lunes)', () => {
-    render(<ActividadesView plans={[mockPlan]} />);
-    expect(screen.getAllByText('Corte de césped').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Limpieza zona dura').length).toBeGreaterThan(0);
+  it('Caso 3: debe renderizar el botón principal explícito REGISTRAR EJECUCIÓN para actividades pendientes', () => {
+    render(<ActividadesView plans={[mockPlan]} selectedGroupId="group-1" />);
+    const registrarButtons = screen.getAllByRole('button', { name: /REGISTRAR EJECUCIÓN/i });
+    expect(registrarButtons.length).toBe(2);
   });
 
-  it('Caso 4: debe mostrar estado visual de día laborable sin actividades (ej. Martes, Jueves, etc.)', () => {
-    render(<ActividadesView plans={[mockPlan]} />);
-    const emptyDays = screen.getAllByText('Sin actividades programadas para este día.');
-    expect(emptyDays.length).toBeGreaterThan(0);
+  it('Caso 4: debe renderizar el botón CONTINUAR REGISTRO para la actividad en ejecución', () => {
+    render(<ActividadesView plans={[mockPlan]} selectedGroupId="group-1" />);
+    expect(screen.getByRole('button', { name: /CONTINUAR REGISTRO/i })).toBeInTheDocument();
   });
 
-  it('Caso 5: debe mostrar distintivo no laborable para Domingo', () => {
-    render(<ActividadesView plans={[mockPlan]} />);
-    expect(screen.getByText('Día no laborable / Descanso operativo programado.')).toBeInTheDocument();
+  it('Caso 5: debe renderizar el botón VER REGISTRO para la actividad completada', () => {
+    render(<ActividadesView plans={[mockPlan]} selectedGroupId="group-1" />);
+    expect(screen.getByRole('button', { name: /VER REGISTRO/i })).toBeInTheDocument();
   });
 
-  it('Caso 6: debe aislar items con fecha fuera de rango o contingencia en sección de contingencia sin hacerlos desaparecer', () => {
-    render(<ActividadesView plans={[mockPlan]} />);
-    expect(screen.getByText('OCURRENCIAS SIN FECHA ASIGNADA')).toBeInTheDocument();
-    expect(screen.getAllByText('Actividad Huérfana').length).toBeGreaterThan(0);
+  it('Caso 6: debe mostrar la fecha programada en cada tarjeta de actividad sin perder la Actividad Huérfana', () => {
+    render(<ActividadesView plans={[mockPlan]} selectedGroupId="group-1" />);
+    expect(screen.getByText('Actividad Huérfana')).toBeInTheDocument();
+    expect(screen.getAllByText('Corte de césped').length).toBe(2);
   });
 });

@@ -290,8 +290,10 @@ describe('FASE 3 Hito 6: Espacio de Búsqueda y Generador Puro de Candidatos', (
       },
     };
 
+    jest.useFakeTimers({ now: new Date('2026-01-01T00:00:00.000Z') });
     const run1 = applyCandidateTransformation(candidateA, shiftTransformation, mockCatalog);
     const run2 = applyCandidateTransformation(candidateA, shiftTransformation, mockCatalog);
+    jest.useRealTimers();
 
     // Inmutabilidad (R-SOL-10)
     expect(candidateA).toEqual(copyA);

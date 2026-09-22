@@ -1,13 +1,13 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import CentralizedFinancialDashboard from '@/components/dashboard/CentralizedFinancialDashboard';
-import ResourceEfficiencyWidget from '@/components/dashboard/ResourceEfficiencyWidget';
+import { FinancialReconciliationView } from '@/components/financial/FinancialReconciliationView';
 import { useBoard, useBoardColumns, useBoardGroups, useActivityTemplates } from '@/hooks/useBoardData';
 import { useBoardMutations } from '@/hooks/useBoardMutations';
 import { isFinancialItem, isActivityItem } from '@/utils/itemUtils';
 import { resolveFinancialColumns } from '@/utils/financialUtils';
-import { Calculator } from 'lucide-react';
+import { FileCheck, Calculator } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -16,6 +16,7 @@ interface FinancialViewContainerProps {
 }
 
 export default function FinancialViewContainer({ boardId }: FinancialViewContainerProps) {
+  const [activeTab, setActiveTab] = useState<'reconciliation' | 'budget'>('reconciliation');
   const queryClient = useQueryClient();
   const { data: board, isLoading: boardLoading } = useBoard(boardId);
   const { data: groups, isLoading: groupsLoading } = useBoardGroups(board?.id);
@@ -55,198 +56,213 @@ export default function FinancialViewContainer({ boardId }: FinancialViewContain
   if (boardLoading || groupsLoading) return <div className="p-8 text-center text-gray-500">Cargando datos financieros...</div>;
 
   return (
-    <div className="w-full py-6 px-4">
-      <CentralizedFinancialDashboard 
-        groups={financialGroups} 
-        columns={columns || []} 
-        onUpdateItemValue={async (groupId: string, itemId: string | number, columnId: string, value: any, metadata?: any) => {
-            // Map the field key if it is a financial item
-            let targetField = columnId;
-            const item = groups?.flatMap(g => g.items).find(i => String(i.id) === String(itemId));
-            const isFin = item ? isFinancialItem(item) : (metadata !== undefined);
+    <div className="w-full py-6 px-4 space-y-6">
+      {/* Sub-Navegación Módulo Financiero */}
+      <div className="flex border-b border-gray-200 dark:border-gray-800 gap-4">
+        <button
+          onClick={() => setActiveTab('reconciliation')}
+          className={`pb-3 px-2 flex items-center gap-2 font-semibold text-sm border-b-2 transition-colors ${
+            activeTab === 'reconciliation'
+              ? 'border-purple-600 text-purple-600 dark:border-purple-400 dark:text-purple-400'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+          }`}
+        >
+          <FileCheck className="w-4 h-4" />
+          Reconciliación y Control de Actas (ADR-0012)
+        </button>
 
-            if (isFin && columns) {
-                const cols = resolveFinancialColumns(columns);
-                if (columnId === cols.priceColKey) targetField = 'unit_price';
-                else if (columnId === cols.qtyColKey) targetField = 'cant';
-                else if (columnId === cols.unitColKey) targetField = 'unit';
-                else if (columnId === cols.catColKey) targetField = 'category';
-                else if (columnId === cols.typeColKey) targetField = 'rubro';
-            }
+        <button
+          onClick={() => setActiveTab('budget')}
+          className={`pb-3 px-2 flex items-center gap-2 font-semibold text-sm border-b-2 transition-colors ${
+            activeTab === 'budget'
+              ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+          }`}
+        >
+          <Calculator className="w-4 h-4" />
+          Presupuesto y Rubros
+        </button>
+      </div>
 
-            if (!itemId && metadata) {
-                // El ítem no existe en este sitio/grupo, lo creamos
-                createOrGetFinancialItem.mutate({
-                    groupId,
-                    name: metadata.name,
-                    initialValues: {
-                        rubro: metadata.rubro,
-                        category: metadata.category,
-                        sub_category: metadata.sub_category,
-                        item_type: 'financial',
-                        unit: metadata.unit || 'Und',
-                        cant: targetField === 'cant' ? (Number(value) || 0) : 0,
-                        executed_qty: targetField === 'executed_qty' ? (Number(value) || 0) : 0,
-                        unit_price: targetField === 'unit_price' ? (Number(value) || 0) : 0
-                    }
-                });
-                return;
-            }
+      {activeTab === 'reconciliation' ? (
+        <FinancialReconciliationView boardId={board?.id} />
+      ) : (
+        <CentralizedFinancialDashboard 
+          groups={financialGroups} 
+          columns={columns || []} 
+          onUpdateItemValue={async (groupId: string, itemId: string | number, columnId: string, value: any, metadata?: any) => {
+              let targetField = columnId;
+              const item = groups?.flatMap(g => g.items).find(i => String(i.id) === String(itemId));
+              const isFin = item ? isFinancialItem(item) : (metadata !== undefined);
 
-            // Map common financial fields to the internal storage or specific columns
-            let updates: any = { [targetField]: value };
-            let isValuesUpdate = true;
+              if (isFin && columns) {
+                  const cols = resolveFinancialColumns(columns);
+                  if (columnId === cols.priceColKey) targetField = 'unit_price';
+                  else if (columnId === cols.qtyColKey) targetField = 'cant';
+                  else if (columnId === cols.unitColKey) targetField = 'unit';
+                  else if (columnId === cols.catColKey) targetField = 'category';
+                  else if (columnId === cols.typeColKey) targetField = 'rubro';
+              }
 
-            // If it's one of our mapped financial items, they store data in 'values'
-            updateItem.mutate({ itemId, updates, isValuesUpdate });
-        }}
-        onAddItem={async (major: string, sub: string, subSub?: string) => {
-            const targetGroupId = groups?.[0]?.id;
-            if (!targetGroupId) return;
-            // Ask for name to avoid generic "Nuevo Recurso"
-            const name = window.prompt(`Nombre del nuevo recurso para ${subSub || sub}:`, 'Nuevo Recurso');
-            if (!name) return;
-            
-            addItem.mutate({ 
-                groupId: targetGroupId, 
-                name: name, 
-                initialValues: { 
-                    rubro: major, 
-                    category: sub, 
-                    sub_category: subSub || 'General', 
-                    item_type: 'financial', 
-                    unit: 'Und', 
-                    unit_price: 0, 
-                    cant: 0 
-                } 
-            });
-        }}
-        onDeleteItem={(itemId: string | number) => deleteItem.mutate(itemId)}
-        onDeleteItems={async (itemIds: (string | number)[]) => {
-            // Simplified: loop or specialized mutation
-            for (const id of itemIds) {
-                deleteItem.mutate(id);
-            }
-        }}
-        onRenameGroup={async (oldName: string, newName: string, type: 'major' | 'sub' | 'subsub', context?: { major?: string, sub?: string }) => {
-            let colId = 'rubro';
-            if (type === 'sub') colId = 'category';
-            if (type === 'subsub') colId = 'sub_category';
-            
-            const itemsToUpdate = groups?.flatMap(g => g.items).filter(i => {
-                const matchName = (i.values[colId] || (colId === 'sub_category' ? 'General' : '')) === oldName;
-                if (!matchName) return false;
-                
-                // Context Check
-                if (type === 'sub' && context?.major) {
-                    return (i.values.rubro || '') === context.major;
-                }
-                if (type === 'subsub' && context?.major && context?.sub) {
-                    return (i.values.rubro || '') === context.major && (i.values.category || '') === context.sub;
-                }
-                return true;
-            }) || [];
-            
-            for (const item of itemsToUpdate) {
-                updateItem.mutate({ itemId: item.id, updates: { [colId]: newName }, isValuesUpdate: true });
-            }
-        }}
-        onAddGroup={async (type: 'major' | 'sub' | 'subsub', parentContext?: { major?: string, sub?: string }) => {
-            const typeLabel = type === 'major' ? 'Categoría (Rubro)' : type === 'sub' ? 'Subcategoría' : 'Grupo (Sub-Subcategoría)';
-            const name = window.prompt(`Nombre para la nueva ${typeLabel}:`);
-            if (!name) return;
-            
-            const targetGroupId = groups?.[0]?.id;
-            if (!targetGroupId) return;
-            
-            addItem.mutate({
-                groupId: targetGroupId,
-                name: 'Primer Recurso',
-                initialValues: { 
-                    rubro: type === 'major' ? name.toUpperCase() : (parentContext?.major || 'GENERAL'),
-                    category: type === 'sub' ? name : (parentContext?.sub || 'General'),
-                    sub_category: type === 'subsub' ? name : 'General',
-                    item_type: 'financial',
-                    cant: 0,
-                    unit_price: 0
-                }
-            });
-        }}
-        onAddSite={async () => {
-             const rawSiteName = prompt('Nombre del nuevo sitio / proyecto:');
-             if (!rawSiteName || !board?.id) return;
-             
-             const siteName = rawSiteName.trim().toUpperCase();
-             
-             // Validar duplicidad
-             const exists = groups?.some(g => g.title.trim().toUpperCase() === siteName);
-             if (exists) {
-                 alert(`Error: Ya existe un sitio llamado "${siteName}".`);
-                 return;
-             }
+              if (!itemId && metadata) {
+                  createOrGetFinancialItem.mutate({
+                      groupId,
+                      name: metadata.name,
+                      initialValues: {
+                          rubro: metadata.rubro,
+                          category: metadata.category,
+                          sub_category: metadata.sub_category,
+                          item_type: 'financial',
+                          unit: metadata.unit || 'Und',
+                          cant: targetField === 'cant' ? (Number(value) || 0) : 0,
+                          executed_qty: targetField === 'executed_qty' ? (Number(value) || 0) : 0,
+                          unit_price: targetField === 'unit_price' ? (Number(value) || 0) : 0
+                      }
+                  });
+                  return;
+              }
 
-             // 1. Create the new group
-             const { data: newGroup, error: groupError } = await supabase.from('groups').insert({ 
-                 board_id: board.id, 
-                 title: siteName, 
-                 color: '#3b82f6', 
-                 position: groups?.length || 0 
-             }).select().single();
+              let updates: any = { [targetField]: value };
+              let isValuesUpdate = true;
 
-             if (groupError) {
-                 alert(`Error al crear sitio: ${groupError.message}`);
-                 return;
-             }
+              updateItem.mutate({ itemId, updates, isValuesUpdate });
+          }}
+          onAddItem={async (major: string, sub: string, subSub?: string) => {
+              const targetGroupId = groups?.[0]?.id;
+              if (!targetGroupId) return;
+              const name = window.prompt(`Nombre del nuevo recurso para ${subSub || sub}:`, 'Nuevo Recurso');
+              if (!name) return;
+              
+              addItem.mutate({ 
+                  groupId: targetGroupId, 
+                  name: name, 
+                  initialValues: { 
+                      rubro: major, 
+                      category: sub, 
+                      sub_category: subSub || 'General', 
+                      item_type: 'financial', 
+                      unit: 'Und', 
+                      unit_price: 0, 
+                      cant: 0 
+                  } 
+              });
+          }}
+          onDeleteItem={(itemId: string | number) => deleteItem.mutate(itemId)}
+          onDeleteItems={async (itemIds: (string | number)[]) => {
+              for (const id of itemIds) {
+                  deleteItem.mutate(id);
+              }
+          }}
+          onRenameGroup={async (oldName: string, newName: string, type: 'major' | 'sub' | 'subsub', context?: { major?: string, sub?: string }) => {
+              let colId = 'rubro';
+              if (type === 'sub') colId = 'category';
+              if (type === 'subsub') colId = 'sub_category';
+              
+              const itemsToUpdate = groups?.flatMap(g => g.items).filter(i => {
+                  const matchName = (i.values[colId] || (colId === 'sub_category' ? 'General' : '')) === oldName;
+                  if (!matchName) return false;
+                  
+                  if (type === 'sub' && context?.major) {
+                      return (i.values.rubro || '') === context.major;
+                  }
+                  if (type === 'subsub' && context?.major && context?.sub) {
+                      return (i.values.rubro || '') === context.major && (i.values.category || '') === context.sub;
+                  }
+                  return true;
+              }) || [];
+              
+              for (const item of itemsToUpdate) {
+                  updateItem.mutate({ itemId: item.id, updates: { [colId]: newName }, isValuesUpdate: true });
+              }
+          }}
+          onAddGroup={async (type: 'major' | 'sub' | 'subsub', parentContext?: { major?: string, sub?: string }) => {
+              const typeLabel = type === 'major' ? 'Categoría (Rubro)' : type === 'sub' ? 'Subcategoría' : 'Grupo (Sub-Subcategoría)';
+              const name = window.prompt(`Nombre para la nueva ${typeLabel}:`);
+              if (!name) return;
+              
+              const targetGroupId = groups?.[0]?.id;
+              if (!targetGroupId) return;
+              
+              addItem.mutate({
+                  groupId: targetGroupId,
+                  name: 'Primer Recurso',
+                  initialValues: { 
+                      rubro: type === 'major' ? name.toUpperCase() : (parentContext?.major || 'GENERAL'),
+                      category: type === 'sub' ? name : (parentContext?.sub || 'General'),
+                      sub_category: type === 'subsub' ? name : 'General',
+                      item_type: 'financial',
+                      cant: 0,
+                      unit_price: 0
+                  }
+              });
+          }}
+          onAddSite={async () => {
+               const rawSiteName = prompt('Nombre del nuevo sitio / proyecto:');
+               if (!rawSiteName || !board?.id) return;
+               
+               const siteName = rawSiteName.trim().toUpperCase();
+               const exists = groups?.some(g => g.title.trim().toUpperCase() === siteName);
+               if (exists) {
+                   alert(`Error: Ya existe un sitio llamado "${siteName}".`);
+                   return;
+               }
 
-             // 2. Initialize with rubros from first site (Plaza Puerto Colombia or similar)
-             // This solves the visibility problem permanently
-             const referenceGroup = groups?.find(g => g.items.some(isFinancialItem));
-             
-             if (referenceGroup && newGroup) {
-                 // Copy unique rubros (items) to the new site
-                 const itemsToCopy = referenceGroup.items.filter(isFinancialItem);
-                 
-                 if (itemsToCopy.length > 0) {
-                     const copies = itemsToCopy.map(i => ({
-                         group_id: newGroup.id,
-                         name: i.name,
-                         position: i.position,
-                         values: {
-                             ...i.values,
-                             item_type: 'financial',
-                             cant: 0,           // Initialize quantities to 0
-                             executed_qty: 0,
-                             unit_price: i.values.unit_price || 0 // Keep the estimated price
-                         }
-                     }));
+               const { data: newGroup, error: groupError } = await supabase.from('groups').insert({ 
+                   board_id: board.id, 
+                   title: siteName, 
+                   color: '#3b82f6', 
+                   position: groups?.length || 0 
+               }).select().single();
 
-                     const { error: copyError } = await supabase.from('items').insert(copies);
-                     if (copyError) {
-                         console.error('Error initializing site items:', copyError);
-                     }
-                 }
-             } else if (newGroup) {
-                // If no reference exists, create at least one dummy item to ensure visibility
-                await supabase.from('items').insert({
-                    group_id: newGroup.id,
-                    name: 'INICIO DE PROYECTO',
-                    values: { rubro: 'INICIO', category: 'GENERAL', item_type: 'financial', cant: 0, unit_price: 0 },
-                    position: 0
-                });
-             }
+               if (groupError) {
+                   alert(`Error al crear sitio: ${groupError.message}`);
+                   return;
+               }
 
-             await queryClient.invalidateQueries({ queryKey: ['groups', board.id] });
-             await queryClient.invalidateQueries({ queryKey: ['board'] }); // Refresh for settings
-        }}
-        totalActa={totalActa}
-        onUpdateActa={(val) => handleUpdateBoardSettings({ totalActa: val })}
-        valorActaPorSitio={valorActaPorSitio}
-        onUpdateValorActaPorSitio={(val) => handleUpdateBoardSettings({ valorActaPorSitio: val })}
-        boardId={board?.id}
-        activityGroups={activityGroupsForWidget}
-        activityTemplates={activityTemplates || []}
-      />
+               const referenceGroup = groups?.find(g => g.items.some(isFinancialItem));
+               
+               if (referenceGroup && newGroup) {
+                   const itemsToCopy = referenceGroup.items.filter(isFinancialItem);
+                   if (itemsToCopy.length > 0) {
+                       const copies = itemsToCopy.map(i => ({
+                           group_id: newGroup.id,
+                           name: i.name,
+                           position: i.position,
+                           values: {
+                               ...i.values,
+                               item_type: 'financial',
+                               cant: 0,
+                               executed_qty: 0,
+                               unit_price: i.values.unit_price || 0
+                           }
+                       }));
 
+                       const { error: copyError } = await supabase.from('items').insert(copies);
+                       if (copyError) {
+                           console.error('Error initializing site items:', copyError);
+                       }
+                   }
+               } else if (newGroup) {
+                  await supabase.from('items').insert({
+                      group_id: newGroup.id,
+                      name: 'INICIO DE PROYECTO',
+                      values: { rubro: 'INICIO', category: 'GENERAL', item_type: 'financial', cant: 0, unit_price: 0 },
+                      position: 0
+                  });
+               }
+
+               await queryClient.invalidateQueries({ queryKey: ['groups', board.id] });
+               await queryClient.invalidateQueries({ queryKey: ['board'] });
+          }}
+          totalActa={totalActa}
+          onUpdateActa={(val) => handleUpdateBoardSettings({ totalActa: val })}
+          valorActaPorSitio={valorActaPorSitio}
+          onUpdateValorActaPorSitio={(val) => handleUpdateBoardSettings({ valorActaPorSitio: val })}
+          boardId={board?.id}
+          activityGroups={activityGroupsForWidget}
+          activityTemplates={activityTemplates || []}
+        />
+      )}
     </div>
   );
 }

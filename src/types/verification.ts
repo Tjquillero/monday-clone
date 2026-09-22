@@ -13,6 +13,7 @@ export interface VerificationActionPayload {
   action: VerificationAction;
   note_or_reason?: string;
   attachments_count?: number; // Count of verified photos (phase 'before' / 'after')
+  source_mutation_id?: string; // Optional caller/retry-supplied idempotent mutation identity
 }
 
 export interface CertifiableMetrics {

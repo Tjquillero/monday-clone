@@ -5,6 +5,7 @@ import { X, Camera, MapPin, UploadCloud, ChevronDown, Check } from 'lucide-react
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface NewsModalProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ interface Group {
 }
 
 export default function NewsModal({ isOpen, onClose }: NewsModalProps) {
+  const { user } = useAuth();
   const [boards, setBoards] = useState<Board[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   
@@ -39,30 +41,46 @@ export default function NewsModal({ isOpen, onClose }: NewsModalProps) {
   useEffect(() => {
     if (isOpen) {
       const fetchBoards = async () => {
-        const { data } = await supabase.from('boards').select('id, name').order('created_at');
-        if (data) {
-          setBoards(data);
-          // Auto-select first if available
-          if (data.length > 0 && !selectedBoardId) setSelectedBoardId(data[0].id);
+        try {
+          const { data, error } = await supabase.from('boards').select('id, name').order('created_at');
+          if (error) {
+            console.warn('[NewsModal] Error loading boards:', error.message);
+            return;
+          }
+          if (data) {
+            setBoards(data);
+            // Auto-select first if available
+            if (data.length > 0 && !selectedBoardId) setSelectedBoardId(data[0].id);
+          }
+        } catch (err) {
+          console.warn('[NewsModal] Network error loading boards:', err);
         }
       };
       fetchBoards();
     }
-  }, [isOpen]);
+  }, [isOpen, selectedBoardId]);
 
   // Fetch Groups when Board changes
   useEffect(() => {
     if (selectedBoardId) {
       const fetchGroups = async () => {
-        const { data } = await supabase
-          .from('groups')
-          .select('id, title, board_id')
-          .eq('board_id', selectedBoardId)
-          .order('position');
-        
-        if (data) {
-          setGroups(data);
-          setSelectedGroupId(''); // Reset site selection
+        try {
+          const { data, error } = await supabase
+            .from('groups')
+            .select('id, title, board_id')
+            .eq('board_id', selectedBoardId)
+            .order('position');
+          
+          if (error) {
+            console.warn('[NewsModal] Error loading groups:', error.message);
+            return;
+          }
+          if (data) {
+            setGroups(data);
+            setSelectedGroupId(''); // Reset site selection
+          }
+        } catch (err) {
+          console.warn('[NewsModal] Network error loading groups:', err);
         }
       };
       fetchGroups();
@@ -92,8 +110,7 @@ export default function NewsModal({ isOpen, onClose }: NewsModalProps) {
     
     setIsSubmitting(true);
     try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("No user logged in");
+        if (!user?.id) throw new Error("No hay un usuario autenticado");
 
         const uploadedUrls: string[] = [];
 

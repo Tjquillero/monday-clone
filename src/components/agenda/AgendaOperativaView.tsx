@@ -9,6 +9,8 @@ import { BoardOperationalAgenda, BoardOperationalAgendaWeek } from '@/types/sche
 import { SEMAPHORE_STYLE } from './semaphoreStyle';
 import AgendaSemanaBlock from './AgendaSemanaBlock';
 import LiveEvidenceGallery from './LiveEvidenceGallery';
+import { DailyOperationsVisual } from '@/components/supervision/DailyOperationsVisual';
+import { ExecutiveProgressMatrix } from '@/components/supervision/ExecutiveProgressMatrix';
 
 // Vista pura de la Agenda Operativa (ADR-0006). Fase 1 (Hoy) + Fase 2
 // (Semana, detrás de un toggle — mismo patrón de dos botones ya usado en
@@ -17,7 +19,7 @@ import LiveEvidenceGallery from './LiveEvidenceGallery';
 // siempre visibles, sin importar la pestaña activa. Estrictamente de solo
 // lectura: todo lo que hace un botón aquí es navegar, nunca mutar.
 
-export type AgendaTab = 'hoy' | 'semana' | 'evidencia';
+export type AgendaTab = 'hoy' | 'operacion' | 'progreso' | 'semana' | 'evidencia';
 
 interface Props {
   boardId: string;
@@ -65,29 +67,41 @@ export default function AgendaOperativaView({
 
   return (
     <div className="h-full overflow-auto custom-scrollbar p-4 md:p-6 space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-xs font-black uppercase tracking-widest text-white">Agenda Operativa</h2>
-          <p className="text-[10px] text-slate-500 mt-0.5 uppercase tracking-widest">¿Qué debo atender hoy?</p>
+          <h2 className="text-xs font-black uppercase tracking-widest text-white">Supervisión & Agenda Operativa</h2>
+          <p className="text-[10px] text-slate-500 mt-0.5 uppercase tracking-widest">Supervisión visual y control diario</p>
         </div>
-        <div className="flex bg-slate-500/5 p-1 rounded-xl border border-[var(--border-color)]">
+        <div className="flex flex-wrap bg-slate-500/5 p-1 rounded-xl border border-[var(--border-color)] gap-1">
           <button
             onClick={() => onTabChange('hoy')}
-            className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'hoy' ? 'bg-[#3B7EF8] text-white shadow-lg shadow-[#3B7EF8]/20' : 'text-slate-500 hover:text-slate-300'}`}
+            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'hoy' ? 'bg-[#3B7EF8] text-white shadow-lg shadow-[#3B7EF8]/20' : 'text-slate-500 hover:text-slate-300'}`}
           >
             Hoy
           </button>
           <button
+            onClick={() => onTabChange('operacion')}
+            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'operacion' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            📸 Operación Diaria
+          </button>
+          <button
+            onClick={() => onTabChange('progreso')}
+            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'progreso' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            📊 Progreso Gerencial
+          </button>
+          <button
             onClick={() => onTabChange('semana')}
-            className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'semana' ? 'bg-[#3B7EF8] text-white shadow-lg shadow-[#3B7EF8]/20' : 'text-slate-500 hover:text-slate-300'}`}
+            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'semana' ? 'bg-[#3B7EF8] text-white shadow-lg shadow-[#3B7EF8]/20' : 'text-slate-500 hover:text-slate-300'}`}
           >
             Semana
           </button>
           <button
             onClick={() => onTabChange('evidencia')}
-            className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'evidencia' ? 'bg-[#3B7EF8] text-white shadow-lg shadow-[#3B7EF8]/20' : 'text-slate-500 hover:text-slate-300'}`}
+            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'evidencia' ? 'bg-[#3B7EF8] text-white shadow-lg shadow-[#3B7EF8]/20' : 'text-slate-500 hover:text-slate-300'}`}
           >
-            Evidencia en Vivo
+            Galería
           </button>
         </div>
       </div>
@@ -127,7 +141,18 @@ export default function AgendaOperativaView({
               </div>
             )}
           </div>
+
+          {/* ── Operación Diaria por Sitio (H1) ────────────────────── */}
+          <DailyOperationsVisual boardId={boardId} />
         </>
+      )}
+
+      {activeTab === 'operacion' && (
+        <DailyOperationsVisual boardId={boardId} />
+      )}
+
+      {activeTab === 'progreso' && (
+        <ExecutiveProgressMatrix boardId={boardId} />
       )}
 
       {activeTab === 'semana' && (

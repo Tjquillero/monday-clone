@@ -145,11 +145,25 @@ export async function removeCrewMember(memberId: string): Promise<void> {
 
 /**
  * Assigns a crew to a weekly_plan_item for a specific planning week.
+ * Enforces CUAD-03 (site compatibility) when boardId is provided.
  */
 export async function assignCrewToPlanItem(
   planItemId: string,
-  crewId: string | null
+  crewId: string | null,
+  boardId?: string
 ): Promise<void> {
+  if (crewId && boardId) {
+    const { data: crew, error: crewErr } = await supabase
+      .from('crews')
+      .select('id, board_id')
+      .eq('id', crewId)
+      .single();
+
+    if (crewErr || !crew || crew.board_id !== boardId) {
+      throw new Error(`Incompatibilidad de sitio: La cuadrilla no pertenece al sitio ${boardId}`);
+    }
+  }
+
   const { error } = await supabase
     .from('weekly_plan_items')
     .update({ crew_id: crewId, updated_at: new Date().toISOString() })

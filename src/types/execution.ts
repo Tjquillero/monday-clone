@@ -10,6 +10,15 @@ export type VerificationStatus =
   | 'closed'
   | 'rejected';
 
+import { OperationalResourceItem } from '../lib/resourceConsumptionControlService';
+
+export type DailyActivityStatus =
+  | 'PENDIENTE'
+  | 'EN_CURSO'
+  | 'CONTINUA_MANANA'
+  | 'TERMINADA_HOY'
+  | 'NO_EJECUTADA';
+
 export interface ExecutionRecord {
   id: string;
   weekly_plan_item_id: string;
@@ -29,8 +38,13 @@ export interface ExecutionRecord {
   confirmed_at?: string | null;
   closed_by?: string | null;
   closed_at?: string | null;
+  source_mutation_id?: string | null;
+  crew_id_snapshot?: string | null;
+  verification_note?: string | null;
   rejection_reason?: string | null;
   verification_status: VerificationStatus;
+  status?: string; // Physical DB column (ADR-0011) SoT
+  used_resources?: OperationalResourceItem[];
   created_at?: string;
   updated_at?: string;
 }
@@ -44,7 +58,11 @@ export interface ExecutionReportInput {
   worker_count?: number;
   hours_worked?: number;
   reported_by: string;
+  source_mutation_id?: string | null;
+  crew_id_snapshot?: string | null;
   verification_status?: VerificationStatus;
+  used_resources?: OperationalResourceItem[];
+  continuation_decision?: 'CONTINUA_MANANA' | 'TERMINADA_HOY';
 }
 
 export interface ExecutionMetrics {

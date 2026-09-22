@@ -192,6 +192,46 @@ export function curateActivityAttachments(
   };
 }
 
+export interface CuratedEvidencePair {
+  before: ExecutionAttachmentItem[]; // max 2
+  after: ExecutionAttachmentItem[];  // max 2
+}
+
+/**
+ * Pure in-memory extraction of curated display evidence (up to maxPerPhase, default 2 per phase).
+ * Consumes the scored attachments from curateActivityAttachments and extracts top non-redundant items per phase.
+ */
+export function extractCuratedEvidencePair(
+  attachments: ExecutionAttachmentItem[],
+  maxPerPhase = 2
+): CuratedEvidencePair {
+  if (!attachments || attachments.length === 0) {
+    return { before: [], after: [] };
+  }
+
+  // Score & rank attachments deterministically
+  const curationResult = curateActivityAttachments('temp-eval-id', attachments, attachments.length);
+  
+  // Non-redundant items take precedence
+  const validItems = curationResult.items.filter((item) => !item.is_redundant);
+  const itemsToConsider = validItems.length > 0 ? validItems : curationResult.items;
+
+  const beforeItems = itemsToConsider
+    .filter((item) => item.attachment.phase === 'before')
+    .slice(0, maxPerPhase)
+    .map((item) => item.attachment);
+
+  const afterItems = itemsToConsider
+    .filter((item) => item.attachment.phase === 'after')
+    .slice(0, maxPerPhase)
+    .map((item) => item.attachment);
+
+  return {
+    before: beforeItems,
+    after: afterItems,
+  };
+}
+
 /**
  * Human Selection Layer
  * Supervisor selects curated documentary evidence for an activity item.

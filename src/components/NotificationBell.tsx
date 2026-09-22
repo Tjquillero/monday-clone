@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Bell, X, Check, Info, AlertTriangle, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/contexts/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -18,23 +19,53 @@ interface Notification {
     link?: string;
 }
 
-
-
 export default function NotificationBell() {
+    const { user } = useAuth();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [isOpen, setIsOpen] = useState(false);
     const [isNewsModalOpen, setIsNewsModalOpen] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
 
+    const fetchNotifications = useCallback(async () => {
+        if (!user?.id) {
+            setNotifications([]);
+            setUnreadCount(0);
+            return;
+        }
+
+        try {
+            const { data, error } = await supabase
+                .from('notifications')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false })
+                .limit(10);
+
+            if (error) {
+                console.warn('[NotificationBell] Failed to fetch notifications:', error.message);
+                return;
+            }
+
+            if (data) {
+                setNotifications(data);
+                setUnreadCount(data.filter((n: any) => !n.read).length);
+            }
+        } catch (err) {
+            console.warn('[NotificationBell] Network or auth error fetching notifications:', err instanceof Error ? err.message : String(err));
+        }
+    }, [user?.id]);
+
     useEffect(() => {
+        if (!user?.id) return;
+
         fetchNotifications();
 
         // Real-time listener for new notifications
         const channel = supabase
-            .channel('public:notifications')
+            .channel(`notifications:${user.id}`)
             .on(
                 'postgres_changes',
-                { event: 'INSERT', schema: 'public', table: 'notifications' },
+                { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
                 (payload: any) => {
                     const newNotif = payload.new as Notification;
                     setNotifications(prev => [newNotif, ...prev]);
@@ -46,34 +77,21 @@ export default function NotificationBell() {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, []);
-
-    const fetchNotifications = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data, error } = await supabase
-            .from('notifications')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false })
-            .limit(10);
-
-        if (data) {
-            setNotifications(data);
-            setUnreadCount(data.filter((n: any) => !n.read).length);
-        }
-    };
+    }, [user?.id, fetchNotifications]);
 
     const markAsRead = async (id: string) => {
-        const { error } = await supabase
-            .from('notifications')
-            .update({ read: true })
-            .eq('id', id);
+        try {
+            const { error } = await supabase
+                .from('notifications')
+                .update({ read: true })
+                .eq('id', id);
 
-        if (!error) {
-            setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-            setUnreadCount(prev => Math.max(0, prev - 1));
+            if (!error) {
+                setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+                setUnreadCount(prev => Math.max(0, prev - 1));
+            }
+        } catch (err) {
+            console.warn('[NotificationBell] Error marking notification as read:', err);
         }
     };
 

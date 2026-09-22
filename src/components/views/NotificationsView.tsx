@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/contexts/AuthContext';
 import { Bell, Check, Trash2, Mail, Info, AlertTriangle, ChevronRight, User } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -19,18 +20,50 @@ interface Notification {
 }
 
 export default function NotificationsView() {
+    const { user } = useAuth();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'all' | 'unread' | 'mentions'>('all');
 
+    const fetchNotifications = useCallback(async () => {
+        if (!user?.id) {
+            setNotifications([]);
+            setLoading(false);
+            return;
+        }
+
+        try {
+            const { data, error } = await supabase
+                .from('notifications')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.warn('[NotificationsView] Failed to fetch notifications:', error.message);
+            } else if (data) {
+                setNotifications(data);
+            }
+        } catch (err) {
+            console.warn('[NotificationsView] Network or auth error fetching notifications:', err);
+        } finally {
+            setLoading(false);
+        }
+    }, [user?.id]);
+
     useEffect(() => {
+        if (!user?.id) {
+            setLoading(false);
+            return;
+        }
+
         fetchNotifications();
 
         const channel = supabase
-            .channel('notifications_view')
+            .channel(`notifications_view:${user.id}`)
             .on(
                 'postgres_changes',
-                { event: '*', schema: 'public', table: 'notifications' },
+                { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
                 () => fetchNotifications()
             )
             .subscribe();
@@ -38,43 +71,38 @@ export default function NotificationsView() {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, []);
-
-    const fetchNotifications = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        let query = supabase
-            .from('notifications')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false });
-
-        const { data, error } = await query;
-        if (data) setNotifications(data);
-        setLoading(false);
-    };
+    }, [user?.id, fetchNotifications]);
 
     const markAllAsRead = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!user?.id) return;
         
-        await supabase
-            .from('notifications')
-            .update({ read: true })
-            .eq('user_id', user.id)
-            .eq('read', false);
+        try {
+            await supabase
+                .from('notifications')
+                .update({ read: true })
+                .eq('user_id', user.id)
+                .eq('read', false);
+            
+            setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+        } catch (err) {
+            console.warn('[NotificationsView] Error marking all as read:', err);
+        }
     };
 
     const deleteHistory = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!user?.id) return;
 
         if (confirm('¿Estás seguro de que deseas eliminar todo el historial de notificaciones?')) {
-            await supabase
-                .from('notifications')
-                .delete()
-                .eq('user_id', user.id);
+            try {
+                await supabase
+                    .from('notifications')
+                    .delete()
+                    .eq('user_id', user.id);
+                
+                setNotifications([]);
+            } catch (err) {
+                console.warn('[NotificationsView] Error deleting notification history:', err);
+            }
         }
     };
 

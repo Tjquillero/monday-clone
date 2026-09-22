@@ -106,7 +106,7 @@ export function useCrewMutations(boardId: string | undefined) {
     }: {
       planItemId: string;
       crewId: string | null;
-    }) => assignCrewToPlanItem(planItemId, crewId),
+    }) => assignCrewToPlanItem(planItemId, crewId, boardId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['weekly_plans'] });
       queryClient.invalidateQueries({ queryKey: ['crews', boardId] });

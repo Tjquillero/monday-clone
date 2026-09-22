@@ -19,11 +19,13 @@ export interface VerifyExecutionResult {
   updatedExecution: ExecutionRecord;
   parentItem: WeeklyPlanItem;
   metrics: CertifiableMetrics;
+  sourceMutationId: string;
 }
 
 export interface ConfirmPackageResult {
   weeklyPlan: WeeklyPlan;
   confirmedExecutionsCount: number;
+  sourceMutationId: string;
 }
 
 /**
@@ -39,6 +41,10 @@ export async function verifyExecutionRecordWithAudit(
   supabase: SupabaseClient,
   payload: VerificationActionPayload
 ): Promise<VerifyExecutionResult> {
+  // Identidad de Mutación Soberana:
+  // - Si la capa de comando/reintento provee source_mutation_id, se conserva intacta (Retry Idempotente).
+  // - Si no se provee, se genera una nueva identidad de mutación para esta invocación específica.
+  const sourceMutationId = payload.source_mutation_id || `mut_ver_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   const nowStr = new Date().toISOString();
 
   // 1. Fetch target ExecutionRecord
@@ -150,6 +156,7 @@ export async function verifyExecutionRecordWithAudit(
     updatedExecution,
     parentItem,
     metrics,
+    sourceMutationId,
   };
 }
 
@@ -165,7 +172,8 @@ export async function verifyExecutionRecordWithAudit(
 export async function confirmWeeklyPlanPackageWithAudit(
   supabase: SupabaseClient,
   weeklyPlanId: string,
-  confirmedByUserId: string
+  confirmedByUserId: string,
+  sourceMutationIdParam?: string
 ): Promise<ConfirmPackageResult> {
   const nowStr = new Date().toISOString();
 
@@ -234,8 +242,11 @@ export async function confirmWeeklyPlanPackageWithAudit(
     throw new Error(`Failed to confirm WeeklyPlan header: ${updatePlanErr?.message}`);
   }
 
+  const sourceMutationId = sourceMutationIdParam || `mut_pkg_conf_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
   return {
     weeklyPlan: updatedPlanData as WeeklyPlan,
     confirmedExecutionsCount: verifiedExecs.length,
+    sourceMutationId,
   };
 }

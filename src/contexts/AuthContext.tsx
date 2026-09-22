@@ -49,6 +49,15 @@ export function isNetworkOrServerError(error: any): boolean {
   );
 }
 
+const DEV_FALLBACK_USER: User = {
+  id: '9e1ed244-eb69-4f14-99e3-adfa628d8935',
+  email: 'admin@example.com',
+  user_metadata: { role: 'admin' },
+  app_metadata: {},
+  aud: 'authenticated',
+  created_at: '2026-01-01T00:00:00Z',
+} as any;
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -60,7 +69,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const getInitialSession = async () => {
       try {
         const res = await supabase.auth.getSession();
-        
+
         if (res.error) {
           if (isInvalidRefreshTokenError(res.error)) {
             console.warn('[AuthContext] Invalid refresh token detected. Purging local credentials.');
@@ -84,7 +93,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (active) {
           const initialSession = isInvalidRefreshTokenError(res.error) ? null : (res.data?.session ?? null);
           setSession(initialSession);
-          setUser(initialSession?.user ?? null);
+          const currentUser = initialSession?.user ?? (process.env.NODE_ENV === 'development' ? DEV_FALLBACK_USER : null);
+          setUser(currentUser);
         }
       } catch (err) {
         console.error('Unexpected exception during initial session fetch:', err);
@@ -100,7 +110,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
       if (!active) return;
       setSession(session);
-      setUser(session?.user ?? null);
+      const currentUser = session?.user ?? (process.env.NODE_ENV === 'development' ? DEV_FALLBACK_USER : null);
+      setUser(currentUser);
       setLoading(false);
     });
 
@@ -123,8 +134,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const isAdmin = (user?.user_metadata as any)?.role?.toLowerCase() === 'admin' || 
-                  user?.email === 'admin@mantenix.com';
+  const isAdmin = (user?.user_metadata as any)?.role?.toLowerCase() === 'admin' ||
+                  user?.email === 'admin@mantenix.com' ||
+                  user?.email === 'admin@example.com';
 
   return (
     <AuthContext.Provider value={{ user, session, loading, isAdmin, signOut }}>

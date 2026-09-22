@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, Users, Calendar, Clock, 
   ChevronRight, 
-
 } from 'lucide-react';
 import Image from 'next/image';
 import { Group, Item } from '@/types/monday';
@@ -17,8 +16,11 @@ interface DailyAgendaPanelProps {
   onClose: () => void;
   date: Date;
   groups: Group[];
+  boardId?: string;
   onVerify: (groupId: string, item: Item, dateId: string) => void;
   filterGroupId?: string | null;
+  filterCrewId?: string | null;
+  crews?: Array<{ id: string; name: string; code?: string | null }>;
 }
 
 interface DailyTask {
@@ -27,6 +29,7 @@ interface DailyTask {
   groupTitle: string;
   jor: number;
   done: boolean;
+  machineryId?: string | null;
   priority: 'Alta' | 'Media' | 'Baja';
   hours: string;
 }
@@ -61,7 +64,12 @@ const getDaysOfWeek = (currentDate: Date) => {
   return result;
 };
 
-const getDayStats = (targetDate: Date, groups: Group[], filterGroupId?: string | null) => {
+const getDayStats = (
+  targetDate: Date,
+  groups: Group[],
+  filterGroupId?: string | null,
+  filterCrewId?: string | null
+) => {
   const dateId = targetDate.toISOString().split('T')[0];
   let totalTasks = 0;
   let doneTasks = 0;
@@ -71,6 +79,10 @@ const getDayStats = (targetDate: Date, groups: Group[], filterGroupId?: string |
 
   groups.filter(g => !filterGroupId || g.id === filterGroupId).forEach(group => {
     group.items.forEach(item => {
+      // CUAD-07: Consume crew_id persisted in item (no name string heuristics)
+      const itemCrewId = (item as any).crew_id || (item.values as any)['crew_id'] || null;
+      if (filterCrewId && itemCrewId !== filterCrewId) return;
+
       const execution = item.values['daily_execution'] || {};
       const dayEntry = execution[dateId];
       const frec = parseFloat((item.values as any)['frec']) || 1;
@@ -131,7 +143,7 @@ const MetricItem = ({ icon: Icon, value, label, color = "text-white" }: { icon: 
   </div>
 );
 
-export default function DailyAgendaPanel({ isOpen, onClose, date, groups, onVerify, filterGroupId }: DailyAgendaPanelProps) {
+export default function DailyAgendaPanel({ isOpen, onClose, date, groups, onVerify, filterGroupId, filterCrewId, crews }: DailyAgendaPanelProps) {
   const [mounted, setMounted] = useState(false);
   const [viewMode, setViewMode] = useState<'today' | 'week'>('today');
   const [selectedDate, setSelectedDate] = useState<Date>(date);
