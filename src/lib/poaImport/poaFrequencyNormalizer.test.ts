@@ -4,20 +4,19 @@ import {
 } from './poaFrequencyNormalizer';
 
 describe('POA Frequency Normalizer Suite', () => {
-  it('1. FREC = 1 en Excel para una actividad semanal sin metadatos diarios debe transformarse a 4', () => {
-    const res = normalizePoaFrequency({
-      frecExcel: 1,
-      descripcion: 'Trasiego con maquinaria en sitio estratégico',
-      unit: 'M²',
-    });
-    expect(res).toBe(4);
+  it('1. FREC = 1 en Excel para actividades operativas rutinarias (Trasiego, Cargue, Limpieza, etc.) se infiere como 1 (diario L-S)', () => {
+    expect(normalizePoaFrequency({ frecExcel: 1, descripcion: 'Arrume con tractor en sitio estratégico (trasiego)', unit: 'M²' })).toBe(1);
+    expect(normalizePoaFrequency({ frecExcel: 1, descripcion: 'Cargue con tractor de material acopiado', unit: 'M²' })).toBe(1);
+    expect(normalizePoaFrequency({ frecExcel: 1, descripcion: 'Limpieza manual de playa en sectores críticos', unit: 'M²' })).toBe(1);
+    expect(isDailyActivityByMetadata({ descripcion: 'Trasiego de material' })).toBe(true);
+    expect(isDailyActivityByMetadata({ descripcion: 'Cargue en volquetas' })).toBe(true);
   });
 
-  it('2. FREC = 1 en Excel para una actividad de Limpieza Manual de Playa debe transformarse a 4', () => {
+  it('2. FREC = 1 en Excel para una actividad no rutinaria ni diaria se transforma a 4 (1x/semana Lunes)', () => {
     const res = normalizePoaFrequency({
       frecExcel: 1,
-      descripcion: 'Limpieza manual de playa en sectores críticos',
-      unit: 'M²',
+      descripcion: 'Informe de gestión ambiental semestral',
+      unit: 'INFORME',
     });
     expect(res).toBe(4);
   });

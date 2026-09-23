@@ -30,9 +30,25 @@ export function isDailyActivityByMetadata(context: FrequencyNormalizationContext
   const unit = (context.unit || '').toUpperCase();
   const key = (context.activityKey || '').trim();
 
+  // 1. Unidad explícitamente diaria
   if (unit === 'DIA' || unit === 'DÍAS' || unit === 'DIAS') return true;
-  if (desc.includes('DIARIO') || desc.includes('DIARIA') || desc.includes('RUTINARIO DIARIO')) return true;
-  if (/^1\.0[1-8]$/.test(key) || /^2\.0[1-5]$/.test(key)) return true;
+
+  // 2. Descripción o metadatos explícitamente diarios/rutinarios
+  if (desc.includes('DIARIO') || desc.includes('DIARIA') || desc.includes('RUTINARIO')) return true;
+
+  // 3. Palabras clave de actividades operativas de rutina diaria en POA
+  const dailyKeywords = [
+    'TRASIEGO', 'CARGUE', 'ARRUME', 'ACOPIO', 'BARRIDO', 'LIMPIEZA',
+    'PODA', 'DESHIERBE', 'RECOLECCION', 'RECOLECCIÓN', 'ROBER',
+    'MANTENIMIENTO', 'REPASO', 'OPERACION', 'OPERACIÓN', 'OXIGENACION',
+    'OXIGENACIÓN', 'PLATEO', 'LAVADO', 'CORTE', 'CORTA', 'TRANSPORTE',
+    'DESMALEZADO', 'RIEGO', 'DESPUNTE', 'SIEMBRA'
+  ];
+  if (dailyKeywords.some((kw) => desc.includes(kw))) return true;
+
+  // 4. Capítulos 1 y 2 de operaciones rutinarias del POA (cualquier código 1.xx o 2.xx)
+  if (/^1\.\d+/.test(key) || /^2\.\d+/.test(key)) return true;
+
   return false;
 }
 

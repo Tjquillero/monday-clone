@@ -28,14 +28,17 @@ describe('Harness de Certificación Final — Corrección Gobernada de Frecuenci
   ];
 
   it('CERT-01: Verificación de Normalización Semántica Determinista', () => {
-    // 1.09, 1.10, 1.11 en Excel vienen con FREC = 1 -> Deben canonicalizarse a frecuencia = 4
-    expect(normalizePoaFrequency({ frecExcel: 1, activityKey: '1.09', descripcion: 'Limpieza manual de playa' })).toBe(4);
-    expect(normalizePoaFrequency({ frecExcel: 1, activityKey: '1.10', descripcion: 'Trasiego con maquinaria' })).toBe(4);
-    expect(normalizePoaFrequency({ frecExcel: 1, activityKey: '1.11', descripcion: 'Oxigenación mecánica de arena' })).toBe(4);
+    // Actividades operativas rutinarias (1.09 Limpieza, 1.10 Trasiego, 1.11 Oxigenación) con FREC = 1 -> Deben canonicalizarse a frecuencia = 1 (diario L-S)
+    expect(normalizePoaFrequency({ frecExcel: 1, activityKey: '1.09', descripcion: 'Limpieza manual de playa' })).toBe(1);
+    expect(normalizePoaFrequency({ frecExcel: 1, activityKey: '1.10', descripcion: 'Trasiego con maquinaria' })).toBe(1);
+    expect(normalizePoaFrequency({ frecExcel: 1, activityKey: '1.11', descripcion: 'Oxigenación mecánica de arena' })).toBe(1);
 
     // Actividades diarias rutinarias 1.01-1.08 y 2.01-2.05 con FREC = 1 -> Deben conservarse como 1 (diario L-S)
     expect(normalizePoaFrequency({ frecExcel: 1, activityKey: '1.01', descripcion: 'Limpieza general' })).toBe(1);
     expect(normalizePoaFrequency({ frecExcel: 1, activityKey: '2.01', descripcion: 'Poda rutinaria' })).toBe(1);
+
+    // Actividades periódicas no rutinarias con FREC = 1 -> Deben canonicalizarse a 4 (1x/semana Lunes)
+    expect(normalizePoaFrequency({ frecExcel: 1, activityKey: '9.01', descripcion: 'Informe de gestión ambiental semestral', unit: 'INFORME' })).toBe(4);
 
     // Frecuencias fraccionarias/periódicas -> Deben conservarse intactas
     expect(normalizePoaFrequency({ frecExcel: 0.5, activityKey: '2.08' })).toBe(0.5);
