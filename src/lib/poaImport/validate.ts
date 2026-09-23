@@ -85,6 +85,8 @@ import type {
   NoContratadaActivity,
   FrecuenciaPendienteMotivo,
 } from './types';
+import { normalizePoaFrequency } from './poaFrequencyNormalizer';
+
 
 export interface ValidatePoaImportContext {
   /** excelZoneName -> group_id resuelto, o null/undefined si está pendiente (ADR-0004). */
@@ -292,13 +294,18 @@ function validateActivity(
     zonasValidadas.push({ groupId, cantidadContratada: z.cantidadContratada });
   }
 
+  const rawFrecuencia = frecResult.valor;
+  const canonicalFrecuencia = rawFrecuencia !== null
+    ? normalizePoaFrequency({ frecExcel: rawFrecuencia, activityKey: act.activityKey, unit: act.unidad, descripcion: act.descripcion })
+    : null;
+
   return {
     validated: {
       activityKey: act.activityKey,
       descripcion: act.descripcion,
       unidad: act.unidad as string,
       precioUnitario: act.precioUnitario as number,
-      frecuencia: frecResult.valor,
+      frecuencia: canonicalFrecuencia,
       zonas: zonasValidadas,
     },
     noContratada: null,
