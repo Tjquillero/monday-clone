@@ -357,6 +357,64 @@ export function generateOperationalRecommendations(
         break;
       }
 
+      // ───────────────────────────────────────────────────────────────────────
+      // R-05: DISCREPANCIA_TRIDIMENSIONAL_MATERIALIZADA (P-05_DISCREPANCIA_MATERIALIZADA)
+      // ───────────────────────────────────────────────────────────────────────
+      case 'P-05_DISCREPANCIA_MATERIALIZADA': {
+        const targetEntity: TargetEntityReference = {
+          entityType: 'ACTIVITY',
+          entityId: pattern.scope.scopeId,
+          entityName: pattern.scope.scopeName || `Actividad ${pattern.scope.scopeId}`,
+        };
+
+        const ipMetric = allMetrics.find((m) => m.metricKey === 'METRIC_PRODUCTIVITY_INDEX');
+        const ratioVal = ipMetric?.value ?? null;
+
+        const proposedAction: ProposedAction = {
+          actionType: 'ADVISE_MULTIDAY_PLANNING',
+          targetEntity,
+          suggestedParameters: {
+            proposedUnitQuota: null,
+            notes: 'Ajuste consultivo de programación por discrepancia tridimensional POA/Plan/Ejecución.',
+          },
+          applicableDomainGateway: 'weeklyPlanService',
+        };
+
+        const projectedImpact: ProjectedImpact = {
+          metricKey: 'METRIC_PRODUCTIVITY_INDEX',
+          currentObservedValue: ratioVal,
+          proposedTargetValue: 1.0,
+          projectedValue: null,
+          unit: 'ratio',
+          expectedImprovementDescription: 'Reconciliar la diferencia entre la planificación semanal materializada y la cuota contractual POA.',
+        };
+
+        const recId = computeRecommendationId(
+          pattern.scope.scopeType,
+          pattern.scope.scopeId,
+          'R-05_DISCREPANCIA_TRIDIMENSIONAL_MATERIALIZADA',
+          targetEntity.entityId
+        );
+
+        recommendations.push({
+          recommendationId: recId,
+          recommendationKey: 'R-05_DISCREPANCIA_TRIDIMENSIONAL_MATERIALIZADA',
+          priority,
+          status: 'PROPOSED',
+          scope: pattern.scope,
+          triggeredPatternKey: pattern.patternKey,
+          targetEntity,
+          sampleSize: pattern.sampleSize,
+          confidenceScore: pattern.confidenceScore,
+          rationale: pattern.empiricalEvidence.summary,
+          supportingMetrics,
+          proposedAction,
+          projectedImpact,
+          generatedAtIso: evaluatedAtIso,
+        });
+        break;
+      }
+
       default:
         // Patrones no asociados a recomendaciones automáticas se ignoran limpiamente
         break;

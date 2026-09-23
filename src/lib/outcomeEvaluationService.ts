@@ -141,6 +141,13 @@ export const FAMILY_WINDOW_CONFIGS: Record<RecommendationKey, FamilyWindowConfig
     minSampleSize: 3,
     ruleVersion: 'R04_UNPLANNED_OVERRUN_ELIMINATION@v1.0',
   },
+  'R-05_DISCREPANCIA_TRIDIMENSIONAL_MATERIALIZADA': {
+    baselineWorkingDays: 20,
+    lagWorkingDays: 1,
+    evaluationWorkingDays: 20,
+    minSampleSize: 3,
+    ruleVersion: 'R05_3D_DISCREPANCY_RECONCILIATION@v1.0',
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

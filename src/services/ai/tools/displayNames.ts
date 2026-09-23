@@ -16,6 +16,7 @@ export const TOOL_DISPLAY_NAMES: Record<string, string> = {
   get_duplicate_attachments: 'Evidencia duplicada',
   find_possible_visual_duplicates: 'Posibles duplicados visuales',
   generate_execution_observations: 'Observaciones de la jornada',
+  get_proactive_advisories: 'Recomendaciones operacionales proactivas',
 };
 
 export function getToolDisplayName(tool: string): string {

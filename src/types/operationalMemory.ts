@@ -92,7 +92,8 @@ export type OperationalPatternKey =
   | 'P-03_RESOURCE_CONSUMPTION_ANOMALY'    // Sobrecostos de insumos o uso recurrente de no planificados
   | 'P-04_HIDDEN_MULTIDAY_DRAG'            // Actividades planificadas en 1 día ejecutadas en >= 2 días
   | 'P-05_OPERATIONAL_BOTTLENECK'          // Zonas con retrasos severos de verificación o alta tasa de rechazo
-  | 'P-06_RECURRENT_RESCHEDULE_DRAG';      // Ocurrencias con múltiples reprogramaciones acumuladas
+  | 'P-06_RECURRENT_RESCHEDULE_DRAG'       // Ocurrencias con múltiples reprogramaciones acumuladas
+  | 'P-05_DISCREPANCIA_MATERIALIZADA';      // Discrepancia tridimensional POA ↔ WeeklyPlan ↔ Execution
 
 export interface PatternThresholdConfig {
   minSampleSize: number;

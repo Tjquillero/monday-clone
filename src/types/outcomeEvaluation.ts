@@ -43,7 +43,8 @@ export type EvaluationRuleVersion =
   | 'R01_IP_TARGET_OR_DELTA@v1.0'
   | 'R02_CREW_CV_REDUCTION_AND_THRESHOLD@v1.0'
   | 'R03_RESOURCE_VARIANCE_CONVERGENCE@v1.0'
-  | 'R04_UNPLANNED_OVERRUN_ELIMINATION@v1.0';
+  | 'R04_UNPLANNED_OVERRUN_ELIMINATION@v1.0'
+  | 'R05_3D_DISCREPANCY_RECONCILIATION@v1.0';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 3. Definición Formal de Cohortes de Evaluación
