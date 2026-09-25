@@ -11,6 +11,14 @@ import { OperationalResourceItem } from '@/lib/resourceConsumptionControlService
 import { LocalEvidenceFile } from '../EvidenceCapture';
 import { generateUUID } from '@/lib/offlineDB';
 
+export type SubmissionStep =
+  | 'IDLE'
+  | 'PREPARING_EVIDENCE'
+  | 'SUBMITTING_RPC'
+  | 'UPLOADING_EVIDENCE'
+  | 'PERSISTED_SUCCESS'
+  | 'ERROR';
+
 export interface SubmitFieldReportParams {
   supabase: SupabaseClient;
   weeklyPlanItemId: string;
@@ -30,9 +38,11 @@ export interface SubmitFieldReportParams {
 
 export function useFieldExecutionMutation() {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [submissionStep, setSubmissionStep] = useState<SubmissionStep>('IDLE');
+  const [stepLabel, setStepLabel] = useState<string>('Listo para registrar');
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<FieldReportResult | null>(null);
-  
+
   // Ref estable para source_mutation_id durante la misma sesión de reporte / reintentos
   const activeMutationIdRef = useRef<string | null>(null);
 
@@ -48,6 +58,8 @@ export function useFieldExecutionMutation() {
     setError(null);
     setResult(null);
     setIsSubmitting(false);
+    setSubmissionStep('IDLE');
+    setStepLabel('Listo para registrar');
   }, []);
 
   const submitReport = useCallback(
@@ -70,6 +82,8 @@ export function useFieldExecutionMutation() {
 
       setIsSubmitting(true);
       setError(null);
+      setSubmissionStep('SUBMITTING_RPC');
+      setStepLabel('Registrando avance físico en servidor...');
 
       try {
         if (!reportedBy) {
@@ -99,60 +113,65 @@ export function useFieldExecutionMutation() {
         if (reportedBy && executionId) {
           // 2.1 Foto Antes
           if (beforePhoto?.file) {
-            try {
-              const fileExt = beforePhoto.file.name.split('.').pop() || 'jpg';
-              const storagePath = `execution/${executionId}/before_${Date.now()}.${fileExt}`;
-              
-              const { error: upErr } = await supabase.storage
-                .from('attachments')
-                .upload(storagePath, beforePhoto.file, { upsert: true });
+            setSubmissionStep('UPLOADING_EVIDENCE');
+            setStepLabel('Subiendo foto ANTES...');
+            const fileExt = beforePhoto.file.name.split('.').pop() || 'jpg';
+            const storagePath = `execution/${executionId}/before_${Date.now()}.${fileExt}`;
 
-              if (!upErr) {
-                await attachFieldEvidence(supabase, {
-                  executionId,
-                  boardId,
-                  userId: reportedBy,
-                  storagePath,
-                  fileType: beforePhoto.file.type || 'image/jpeg',
-                  phase: 'before',
-                });
-              }
-            } catch (attErr) {
-              console.warn('[useFieldExecutionMutation] No se pudo adjuntar foto antes:', attErr);
+            const { error: upErr } = await supabase.storage
+              .from('attachments')
+              .upload(storagePath, beforePhoto.file, { upsert: true });
+
+            if (upErr) {
+              throw new Error(`Fallo al subir foto ANTES: ${upErr.message}`);
             }
+
+            await attachFieldEvidence(supabase, {
+              executionId,
+              boardId,
+              userId: reportedBy,
+              storagePath,
+              fileType: beforePhoto.file.type || 'image/jpeg',
+              phase: 'before',
+            });
           }
 
           // 2.2 Foto Después
           if (afterPhoto?.file) {
-            try {
-              const fileExt = afterPhoto.file.name.split('.').pop() || 'jpg';
-              const storagePath = `execution/${executionId}/after_${Date.now()}.${fileExt}`;
+            setSubmissionStep('UPLOADING_EVIDENCE');
+            setStepLabel('Subiendo foto DESPUÉS...');
+            const fileExt = afterPhoto.file.name.split('.').pop() || 'jpg';
+            const storagePath = `execution/${executionId}/after_${Date.now()}.${fileExt}`;
 
-              const { error: upErr } = await supabase.storage
-                .from('attachments')
-                .upload(storagePath, afterPhoto.file, { upsert: true });
+            const { error: upErr } = await supabase.storage
+              .from('attachments')
+              .upload(storagePath, afterPhoto.file, { upsert: true });
 
-              if (!upErr) {
-                await attachFieldEvidence(supabase, {
-                  executionId,
-                  boardId,
-                  userId: reportedBy,
-                  storagePath,
-                  fileType: afterPhoto.file.type || 'image/jpeg',
-                  phase: 'after',
-                });
-              }
-            } catch (attErr) {
-              console.warn('[useFieldExecutionMutation] No se pudo adjuntar foto después:', attErr);
+            if (upErr) {
+              throw new Error(`Fallo al subir foto DESPUÉS: ${upErr.message}`);
             }
+
+            await attachFieldEvidence(supabase, {
+              executionId,
+              boardId,
+              userId: reportedBy,
+              storagePath,
+              fileType: afterPhoto.file.type || 'image/jpeg',
+              phase: 'after',
+            });
           }
         }
 
+        setSubmissionStep('PERSISTED_SUCCESS');
+        setStepLabel('Ejecución registrada con éxito');
         setResult(reportResult);
         return reportResult;
       } catch (err: any) {
+        setSubmissionStep('ERROR');
+        setStepLabel('Error en el registro');
         const msg = err?.message || 'Error al reportar avance físico de campo';
         setError(msg);
+        setResult(null);
         throw err;
       } finally {
         setIsSubmitting(false);
@@ -164,6 +183,8 @@ export function useFieldExecutionMutation() {
   return {
     submitReport,
     isSubmitting,
+    submissionStep,
+    stepLabel,
     error,
     result,
     isIdempotentReplay: result?.isIdempotentReplay ?? false,

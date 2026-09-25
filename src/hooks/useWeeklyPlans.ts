@@ -101,14 +101,123 @@ export function useWeeklyPlanWithItems(planId: string | undefined) {
 // plan publicado de la semana activa).
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { extractCuratedEvidencePair, ExecutionAttachmentItem } from '@/lib/evidenceCuration';
+
+export interface ExecutionEvidencePreviewDTO {
+  id: string;
+  storage_path: string;
+  phase: 'before' | 'after';
+}
+
+export type VerificationSummaryStatus =
+  | 'none'
+  | 'draft'
+  | 'reported'
+  | 'evidence_pending'
+  | 'verified'
+  | 'confirmed'
+  | 'closed'
+  | 'rejected';
+
+export interface ItemExecutionSummaryDTO {
+  totalExecutions: number;
+  lastExecutionDate: string | null;
+  verificationStatus: VerificationSummaryStatus;
+  latestRejectionNotes?: string | null;
+  evidencePreview: {
+    before: ExecutionEvidencePreviewDTO[];
+    after: ExecutionEvidencePreviewDTO[];
+  };
+}
+
 export interface PublishedWeekPlanItem extends WeeklyPlanItem {
   standard: { name: string; category: string; unit: string } | null;
+  displayJr?: number;
+  crew?: {
+    id: string;
+    name: string;
+    code?: string;
+    leader_name?: string | null;
+    members_count?: number;
+    members?: Array<{
+      id: string;
+      full_name: string;
+      role_in_site?: string | null;
+      zone?: string | null;
+    }>;
+  } | null;
+  isRescheduled?: boolean;
+  overrideReasonLabel?: string | null;
+  is_manual_override?: boolean;
+  override_reason?: string | null;
+  occurrence_key?: string;
+  executionsSummary?: ItemExecutionSummaryDTO | null;
 }
 
 export interface PublishedWeekPlan extends WeeklyPlan {
   group: { title: string; color: string | null } | null;
   board: { name: string } | null;
   items: PublishedWeekPlanItem[];
+}
+
+const CANONICAL_REASON_MAP: Record<string, string> = {
+  WEATHER_DELAY: 'Condición Climática',
+  LOGISTICS_EQUIPMENT: 'Equipo / Insumos',
+  OPERATIONAL_PRIORITY: 'Prioridad Operativa',
+  SUPERVISOR_ADJUSTMENT: 'Ajuste de Supervisión',
+};
+
+/**
+ * Helper puro H6.5: Parsea y traduce la razón de reprogramación (`override_reason`)
+ * extrayendo la entrada más reciente en historiales acumulativos (|) y traduciendo
+ * códigos canónicos de ADR-0013 sin alterar datos en BD ni inventar categorías.
+ */
+export function formatOverrideReason(reason: string | null | undefined): string | null {
+  if (!reason || typeof reason !== 'string') return null;
+  const trimmed = reason.trim();
+  if (!trimmed) return null;
+
+  // Si existen múltiples entradas de historial separadas por |, tomar la última (más reciente)
+  const segments = trimmed.split('|');
+  const lastSegment = segments[segments.length - 1].trim();
+  if (!lastSegment) return null;
+
+  // 1. Extraer código estructurado de patrones como [RESCHEDULE:CODE] o [CODE]
+  const rescheduleMatch = lastSegment.match(/\[RESCHEDULE:([A-Z_]+)\]/i) || lastSegment.match(/\[([A-Z_]+)\]/i);
+  if (rescheduleMatch) {
+    const code = rescheduleMatch[1].toUpperCase();
+    if (CANONICAL_REASON_MAP[code]) {
+      return CANONICAL_REASON_MAP[code];
+    }
+  }
+
+  // 2. Verificar directamente si la última sección contiene un código canónico conocido
+  for (const [code, label] of Object.entries(CANONICAL_REASON_MAP)) {
+    if (lastSegment.toUpperCase().includes(code)) {
+      return label;
+    }
+  }
+
+  // 3. Si no tiene código estructurado, extraer el texto descriptivo removiendo bloques entre corchetes [...]
+  const cleanText = lastSegment.replace(/\[[^\]]*\]/g, '').trim();
+  if (cleanText) {
+    return cleanText.length > 35 ? `${cleanText.substring(0, 35)}...` : cleanText;
+  }
+
+  return null;
+}
+
+/**
+ * Proyección pura de ViewModel H6.4:
+ * Calcula la participación de jornal por ocurrencia (`displayJr`) derivada 100% de la semántica H6.2:
+ * displayJr = (plannedJrTotal * canonicalFrequency) / 25
+ */
+export function calculateOccurrenceDisplayJr(
+  plannedJrTotal: number,
+  canonicalFrequency: number
+): number {
+  if (canonicalFrequency <= 0 || plannedJrTotal <= 0) return 0;
+  return (plannedJrTotal * canonicalFrequency) / 25;
 }
 
 function addDaysISO(iso: string, days: number): string {
@@ -218,16 +327,18 @@ export function usePublishedWeekPlans(weekStartISO: string | undefined) {
           plans = (refetched.data ?? []) as PublishedWeekPlan[];
         }
 
-        // Filtro Estricto de Dominio Operacional:
-        // Excluir grupos financieros (PRESUPUESTO GENERAL) y planes vacíos sin actividades operativas.
+        // Filtro Estricto de Dominio Operacional (H6.4):
+        // Excluir exclusivamente grupos financieros (PRESUPUESTO GENERAL).
+        // NO descartar planes publicados cuya lista de items esté temporalmente vacía.
         plans = plans.filter((plan) => {
           const groupTitle = (plan.group?.title || '').toUpperCase().trim();
-          if (groupTitle.includes('PRESUPUESTO GENERAL')) return false;
-          return (plan.items || []).length > 0;
+          return !groupTitle.includes('PRESUPUESTO GENERAL');
         });
 
         const boardIds = [...new Set(plans.map((p) => p.board_id))];
-        const activityKeys = [...new Set(plans.flatMap((p) => p.items.map((i) => i.activity_key)))];
+        const activityKeys = [...new Set(plans.flatMap((p) => (p.items || []).map((i) => i.activity_key)))];
+        const crewIds = [...new Set(plans.flatMap((p) => (p.items || []).map((i) => i.crew_id).filter(Boolean)))];
+
         let standards: any[] = [];
         let standardsByKey = new Map<string, { name: string; category: string; unit: string }>();
         if (boardIds.length > 0 && activityKeys.length > 0) {
@@ -242,12 +353,198 @@ export function usePublishedWeekPlans(weekStartISO: string | undefined) {
           standardsByKey = new Map(standards.map((s: any) => [`${s.board_id}|${s.activity_key}`, s]));
         }
 
+        let crewsByKey = new Map<string, any>();
+        if (boardIds.length > 0 && crewIds.length > 0) {
+          try {
+            const { data: crewsData } = await supabase
+              .from('crews')
+              .select(`
+                id,
+                name,
+                code,
+                leader:personnel!crews_leader_id_fkey(name),
+                members:crew_members(
+                  id,
+                  personnel_assignment_id,
+                  assignment:personnel_site_assignments(
+                    id,
+                    role_in_site,
+                    zone,
+                    personnel:personnel(name)
+                  )
+                )
+              `)
+              .in('id', crewIds);
+
+            for (const c of crewsData || []) {
+              const rawMembers = (c as any).members || [];
+              const members = rawMembers.map((m: any) => ({
+                id: m.id,
+                full_name: m.assignment?.personnel?.name || 'Desconocido',
+                role_in_site: m.assignment?.role_in_site || null,
+                zone: m.assignment?.zone || null,
+              }));
+
+              crewsByKey.set(c.id, {
+                id: c.id,
+                name: c.name,
+                code: c.code,
+                leader_name: (c as any).leader?.name || null,
+                members_count: rawMembers.length,
+                members,
+              });
+            }
+          } catch (_crewErr) {
+            // Graceful fallback for environments where crews table is empty or unmocked
+          }
+        }
+
+        const allItemIds = plans.flatMap((p) => (p.items || []).map((i) => i.id));
+        let executionsByItemMap = new Map<string, any[]>();
+        let allExecutionIds: string[] = [];
+
+        if (allItemIds.length > 0) {
+          try {
+            const { data: execsData } = await supabase
+              .from('weekly_plan_item_executions')
+              .select('id, weekly_plan_item_id, execution_date, status, verification_status, rejection_notes, created_at')
+              .in('weekly_plan_item_id', allItemIds);
+
+            for (const exec of execsData || []) {
+              const list = executionsByItemMap.get(exec.weekly_plan_item_id) || [];
+              list.push(exec);
+              executionsByItemMap.set(exec.weekly_plan_item_id, list);
+              allExecutionIds.push(exec.id);
+            }
+          } catch (_execErr) {
+            // Graceful fallback
+          }
+        }
+
+        let attachmentsByExecMap = new Map<string, ExecutionAttachmentItem[]>();
+        if (allExecutionIds.length > 0) {
+          try {
+            const { data: attsData } = await supabase
+              .from('execution_attachments')
+              .select('id, execution_id, file_name, file_url, file_type, created_at, phase, file_hash')
+              .in('execution_id', allExecutionIds);
+
+            for (const att of attsData || []) {
+              const list = attachmentsByExecMap.get(att.execution_id) || [];
+              list.push({
+                id: att.id,
+                execution_id: att.execution_id,
+                storage_path: att.file_url || `execution/${att.execution_id}/${att.file_name}`,
+                file_hash: att.file_hash || att.id,
+                phase: att.phase === 'before' || att.phase === 'after' ? att.phase : 'after',
+                captured_at: att.created_at,
+              });
+              attachmentsByExecMap.set(att.execution_id, list);
+            }
+          } catch (_attErr) {
+            // Graceful fallback
+          }
+        }
+
         for (const plan of plans) {
+          plan.items = plan.items || [];
           plan.items.sort((a, b) => a.planned_sequence - b.planned_sequence);
           const actCounters = new Map<string, number>();
 
           for (const item of plan.items) {
             item.standard = standardsByKey.get(`${plan.board_id}|${item.activity_key}`) ?? null;
+
+            // H6.4 ViewModel Display JR Projection (Planned JR total * canonicalFrequency / 25)
+            const plannedJrTotal = Number(item.planned_jr ?? 0);
+            const canonicalFreq = typeof item.planned_frecuencia === 'number' && Number.isFinite(item.planned_frecuencia) && item.planned_frecuencia > 0
+              ? item.planned_frecuencia
+              : undefined;
+
+            item.displayJr = canonicalFreq !== undefined && plannedJrTotal > 0
+              ? calculateOccurrenceDisplayJr(plannedJrTotal, canonicalFreq)
+              : undefined;
+
+            // Proyección consultiva de cuadrilla
+            if (item.crew_id) {
+              item.crew = crewsByKey.get(item.crew_id) ?? null;
+            } else {
+              item.crew = null;
+            }
+
+            // Proyección consultiva de trazabilidad de reprogramación (H6.5)
+            item.isRescheduled = Boolean(item.is_manual_override);
+            item.overrideReasonLabel = formatOverrideReason(item.override_reason);
+
+            // Proyección consultiva de ejecuciones y evidencias curadas (H6.7)
+            const itemExecs = executionsByItemMap.get(item.id) || [];
+            if (itemExecs.length === 0) {
+              item.executionsSummary = null;
+            } else {
+              const sortedExecs = [...itemExecs].sort((a, b) => (b.execution_date || '').localeCompare(a.execution_date || ''));
+              const lastExecutionDate = sortedExecs[0]?.execution_date || null;
+
+              let vStatus: VerificationSummaryStatus = 'none';
+              if (itemExecs.some((e) => e.verification_status === 'rejected' || e.status === 'rejected')) {
+                vStatus = 'rejected';
+              } else if (itemExecs.some((e) => e.verification_status === 'evidence_pending')) {
+                vStatus = 'evidence_pending';
+              } else if (itemExecs.some((e) => e.verification_status === 'verified')) {
+                vStatus = 'verified';
+              } else if (itemExecs.some((e) => e.verification_status === 'confirmed')) {
+                vStatus = 'confirmed';
+              } else if (itemExecs.some((e) => e.verification_status === 'closed')) {
+                vStatus = 'closed';
+              } else if (itemExecs.some((e) => e.status === 'reported')) {
+                vStatus = 'reported';
+              } else if (itemExecs.some((e) => e.status === 'draft')) {
+                vStatus = 'draft';
+              }
+
+              const itemAttachments: ExecutionAttachmentItem[] = [];
+              for (const exec of itemExecs) {
+                const atts = attachmentsByExecMap.get(exec.id) || [];
+                itemAttachments.push(...atts);
+              }
+
+              const curatedPair = extractCuratedEvidencePair(itemAttachments, 2);
+
+              // PO-02: Extracción determinista de latestRejectionNotes
+              // Filtra ejecuciones rejected y ordena determinísticamente por created_at DESC, con id DESC como desempate
+              const rejectedExecs = itemExecs
+                .filter((e) => e.status === 'rejected' || e.verification_status === 'rejected')
+                .sort((a, b) => {
+                  const createdA = a.created_at || '';
+                  const createdB = b.created_at || '';
+                  const cmp = createdB.localeCompare(createdA);
+                  if (cmp !== 0) return cmp;
+                  return (b.id || '').localeCompare(a.id || '');
+                });
+
+              const latestRejectionNotes =
+                rejectedExecs.length > 0 && rejectedExecs[0].rejection_notes?.trim()
+                  ? rejectedExecs[0].rejection_notes.trim()
+                  : null;
+
+              item.executionsSummary = {
+                totalExecutions: itemExecs.length,
+                lastExecutionDate,
+                verificationStatus: vStatus,
+                latestRejectionNotes,
+                evidencePreview: {
+                  before: curatedPair.before.map((att) => ({
+                    id: att.id,
+                    storage_path: att.storage_path,
+                    phase: 'before',
+                  })),
+                  after: curatedPair.after.map((att) => ({
+                    id: att.id,
+                    storage_path: att.storage_path,
+                    phase: 'after',
+                  })),
+                },
+              };
+            }
+
             if (!item.planned_date) {
               const count = actCounters.get(item.activity_key) ?? 0;
               actCounters.set(item.activity_key, count + 1);
