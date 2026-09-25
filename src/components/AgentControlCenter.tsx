@@ -154,21 +154,22 @@ export default function AgentControlCenter() {
   return (
     <div className="fixed bottom-8 right-8 z-[200]">
       <motion.button
-        whileHover={{ scale: 1.05, boxShadow: '0 0 30px rgba(59, 126, 248, 0.4)' }}
+        whileHover={{ scale: 1.05, boxShadow: '0 0 30px rgba(11, 42, 74, 0.3)' }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-18 h-18 rounded-[2rem] shadow-2xl flex items-center justify-center relative border-2 overflow-hidden group transition-all duration-500 ${isOpen ? 'bg-[#3B7EF8] border-white/20' : 'bg-[var(--bg-primary)] border-[var(--border-color)]'}`}
+        className={`w-18 h-18 rounded-[2rem] shadow-2xl flex items-center justify-center relative border-2 overflow-hidden group transition-all duration-500 ${isOpen ? 'bg-[var(--color-primary)] border-white/20' : 'bg-[var(--card-bg)] border-[var(--border-color)]'}`}
         style={{ width: '72px', height: '72px' }}
+        aria-label={isOpen ? 'Cerrar Copiloto Mantenix' : 'Abrir Copiloto Mantenix'}
       >
-        <div className="absolute inset-0 bg-gradient-to-tr from-[#3B7EF8]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+        <div className="absolute inset-0 bg-gradient-to-tr from-[var(--color-primary)]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
         <div className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ${isOpen ? 'rotate-180 scale-0 opacity-0' : 'scale-100 opacity-100'}`}>
-          <Cpu className="w-8 h-8 text-[#3B7EF8]" />
+          <Cpu className="w-8 h-8 text-[var(--color-primary)]" />
         </div>
         <div className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ${isOpen ? 'scale-100 opacity-100' : 'scale-0 -rotate-180 opacity-0'}`}>
           <X className="w-8 h-8 text-white" />
         </div>
         {!isOpen && (
-          <div className="absolute inset-0 rounded-[2rem] border-2 border-[#3B7EF8]/30 animate-ping opacity-20 pointer-events-none" />
+          <div className="absolute inset-0 rounded-[2rem] border-2 border-[var(--color-primary)]/30 animate-ping opacity-20 pointer-events-none" />
         )}
       </motion.button>
 
@@ -178,46 +179,46 @@ export default function AgentControlCenter() {
             initial={{ opacity: 0, y: 40, scale: 0.9, filter: 'blur(10px)' }}
             animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
             exit={{ opacity: 0, y: 40, scale: 0.9, filter: 'blur(10px)' }}
-            className="absolute bottom-24 right-0 w-[420px] h-[680px] bg-[var(--bg-secondary)] rounded-[3rem] shadow-[0_30px_100px_rgba(0,0,0,0.6)] overflow-hidden border border-[var(--border-color)] flex flex-col backdrop-blur-2xl"
+            className="absolute bottom-24 right-0 w-[420px] max-w-[calc(100vw-2rem)] h-[680px] max-h-[calc(100vh-8rem)] bg-[var(--card-bg)] rounded-[var(--radius-surface)] shadow-[0_30px_100px_rgba(0,0,0,0.3)] overflow-hidden border border-[var(--border-color)] flex flex-col backdrop-blur-2xl"
           >
-            <div className="bg-[var(--bg-primary)] p-8 shrink-0 relative overflow-hidden border-b border-[var(--border-color)]">
+            <div className="bg-[var(--color-surface-subtle)] p-6 shrink-0 relative overflow-hidden border-b border-[var(--border-color)]">
               <div className="absolute -top-12 -right-12 opacity-5 blur-[80px]">
-                <Zap className="w-48 h-48 text-[#3B7EF8]" />
+                <Zap className="w-48 h-48 text-[var(--color-primary)]" />
               </div>
               <div className="flex items-center justify-between relative z-10">
-                <div className="flex items-center space-x-5">
-                  <div className="w-12 h-12 bg-gradient-to-br from-[#3B7EF8] to-[#1E2442] rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(59,126,248,0.3)] border border-[var(--border-color)]">
-                    <Bot className="w-7 h-7 text-white" />
+                <div className="flex items-center space-x-4">
+                  <div className="w-11 h-11 bg-[var(--color-primary)] rounded-xl flex items-center justify-center shadow-md border border-white/10 shrink-0">
+                    <Bot className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <h3 className="font-black text-white text-xl tracking-tighter uppercase italic">Copiloto Mantenix</h3>
-                    <div className="flex items-center space-x-2 mt-1">
-                      <span className="w-2 h-2 bg-[#10B981] rounded-full animate-pulse shadow-[0_0_8px_#10b981]" />
-                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em]">
+                    <h3 className="font-brand font-black text-[var(--text-primary)] text-lg tracking-tight uppercase">Copiloto Mantenix</h3>
+                    <div className="flex items-center space-x-2 mt-0.5">
+                      <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]" />
+                      <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
                         {boardId ? 'Board activo' : 'Sin board seleccionado'}
                       </span>
                     </div>
                   </div>
                 </div>
-                <Activity className="w-4 h-4 text-emerald-500/50" />
+                <Activity className="w-4 h-4 text-emerald-500/70" />
               </div>
             </div>
 
-            <div className="flex-1 overflow-hidden relative bg-[var(--bg-primary)]/30 p-6 flex flex-col">
-              <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-6 pr-3 custom-scrollbar">
+            <div className="flex-1 overflow-hidden relative bg-[var(--card-bg)] p-5 flex flex-col">
+              <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
                 {messages.length === 0 && proactiveSummary && (
-                  <div className="p-4 rounded-2xl border border-[#3B7EF8]/20 bg-[#3B7EF8]/5 text-[12px] font-medium leading-relaxed text-[var(--text-primary)]">
-                    <div className="flex items-center gap-2 mb-2 opacity-60">
-                      <Activity className="w-3 h-3 text-[#3B7EF8]" />
-                      <span className="text-[8px] font-black uppercase tracking-widest">Aviso automático</span>
+                  <div className="p-4 rounded-[var(--radius-control)] border border-[var(--color-primary)]/20 bg-[var(--color-primary)]/5 text-[12px] font-medium leading-relaxed text-[var(--text-primary)]">
+                    <div className="flex items-center gap-2 mb-2 opacity-70">
+                      <Activity className="w-3.5 h-3.5 text-[var(--color-primary)]" />
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--color-primary)]">Aviso automático</span>
                     </div>
                     {proactiveSummary}
                   </div>
                 )}
                 {messages.length === 0 && !proactiveSummary && (
-                  <div className="h-full flex flex-col items-center justify-center text-center p-10 opacity-30">
-                    <Bot className="w-16 h-16 mb-6 text-[#3B7EF8]" />
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] leading-loose">
+                  <div className="h-full flex flex-col items-center justify-center text-center p-8 opacity-40">
+                    <Bot className="w-14 h-14 mb-4 text-[var(--color-primary)]" />
+                    <p className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider leading-relaxed">
                       Pregúntame sobre este board.
                       <br />
                       Solo respondo con datos reales del dominio.
@@ -227,19 +228,23 @@ export default function AgentControlCenter() {
                 {messages.map((m, i) => (
                   <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div
-                      className={`max-w-[85%] p-4 rounded-2xl text-[12px] font-medium leading-relaxed border transition-all ${m.role === 'user' ? 'bg-[#3B7EF8]/10 text-white border-[#3B7EF8]/20 rounded-tr-none' : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] border-[var(--border-color)] rounded-tl-none shadow-xl'}`}
+                      className={`max-w-[85%] p-3.5 rounded-[var(--radius-control)] text-[13px] font-medium leading-relaxed border transition-all ${
+                        m.role === 'user'
+                          ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] rounded-tr-none shadow-sm'
+                          : 'bg-[var(--color-surface-subtle)] text-[var(--text-primary)] border-[var(--border-color)] rounded-tl-none shadow-xs'
+                      }`}
                     >
-                      <div className="flex items-center gap-2 mb-2 opacity-50">
-                        <span className="text-[8px] font-black uppercase tracking-widest">
+                      <div className="flex items-center gap-2 mb-1.5 opacity-60">
+                        <span className="text-[9px] font-bold uppercase tracking-wider">
                           {m.role === 'user' ? 'Tú' : 'Copiloto'}
                         </span>
                         <div className="h-[1px] flex-1 bg-current opacity-20" />
                       </div>
                       <div className="whitespace-pre-wrap">{m.content}</div>
                       {m.citations && m.citations.length > 0 && (
-                        <div className="flex items-start gap-1.5 mt-3 pt-2 border-t border-current/10 opacity-50">
-                          <Wrench className="w-3 h-3 mt-[1px] shrink-0" />
-                          <span className="text-[8px] font-bold uppercase tracking-wider break-all">
+                        <div className="flex items-start gap-1.5 mt-2.5 pt-2 border-t border-current/15 opacity-70">
+                          <Wrench className="w-3.5 h-3.5 mt-[1px] shrink-0" />
+                          <span className="text-[9px] font-mono uppercase tracking-wider break-all">
                             Fuente: {m.citations.map(formatCitation).join(' · ')}
                           </span>
                         </div>
@@ -249,30 +254,31 @@ export default function AgentControlCenter() {
                 ))}
                 {isLoading && (
                   <div className="flex justify-start">
-                    <div className="bg-[var(--bg-secondary)] p-4 rounded-2xl border border-[var(--border-color)] shadow-xl flex space-x-2 items-center">
-                      <div className="w-1.5 h-1.5 bg-[#3B7EF8] rounded-full animate-bounce [animation-delay:-0.3s]" />
-                      <div className="w-1.5 h-1.5 bg-[#3B7EF8] rounded-full animate-bounce [animation-delay:-0.15s]" />
-                      <div className="w-1.5 h-1.5 bg-[#3B7EF8] rounded-full animate-bounce" />
+                    <div className="bg-[var(--color-surface-subtle)] p-3.5 rounded-[var(--radius-control)] border border-[var(--border-color)] shadow-xs flex space-x-2 items-center">
+                      <div className="w-1.5 h-1.5 bg-[var(--color-primary)] rounded-full animate-bounce [animation-delay:-0.3s]" />
+                      <div className="w-1.5 h-1.5 bg-[var(--color-primary)] rounded-full animate-bounce [animation-delay:-0.15s]" />
+                      <div className="w-1.5 h-1.5 bg-[var(--color-primary)] rounded-full animate-bounce" />
                     </div>
                   </div>
                 )}
               </div>
 
-              <div className="mt-6 flex items-center space-x-3 bg-[var(--bg-primary)] p-2 rounded-2xl border border-[var(--border-color)] shadow-inner group-focus-within:border-[#3B7EF8]/50 transition-all">
+              <div className="mt-4 flex items-center space-x-2 bg-[var(--color-surface-subtle)] p-1.5 rounded-[var(--radius-control)] border border-[var(--border-color)] shadow-inner focus-within:border-[var(--color-primary)]/50 focus-within:ring-2 focus-within:ring-[var(--color-primary)]/10 transition-all">
                 <input
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                   placeholder="Pregunta algo sobre este board..."
-                  className="flex-1 bg-transparent border-none focus:ring-0 text-[12px] font-medium text-white px-4 h-12"
+                  className="flex-1 bg-transparent border-none focus:outline-none focus:ring-0 text-[13px] font-medium text-[var(--text-primary)] placeholder:text-[var(--text-muted)] px-3 h-11"
                 />
                 <button
                   onClick={handleSendMessage}
                   disabled={!input.trim() || isLoading}
-                  className="w-12 h-12 bg-[#3B7EF8] text-white rounded-xl flex items-center justify-center shadow-lg shadow-[#3B7EF8]/30 hover:bg-[#2563EB] disabled:opacity-30 transition-all active:scale-90 border border-[var(--border-color)]"
+                  className="w-11 h-11 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white rounded-[var(--radius-control)] flex items-center justify-center shadow-md disabled:opacity-30 transition-all active:scale-95 shrink-0"
+                  aria-label="Enviar pregunta"
                 >
-                  <Send className="w-5 h-5" />
+                  <Send className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -285,11 +291,11 @@ export default function AgentControlCenter() {
           width: 5px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.03);
+          background: var(--border-color);
           border-radius: 10px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(59, 126, 248, 0.3);
+          background: var(--color-primary);
         }
         .custom-scrollbar::-webkit-scrollbar-track {
           background: transparent;
