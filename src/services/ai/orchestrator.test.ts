@@ -24,7 +24,7 @@ jest.mock('./tools/registry', () => ({
   listToolDeclarations: () => [{ name: 'slow_tool', description: '', parametersJsonSchema: {} }],
 }));
 
-import { runAiOrchestrator } from './orchestrator';
+import { runAiOrchestrator, extractCandidateText } from './orchestrator';
 
 describe('runAiOrchestrator — durationMs de las citas', () => {
   beforeEach(() => {
@@ -94,5 +94,117 @@ describe('runAiOrchestrator — fallback de modelo en la segunda llamada', () =>
 
     expect(mockGenerateContent).toHaveBeenCalledTimes(3);
     expect(result.text).toBe('Listo (con respaldo).');
+  });
+});
+
+describe('extractCandidateText — extracción segura y filtrado de razonamiento (thoughts)', () => {
+  it('extrae el texto final cuando parts[0] es un bloque de thought', () => {
+    const response = {
+      candidates: [
+        {
+          content: {
+            role: 'model',
+            parts: [
+              { thought: true, text: 'Thinking: analyzing tools...' },
+              { text: 'Respuesta final válida' },
+            ],
+          },
+        },
+      ],
+    };
+
+    expect(extractCandidateText(response)).toBe('Respuesta final válida');
+  });
+
+  it('devuelve cadena vacía si todas las partes son thought', () => {
+    const response = {
+      candidates: [
+        {
+          content: {
+            role: 'model',
+            parts: [
+              { thought: true, text: 'Thinking 1...' },
+              { thought: true, text: 'Thinking 2...' },
+            ],
+          },
+        },
+      ],
+    };
+
+    expect(extractCandidateText(response)).toBe('');
+  });
+
+  it('concatena múltiples partes de texto válidas preservando el orden', () => {
+    const response = {
+      candidates: [
+        {
+          content: {
+            role: 'model',
+            parts: [
+              { text: 'Primer párrafo.' },
+              { thought: true, text: 'Internal note' },
+              { text: 'Segundo párrafo.' },
+            ],
+          },
+        },
+      ],
+    };
+
+    expect(extractCandidateText(response)).toBe('Primer párrafo.\n\nSegundo párrafo.');
+  });
+
+  it('prioriza response.text si existe y es string no vacío', () => {
+    const response = {
+      text: 'Respuesta top-level directa',
+      candidates: [
+        {
+          content: {
+            role: 'model',
+            parts: [{ text: 'Texto en parts' }],
+          },
+        },
+      ],
+    };
+
+    expect(extractCandidateText(response)).toBe('Respuesta top-level directa');
+  });
+});
+
+describe('runAiOrchestrator — respuesta multi-part tras ejecución de tool', () => {
+  beforeEach(() => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    mockGenerateContent.mockReset();
+  });
+
+  it('procesa correctamente candidate con thought en parts[0] y texto en parts[1] post-tool', async () => {
+    mockGenerateContent
+      .mockResolvedValueOnce({
+        functionCalls: [{ name: 'slow_tool', args: {} }],
+        candidates: [{ content: { role: 'model', parts: [{ functionCall: { name: 'slow_tool', args: {} } }] } }],
+      })
+      .mockResolvedValueOnce({
+        candidates: [
+          {
+            content: {
+              role: 'model',
+              parts: [
+                { thought: true, text: 'Analyzing tool output internally...' },
+                { text: 'Recomendaciones calculadas exitosamente.' },
+              ],
+            },
+          },
+        ],
+      });
+
+    const supabase = { rpc: jest.fn().mockResolvedValue({ data: null, error: null }) } as any;
+
+    const result = await runAiOrchestrator({
+      supabase,
+      message: 'ejecuta slow_tool y dame el resultado',
+      boardId: 'test-board',
+    });
+
+    expect(result.citations).toHaveLength(1);
+    expect(result.text).toBe('Recomendaciones calculadas exitosamente.');
   });
 });

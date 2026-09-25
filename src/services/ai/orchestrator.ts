@@ -141,9 +141,9 @@ export async function runAiOrchestrator(args: {
     ));
   }
 
+  const extracted = extractCandidateText(response);
   const text: string =
-    response.candidates?.[0]?.content?.parts?.[0]?.text ||
-    response.text ||
+    extracted ||
     // Fallback defensivo: en la práctica, tras recibir un functionResponse
     // de error (tool fuera de whitelist), el modelo a veces no genera texto
     // de seguimiento en el mismo turno (confirmado empíricamente) — el
@@ -162,4 +162,23 @@ export async function runAiOrchestrator(args: {
   const history = trimConversationState({ contents });
 
   return { text, citations, history };
+}
+
+export function extractCandidateText(response: any): string {
+  if (typeof response?.text === 'string' && response.text.trim()) {
+    return response.text.trim();
+  }
+
+  const parts = response?.candidates?.[0]?.content?.parts;
+  if (Array.isArray(parts)) {
+    const textParts = parts
+      .filter((p: any) => !p.thought && typeof p.text === 'string' && p.text.trim())
+      .map((p: any) => p.text);
+
+    if (textParts.length > 0) {
+      return textParts.join('\n\n').trim();
+    }
+  }
+
+  return '';
 }
