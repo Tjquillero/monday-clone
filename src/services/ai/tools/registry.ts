@@ -13,6 +13,7 @@ import { getDuplicateAttachmentsTool } from './getDuplicateAttachments';
 import { findPossibleVisualDuplicatesTool } from './findPossibleVisualDuplicates';
 import { generateExecutionObservationsTool } from './generateExecutionObservations';
 import { getProactiveAdvisoriesTool } from './getProactiveAdvisories';
+import { getOperationalActivitiesTool } from './getOperationalActivities';
 
 // La whitelist. Si un tool no está aquí, el modelo no puede usarlo — el
 // Orchestrator valida el nombre contra este registro independientemente de
@@ -39,6 +40,7 @@ export const AI_TOOL_REGISTRY: Record<string, AiToolDefinition> = {
   [findPossibleVisualDuplicatesTool.name]: findPossibleVisualDuplicatesTool,
   [generateExecutionObservationsTool.name]: generateExecutionObservationsTool,
   [getProactiveAdvisoriesTool.name]: getProactiveAdvisoriesTool,
+  [getOperationalActivitiesTool.name]: getOperationalActivitiesTool,
 };
 
 export function getToolDefinition(name: string): AiToolDefinition | undefined {

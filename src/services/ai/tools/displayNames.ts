@@ -17,6 +17,7 @@ export const TOOL_DISPLAY_NAMES: Record<string, string> = {
   find_possible_visual_duplicates: 'Posibles duplicados visuales',
   generate_execution_observations: 'Observaciones de la jornada',
   get_proactive_advisories: 'Recomendaciones operacionales proactivas',
+  get_operational_activities: 'Actividades operativas y alcance contractual',
 };
 
 export function getToolDisplayName(tool: string): string {
