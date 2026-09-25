@@ -40,32 +40,32 @@ export const DailyBriefBanner: React.FC<DailyBriefBannerProps> = ({
   const consolidatedResources = closureSummary?.consolidatedResources ?? [];
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 md:p-6 mb-6">
+    <div className="bg-[var(--card-bg)] rounded-[var(--radius-surface)] border border-[var(--border-color)] shadow-card p-5 md:p-6 mb-6 transition-colors">
       {/* 1. Header con fecha y badge de calendario legal colombiano */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--border-color)]">
         <div className="flex items-center space-x-3">
-          <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
+          <div className="p-2.5 rounded-[var(--radius-control)] bg-[var(--color-primary-subtle)] text-[var(--color-primary)]">
             <Calendar className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-lg md:text-xl font-bold text-slate-800">
+            <h2 className="text-lg md:text-xl font-brand font-bold text-[var(--text-primary)]">
               Briefing Operativo del Día
             </h2>
-            <p className="text-xs text-slate-500">
-              Fecha de operación: <span className="font-semibold text-slate-700">{formattedDate}</span>
+            <p className="text-xs text-[var(--text-muted)]">
+              Fecha de operación: <span className="font-semibold text-[var(--text-secondary)] font-mono">{formattedDate}</span>
             </p>
           </div>
         </div>
 
         <div>
           {isWorkingDay ? (
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse" />
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-[var(--color-success)] border border-emerald-500/30">
+              <span className="w-2 h-2 rounded-full bg-[var(--color-success)] mr-2 animate-pulse" />
               {workingDayReason}
             </span>
           ) : (
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-              <AlertCircle className="w-3.5 h-3.5 mr-1.5 text-amber-600" />
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-[var(--color-warning)] border border-amber-500/30">
+              <AlertCircle className="w-3.5 h-3.5 mr-1.5 text-[var(--color-warning)]" />
               {workingDayReason}
             </span>
           )}
@@ -77,19 +77,19 @@ export const DailyBriefBanner: React.FC<DailyBriefBannerProps> = ({
         {/* Total Actividades */}
         <div
           onClick={() => onFilterStatus && onFilterStatus('all')}
-          className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+          className={`p-3.5 rounded-[var(--radius-control)] border transition-all cursor-pointer ${
             activeStatusFilter === 'all'
-              ? 'bg-slate-50 border-primary ring-1 ring-primary/20'
-              : 'bg-slate-50/50 border-slate-200/60 hover:bg-slate-50'
+              ? 'bg-[var(--color-primary-subtle)] border-[var(--color-primary)] ring-1 ring-[var(--color-primary)]/20'
+              : 'bg-[var(--color-surface-subtle)] border-[var(--border-color)] hover:border-[var(--color-primary)]/40'
           }`}
         >
-          <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+          <div className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wide">
             Actividades Hoy
           </div>
-          <div className="text-xl md:text-2xl font-bold text-slate-800 mt-1">
+          <div className="text-xl md:text-2xl font-bold font-mono text-[var(--text-primary)] mt-1">
             {totalActivities}
           </div>
-          <div className="text-[11px] text-slate-400 mt-0.5">
+          <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
             {completedActivities} cerradas · {inProgressActivities} en curso
           </div>
         </div>
@@ -97,47 +97,47 @@ export const DailyBriefBanner: React.FC<DailyBriefBannerProps> = ({
         {/* Pendientes */}
         <div
           onClick={() => onFilterStatus && onFilterStatus('pending')}
-          className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+          className={`p-3.5 rounded-[var(--radius-control)] border transition-all cursor-pointer ${
             activeStatusFilter === 'pending'
-              ? 'bg-amber-50/70 border-amber-400 ring-1 ring-amber-400/20'
-              : 'bg-slate-50/50 border-slate-200/60 hover:bg-slate-50'
+              ? 'bg-amber-500/15 border-[var(--color-warning)] ring-1 ring-[var(--color-warning)]/20'
+              : 'bg-[var(--color-surface-subtle)] border-[var(--border-color)] hover:border-[var(--color-warning)]/40'
           }`}
         >
-          <div className="text-[11px] font-semibold text-amber-700 uppercase tracking-wide flex items-center">
-            <Clock className="w-3.5 h-3.5 mr-1 text-amber-600" />
+          <div className="text-[11px] font-semibold text-[var(--color-warning)] uppercase tracking-wide flex items-center">
+            <Clock className="w-3.5 h-3.5 mr-1 text-[var(--color-warning)]" />
             Por Iniciar
           </div>
-          <div className="text-xl md:text-2xl font-bold text-slate-800 mt-1">
+          <div className="text-xl md:text-2xl font-bold font-mono text-[var(--text-primary)] mt-1">
             {pendingActivities}
           </div>
-          <div className="text-[11px] text-slate-400 mt-0.5">
+          <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
             Pendientes de reporte
           </div>
         </div>
 
         {/* Avance Físico Hoy */}
-        <div className="p-3.5 rounded-xl border bg-slate-50/50 border-slate-200/60">
-          <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+        <div className="p-3.5 rounded-[var(--radius-control)] border bg-[var(--color-surface-subtle)] border-[var(--border-color)]">
+          <div className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wide">
             Avance Reportado
           </div>
-          <div className="text-xl md:text-2xl font-bold text-slate-800 mt-1">
+          <div className="text-xl md:text-2xl font-bold font-mono text-[var(--text-primary)] mt-1">
             {totalDailyExecutedQty.toLocaleString()}
           </div>
-          <div className="text-[11px] text-slate-400 mt-0.5">
+          <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
             {totalVerifiedQty > 0 ? `${totalVerifiedQty.toLocaleString()} verificado` : `Meta planificada: ${totalPlannedQty.toLocaleString()}`}
           </div>
         </div>
 
         {/* Jornales de Turno */}
-        <div className="p-3.5 rounded-xl border bg-slate-50/50 border-slate-200/60">
-          <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex items-center">
-            <Users className="w-3.5 h-3.5 mr-1 text-slate-600" />
+        <div className="p-3.5 rounded-[var(--radius-control)] border bg-[var(--color-surface-subtle)] border-[var(--border-color)]">
+          <div className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wide flex items-center">
+            <Users className="w-3.5 h-3.5 mr-1 text-[var(--text-secondary)]" />
             Jornales Empleados
           </div>
-          <div className="text-xl md:text-2xl font-bold text-slate-800 mt-1">
-            {jornalesUsed.toFixed(1)} <span className="text-xs font-normal text-slate-400">JR</span>
+          <div className="text-xl md:text-2xl font-bold font-mono text-[var(--text-primary)] mt-1">
+            {jornalesUsed.toFixed(1)} <span className="text-xs font-normal text-[var(--text-muted)]">JR</span>
           </div>
-          <div className="text-[11px] text-slate-400 mt-0.5">
+          <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
             Turno de hoy
           </div>
         </div>
@@ -145,17 +145,17 @@ export const DailyBriefBanner: React.FC<DailyBriefBannerProps> = ({
 
       {/* 3. Recursos Agregados Observados en la Jornada (POD-01) */}
       {consolidatedResources.length > 0 && (
-        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold text-slate-500 flex items-center mr-1">
-            <Wrench className="w-3.5 h-3.5 mr-1 text-slate-400" />
+        <div className="pt-3 border-t border-[var(--border-color)] flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-[var(--text-secondary)] flex items-center mr-1">
+            <Wrench className="w-3.5 h-3.5 mr-1 text-[var(--text-muted)]" />
             Insumos y Equipos usados hoy:
           </span>
           {consolidatedResources.map((res, idx) => (
             <span
               key={`${res.resourceKey}-${idx}`}
-              className="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200"
+              className="inline-flex items-center px-2.5 py-0.5 rounded-[var(--radius-control)] text-xs font-medium bg-[var(--color-surface-subtle)] text-[var(--text-secondary)] border border-[var(--border-color)]"
             >
-              <span className="font-semibold mr-1">{res.quantity} {res.unit}</span>
+              <span className="font-semibold font-mono mr-1">{res.quantity} {res.unit}</span>
               {res.resourceName}
             </span>
           ))}

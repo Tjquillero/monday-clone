@@ -24,9 +24,9 @@ function todayISO(): string {
 }
 
 const inputCls =
-  'w-full min-h-[44px] sm:min-h-[38px] px-3.5 py-2.5 sm:py-2 text-base sm:text-sm border border-slate-200 rounded-xl bg-white ' +
-  'focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
-const labelCls = 'block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1';
+  'w-full min-h-[44px] sm:min-h-[38px] px-3.5 py-2.5 sm:py-2 text-base sm:text-sm border border-[var(--border-color)] rounded-[var(--radius-control)] bg-[var(--card-bg)] text-[var(--text-primary)] ' +
+  'focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] transition-all';
+const labelCls = 'block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wide mb-1';
 
 export default function JornadaForm({ unit, initial, submitting, submitLabel, onSubmit, onCancel }: Props) {
   const [values, setValues] = useState<JornadaFormValues>({
@@ -52,7 +52,7 @@ export default function JornadaForm({ unit, initial, submitting, submitLabel, on
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-slate-50/90 border border-slate-200/90 rounded-xl p-4 sm:p-5 space-y-4 shadow-xs">
+    <form onSubmit={handleSubmit} className="bg-[var(--color-surface-subtle)] border border-[var(--border-color)] rounded-[var(--radius-surface)] p-4 sm:p-5 space-y-4 shadow-xs text-[var(--text-primary)]">
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
         <div>
           <label className={labelCls}>Fecha</label>
@@ -131,25 +131,25 @@ export default function JornadaForm({ unit, initial, submitting, submitLabel, on
         />
       </div>
 
-      <p className="text-[11px] font-medium text-slate-400">
+      <p className="text-[11px] font-medium text-[var(--text-muted)]">
         Jornales: se calcularán automáticamente al guardar.
       </p>
 
-      {error && <p className="text-xs font-semibold text-red-500 bg-red-50 p-2 rounded-lg border border-red-200">{error}</p>}
+      {error && <p className="text-xs font-semibold text-[var(--color-danger)] bg-[var(--color-danger-subtle)] p-2 rounded-[var(--radius-control)] border border-[var(--color-danger)]/30">{error}</p>}
 
       <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-1">
         <button
           type="button"
           onClick={onCancel}
           disabled={submitting}
-          className="min-h-[48px] sm:min-h-[38px] px-5 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors border border-slate-200 sm:border-0 rounded-xl"
+          className="min-h-[48px] sm:min-h-[38px] px-5 py-2.5 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors border border-[var(--border-color)] sm:border-0 rounded-[var(--radius-control)]"
         >
           Cancelar
         </button>
         <button
           type="submit"
           disabled={submitting}
-          className="min-h-[48px] sm:min-h-[38px] flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors disabled:opacity-60 shadow-xs active:scale-[0.99]"
+          className="min-h-[48px] sm:min-h-[38px] flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary)]/90 rounded-[var(--radius-control)] transition-colors disabled:opacity-60 shadow-xs active:scale-[0.99]"
         >
           {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
           {submitLabel}

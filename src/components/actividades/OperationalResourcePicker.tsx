@@ -97,10 +97,10 @@ export const OperationalResourcePicker: React.FC<OperationalResourcePickerProps>
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 text-[var(--text-primary)]">
       <div className="flex items-center justify-between">
-        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide flex items-center">
-          <Wrench className="w-3.5 h-3.5 mr-1.5 text-primary" />
+        <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide flex items-center">
+          <Wrench className="w-3.5 h-3.5 mr-1.5 text-[var(--color-primary)]" />
           Insumos y Equipos Observados (Opcional)
         </label>
         {!isAddingCustom && (
@@ -108,7 +108,7 @@ export const OperationalResourcePicker: React.FC<OperationalResourcePickerProps>
             type="button"
             onClick={() => setIsAddingCustom(true)}
             disabled={disabled}
-            className="text-[11px] text-primary hover:underline font-medium"
+            className="text-[11px] text-[var(--color-primary)] hover:underline font-medium"
           >
             + Otro recurso
           </button>
@@ -122,7 +122,7 @@ export const OperationalResourcePicker: React.FC<OperationalResourcePickerProps>
             value={selectedPresetKey}
             onChange={(e) => setSelectedPresetKey(e.target.value)}
             disabled={disabled}
-            className="flex-1 text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary text-slate-700"
+            className="flex-1 text-xs px-3 py-2 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-control)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] text-[var(--text-primary)]"
           >
             <option value="">-- Seleccionar insumo / equipo frecuente --</option>
             <optgroup label="Materiales">
@@ -152,7 +152,7 @@ export const OperationalResourcePicker: React.FC<OperationalResourcePickerProps>
             type="button"
             onClick={handleAddPreset}
             disabled={disabled || !selectedPresetKey}
-            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 text-xs font-semibold rounded-lg flex items-center gap-1 transition-colors"
+            className="px-3 py-2 bg-[var(--color-surface-subtle)] hover:bg-[var(--border-color)]/30 disabled:opacity-50 text-[var(--text-primary)] text-xs font-semibold rounded-[var(--radius-control)] flex items-center gap-1 transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
             Agregar
@@ -162,20 +162,20 @@ export const OperationalResourcePicker: React.FC<OperationalResourcePickerProps>
 
       {/* Formulario de Recurso Personalizado */}
       {isAddingCustom && (
-        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2.5 animate-fadeIn">
-          <div className="text-[11px] font-semibold text-slate-600">Registrar recurso específico:</div>
+        <div className="p-3 bg-[var(--color-surface-subtle)] rounded-[var(--radius-control)] border border-[var(--border-color)] space-y-2.5 animate-fadeIn">
+          <div className="text-[11px] font-semibold text-[var(--text-secondary)]">Registrar recurso específico:</div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <input
               type="text"
               placeholder="Nombre del insumo / equipo"
               value={customName}
               onChange={(e) => setCustomName(e.target.value)}
-              className="text-xs px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg sm:col-span-2 text-slate-800"
+              className="text-xs px-2.5 py-1.5 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-control)] sm:col-span-2 text-[var(--text-primary)]"
             />
             <select
               value={customCategory}
               onChange={(e) => setCustomCategory(e.target.value as any)}
-              className="text-xs px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-700"
+              className="text-xs px-2 py-1.5 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-control)] text-[var(--text-primary)]"
             >
               <option value="MATERIAL">Material</option>
               <option value="EQUIPO_MENOR">Equipo Menor</option>
@@ -184,38 +184,38 @@ export const OperationalResourcePicker: React.FC<OperationalResourcePickerProps>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex-1 flex items-center gap-1">
-              <span className="text-[11px] text-slate-500">Cantidad:</span>
+              <span className="text-[11px] text-[var(--text-muted)]">Cantidad:</span>
               <input
                 type="number"
                 min="0.1"
                 step="any"
                 value={customQty}
                 onChange={(e) => setCustomQty(parseFloat(e.target.value) || 0)}
-                className="w-20 text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-800"
+                className="w-20 text-xs px-2 py-1 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-control)] text-[var(--text-primary)] font-mono"
               />
             </div>
             <div className="flex-1 flex items-center gap-1">
-              <span className="text-[11px] text-slate-500">Unidad:</span>
+              <span className="text-[11px] text-[var(--text-muted)]">Unidad:</span>
               <input
                 type="text"
                 placeholder="und, m3, hora..."
                 value={customUnit}
                 onChange={(e) => setCustomUnit(e.target.value)}
-                className="w-24 text-xs px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-800"
+                className="w-24 text-xs px-2 py-1 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-control)] text-[var(--text-primary)]"
               />
             </div>
             <button
               type="button"
               onClick={handleAddCustom}
               disabled={!customName.trim() || customQty <= 0}
-              className="px-3 py-1 bg-primary text-white text-xs font-semibold rounded-lg disabled:opacity-50"
+              className="px-3 py-1 bg-[var(--color-primary)] text-white text-xs font-semibold rounded-[var(--radius-control)] disabled:opacity-50"
             >
               Guardar
             </button>
             <button
               type="button"
               onClick={() => setIsAddingCustom(false)}
-              className="px-2 py-1 text-slate-400 hover:text-slate-600 text-xs"
+              className="px-2 py-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] text-xs"
             >
               Cancelar
             </button>
@@ -223,18 +223,17 @@ export const OperationalResourcePicker: React.FC<OperationalResourcePickerProps>
         </div>
       )}
 
-      {/* Lista de Recursos Agregados */}
       {resources.length > 0 ? (
         <div className="space-y-1.5 mt-2">
           {resources.map((res, idx) => (
             <div
               key={`${res.resourceKey}-${idx}`}
-              className="flex items-center justify-between p-2.5 bg-slate-50/70 border border-slate-200/60 rounded-xl text-xs"
+              className="flex items-center justify-between p-2.5 bg-[var(--color-surface-subtle)] border border-[var(--border-color)] rounded-[var(--radius-control)] text-xs"
             >
               <div className="flex items-center space-x-2 min-w-0 pr-2">
-                {CATEGORY_ICONS[res.category] || <Package className="w-3.5 h-3.5 text-slate-400" />}
-                <span className="font-semibold text-slate-800 truncate">{res.resourceName}</span>
-                <span className="text-[10px] text-slate-400 uppercase bg-white px-1.5 py-0.5 rounded border border-slate-100">
+                {CATEGORY_ICONS[res.category] || <Package className="w-3.5 h-3.5 text-[var(--text-muted)]" />}
+                <span className="font-semibold text-[var(--text-primary)] truncate">{res.resourceName}</span>
+                <span className="text-[10px] text-[var(--text-muted)] uppercase bg-[var(--card-bg)] px-1.5 py-0.5 rounded border border-[var(--border-color)]">
                   {res.category.replace('_', ' ')}
                 </span>
               </div>
@@ -247,16 +246,16 @@ export const OperationalResourcePicker: React.FC<OperationalResourcePickerProps>
                   value={res.quantity}
                   onChange={(e) => handleUpdateQty(idx, parseFloat(e.target.value) || 1)}
                   disabled={disabled}
-                  className="w-16 text-center text-xs py-1 px-1.5 bg-white border border-slate-200 rounded-lg font-semibold text-slate-800"
+                  className="w-16 text-center text-xs py-1 px-1.5 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-control)] font-semibold font-mono text-[var(--text-primary)]"
                 />
-                <span className="text-slate-500 text-[11px] w-8">{res.unit}</span>
+                <span className="text-[var(--text-muted)] text-[11px] w-8">{res.unit}</span>
                 <button
                   type="button"
                   onClick={() => handleRemove(idx)}
                   disabled={disabled}
                   aria-label="Eliminar recurso"
                   data-testid={`remove-resource-${idx}`}
-                  className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                  className="p-1 text-[var(--text-muted)] hover:text-[var(--color-danger)] transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -265,7 +264,7 @@ export const OperationalResourcePicker: React.FC<OperationalResourcePickerProps>
           ))}
         </div>
       ) : (
-        <p className="text-[11px] text-slate-400 italic">
+        <p className="text-[11px] text-[var(--text-muted)] italic">
           No se han registrado insumos ni equipos para esta jornada.
         </p>
       )}

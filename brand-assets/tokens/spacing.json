@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "name": "Mantenix Spacing Tokens",
+  "unit": "4px",
+  "scale": {
+    "0": "0px",
+    "1": "4px",
+    "2": "8px",
+    "3": "12px",
+    "4": "16px",
+    "5": "20px",
+    "6": "24px",
+    "8": "32px",
+    "10": "40px",
+    "12": "48px",
+    "16": "64px",
+    "20": "80px",
+    "24": "96px"
+  },
+  "layout": {
+    "touchTargetMin": "44px",
+    "sidebarWidth": "260px",
+    "sidebarCollapsedWidth": "64px",
+    "headerHeight": "60px",
+    "containerMaxWidth": "1440px"
+  }
+}

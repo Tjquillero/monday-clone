@@ -1,7 +1,6 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import Image from 'next/image';
 
 interface MantenixLogoProps {
   size?: 'sm' | 'md' | 'lg';
@@ -10,10 +9,16 @@ interface MantenixLogoProps {
 }
 
 export default function MantenixLogo({ size = 'md', className = '', withText = false }: MantenixLogoProps) {
-  const dimensions = {
-    sm: { container: 'w-8 h-8', icon: 18, text: 'text-xs' },
-    md: { container: 'w-11 h-11', icon: 26, text: 'text-sm' },
-    lg: { container: 'w-16 h-16', icon: 38, text: 'text-lg' }
+  const pixelSizes = {
+    sm: 24,
+    md: 32,
+    lg: 44,
+  }[size];
+
+  const textClasses = {
+    sm: 'text-sm',
+    md: 'text-base',
+    lg: 'text-xl',
   }[size];
 
   return (
@@ -21,68 +26,62 @@ export default function MantenixLogo({ size = 'md', className = '', withText = f
       <motion.div 
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
-        className="relative group cursor-pointer"
+        className="relative group cursor-pointer flex-shrink-0"
+        title="Mantenix"
       >
-        {/* Outer Industrial Frame (Precision Bevel) */}
-        <div className={`${dimensions.container} bg-gradient-to-br from-[#1E2442] to-[#0C0F1A] rounded-2xl border border-[var(--border-color)] shadow-[0_10px_30px_rgba(0,0,0,0.5)] flex items-center justify-center overflow-hidden transition-all group-hover:border-[#3B7EF8]/50 group-hover:shadow-[0_0_20px_rgba(59,126,248,0.2)]`}>
-          
-          {/* Internal Glow Base (Energy Core) */}
-          <div className="absolute inset-x-0 bottom-0 h-1/2 bg-[#3B7EF8] opacity-5 blur-2xl group-hover:opacity-10 transition-opacity" />
-          
-          {/* Precision Ring (Technical Detail) */}
-          <div className="absolute inset-1 rounded-[14px] border border-[var(--border-color)] bg-[var(--bg-secondary)]/30 backdrop-blur-sm" />
-          
-          {/* Logo Asset with Tech Processing */}
-          <div className="relative z-10 flex items-center justify-center">
-            <Image 
-              src="/logo-new.png" 
-              alt="Mantenix Logo" 
-              width={dimensions.icon} 
-              height={dimensions.icon} 
-              className="object-contain logo-tech-filter"
+        {size === 'sm' ? (
+          /* Micro-mark oficial para escalas pequeñas (16–24 px) */
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            viewBox="0 0 32 32" 
+            width={pixelSizes} 
+            height={pixelSizes}
+            className="block drop-shadow-sm"
+          >
+            <circle cx="16" cy="16" r="15" fill="#0B2A4A" />
+            <path 
+              d="M 7 21 C 9 18, 11 19, 13 18 C 15 17, 16.5 12.5, 19.5 12.5 C 22.5 12.5, 23.5 18, 25.5 18" 
+              fill="none" 
+              stroke="#FFFFFF" 
+              strokeWidth="2.2" 
+              strokeLinecap="round" 
+              strokeLinejoin="round" 
             />
-          </div>
-
-          {/* Scanning Line (Active Process Effect) */}
-          <motion.div 
-            animate={{ 
-              top: ['-100%', '100%'],
-              opacity: [0, 0.5, 0]
-            }} 
-            transition={{ 
-              duration: 3, 
-              repeat: Infinity, 
-              ease: "linear" 
-            }}
-            className="absolute left-0 right-0 h-[10px] bg-gradient-to-b from-transparent via-[#3B7EF8]/40 to-transparent pointer-events-none z-20"
-          />
-
-          {/* Glitch/Energy Pulse in Hover */}
-          <div className="absolute inset-0 bg-[#3B7EF8] opacity-0 group-hover:opacity-[0.03] transition-opacity duration-300" />
-        </div>
-
-        {/* Ambient Backglow */}
-        <div className="absolute -inset-2 bg-[#3B7EF8] blur-2xl opacity-0 group-hover:opacity-10 transition-opacity duration-500 rounded-full" />
+            <circle cx="19.5" cy="12.5" r="2.2" fill="#E8792F" stroke="#FFFFFF" strokeWidth="0.8" />
+          </svg>
+        ) : (
+          /* Símbolo oficial para escalas medianas y grandes (≥ 26 px) */
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            viewBox="0 0 512 512" 
+            width={pixelSizes} 
+            height={pixelSizes}
+            className="block drop-shadow-sm"
+          >
+            <circle cx="256" cy="256" r="240" fill="#0B2A4A" />
+            <path 
+              d="M 120 330 C 145 285, 175 295, 205 280 C 235 265, 260 200, 310 200 C 355 200, 375 280, 400 280" 
+              fill="none" 
+              stroke="#FFFFFF" 
+              strokeWidth="28" 
+              strokeLinecap="round" 
+              strokeLinejoin="round" 
+            />
+            <circle cx="310" cy="200" r="24" fill="#E8792F" stroke="#FFFFFF" strokeWidth="6" />
+          </svg>
+        )}
       </motion.div>
 
       {withText && (
-        <div className="flex flex-col">
-          <span className={`font-black tracking-tighter text-white uppercase leading-none ${dimensions.text}`}>
+        <div className="flex flex-col select-none">
+          <span className={`brand-title tracking-tight text-[var(--text-primary)] leading-none ${textClasses}`}>
             Mantenix
           </span>
-          <span className="text-[8px] font-mono font-bold text-slate-500 tracking-[0.3em] uppercase mt-0.5">
-            Operational Unit
+          <span className="text-[9px] font-sans font-semibold text-[var(--text-muted)] tracking-[0.18em] uppercase mt-0.5">
+            Operaciones
           </span>
         </div>
       )}
-
-      <style jsx global>{`
-        .logo-tech-filter {
-          filter: drop-shadow(0 0 10px rgba(59,126,248,0.5)) brightness(1.1) contrast(1.1);
-          /* In high-end design, we help the logo blend if it has a white square background */
-          /* mix-blend-mode: screen; */
-        }
-      `}</style>
     </div>
   );
 }

@@ -1,0 +1,273 @@
+{
+  "colors": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "name": "Mantenix Color Palette",
+    "version": "1.0.0",
+    "mode": {
+      "light": {
+        "primary": {
+          "base": "#0B2A4A",
+          "hover": "#123A63",
+          "active": "#082036",
+          "subtle": "#E7EDF3"
+        },
+        "accent": {
+          "base": "#E8792F",
+          "hover": "#D66B24",
+          "subtle": "#FDF1E9"
+        },
+        "background": "#F7F8F6",
+        "surface": {
+          "base": "#FFFFFF",
+          "elevated": "#FFFFFF",
+          "subtle": "#F0F2F0"
+        },
+        "border": {
+          "base": "#E1E4E2",
+          "subtle": "#EDF0EE",
+          "focus": "#0B2A4A"
+        },
+        "text": {
+          "primary": "#0B2A4A",
+          "secondary": "#4A5560",
+          "muted": "#8A94A0",
+          "inverse": "#FFFFFF"
+        },
+        "semantics": {
+          "success": {
+            "base": "#16A34A",
+            "subtle": "#DCFCE7",
+            "border": "#86EFAC"
+          },
+          "warning": {
+            "base": "#D97706",
+            "subtle": "#FEF3C7",
+            "border": "#FDE68A"
+          },
+          "danger": {
+            "base": "#DC2626",
+            "subtle": "#FEE2E2",
+            "border": "#FCA5A5"
+          },
+          "info": {
+            "base": "#2563EB",
+            "subtle": "#DBEAFE",
+            "border": "#93C5FD"
+          }
+        }
+      },
+      "dark": {
+        "primary": {
+          "base": "#4C86C9",
+          "hover": "#659CDC",
+          "active": "#3A6DA8",
+          "subtle": "#16324F"
+        },
+        "accent": {
+          "base": "#E8792F",
+          "hover": "#F28C49",
+          "subtle": "#2A1D15"
+        },
+        "background": "#0B1420",
+        "surface": {
+          "base": "#121D2B",
+          "elevated": "#172435",
+          "subtle": "#0E1824"
+        },
+        "border": {
+          "base": "#223347",
+          "subtle": "#1A2737",
+          "focus": "#4C86C9"
+        },
+        "text": {
+          "primary": "#F7F8F6",
+          "secondary": "#AAB4BF",
+          "muted": "#5C6B7B",
+          "inverse": "#0B1420"
+        },
+        "semantics": {
+          "success": {
+            "base": "#22C55E",
+            "subtle": "#052E16",
+            "border": "#14532D"
+          },
+          "warning": {
+            "base": "#F59E0B",
+            "subtle": "#451A03",
+            "border": "#78350F"
+          },
+          "danger": {
+            "base": "#EF4444",
+            "subtle": "#450A0A",
+            "border": "#7F1D1D"
+          },
+          "info": {
+            "base": "#3B82F6",
+            "subtle": "#172554",
+            "border": "#1E3A8A"
+          }
+        }
+      }
+    }
+  },
+  "typography": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "name": "Mantenix Typography Tokens",
+    "fontFamilies": {
+      "brand": "Syne, system-ui, -apple-system, sans-serif",
+      "ui": "Inter, system-ui, -apple-system, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "scales": {
+      "display": {
+        "family": "brand",
+        "size": "56px",
+        "lineHeight": "1.1",
+        "weight": 800,
+        "tracking": "-0.03em"
+      },
+      "h1": {
+        "family": "brand",
+        "size": "40px",
+        "lineHeight": "1.15",
+        "weight": 800,
+        "tracking": "-0.02em"
+      },
+      "h2": {
+        "family": "brand",
+        "size": "32px",
+        "lineHeight": "1.2",
+        "weight": 700,
+        "tracking": "-0.02em"
+      },
+      "h3": {
+        "family": "ui",
+        "size": "24px",
+        "lineHeight": "1.3",
+        "weight": 600,
+        "tracking": "-0.01em"
+      },
+      "h4": {
+        "family": "ui",
+        "size": "20px",
+        "lineHeight": "1.35",
+        "weight": 600,
+        "tracking": "-0.01em"
+      },
+      "bodyLarge": {
+        "family": "ui",
+        "size": "18px",
+        "lineHeight": "1.5",
+        "weight": 400
+      },
+      "body": {
+        "family": "ui",
+        "size": "15px",
+        "lineHeight": "1.5",
+        "weight": 400
+      },
+      "bodySmall": {
+        "family": "ui",
+        "size": "13px",
+        "lineHeight": "1.4",
+        "weight": 400
+      },
+      "caption": {
+        "family": "ui",
+        "size": "12px",
+        "lineHeight": "1.35",
+        "weight": 500,
+        "tracking": "0.01em"
+      },
+      "numericLarge": {
+        "family": "ui",
+        "size": "36px",
+        "lineHeight": "1.1",
+        "weight": 700,
+        "fontVariantNumeric": "tabular-nums"
+      },
+      "numeric": {
+        "family": "ui",
+        "size": "15px",
+        "lineHeight": "1.4",
+        "weight": 600,
+        "fontVariantNumeric": "tabular-nums"
+      }
+    }
+  },
+  "spacing": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "name": "Mantenix Spacing Tokens",
+    "unit": "4px",
+    "scale": {
+      "0": "0px",
+      "1": "4px",
+      "2": "8px",
+      "3": "12px",
+      "4": "16px",
+      "5": "20px",
+      "6": "24px",
+      "8": "32px",
+      "10": "40px",
+      "12": "48px",
+      "16": "64px",
+      "20": "80px",
+      "24": "96px"
+    },
+    "layout": {
+      "touchTargetMin": "44px",
+      "sidebarWidth": "260px",
+      "sidebarCollapsedWidth": "64px",
+      "headerHeight": "60px",
+      "containerMaxWidth": "1440px"
+    }
+  },
+  "radius": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "name": "Mantenix Border Radius Tokens",
+    "scale": {
+      "none": "0px",
+      "sm": "6px",
+      "control": "10px",
+      "md": "10px",
+      "surface": "14px",
+      "lg": "14px",
+      "xl": "20px",
+      "full": "9999px"
+    }
+  },
+  "shadows": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "name": "Mantenix Elevation & Shadows",
+    "light": {
+      "sm": "0 1px 2px rgba(11, 42, 74, 0.05)",
+      "card": "0 2px 8px rgba(11, 42, 74, 0.06)",
+      "floating": "0 8px 24px rgba(11, 42, 74, 0.12)",
+      "modal": "0 16px 40px rgba(11, 42, 74, 0.18)",
+      "focusRing": "0 0 0 2px #FFFFFF, 0 0 0 4px #0B2A4A"
+    },
+    "dark": {
+      "sm": "0 1px 3px rgba(0, 0, 0, 0.3)",
+      "card": "0 4px 12px rgba(0, 0, 0, 0.4)",
+      "floating": "0 8px 28px rgba(0, 0, 0, 0.5)",
+      "modal": "0 20px 48px rgba(0, 0, 0, 0.7)",
+      "focusRing": "0 0 0 2px #0B1420, 0 0 0 4px #4C86C9"
+    },
+    "overlay": "rgba(11, 20, 32, 0.60)"
+  },
+  "motion": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "name": "Mantenix Motion Tokens",
+    "duration": {
+      "fast": "150ms",
+      "normal": "250ms",
+      "slow": "400ms"
+    },
+    "easing": {
+      "default": "cubic-bezier(0.4, 0, 0.2, 1)",
+      "in": "cubic-bezier(0.4, 0, 1, 1)",
+      "out": "cubic-bezier(0, 0, 0.2, 1)",
+      "bounce": "cubic-bezier(0.34, 1.56, 0.64, 1)"
+    }
+  }
+}

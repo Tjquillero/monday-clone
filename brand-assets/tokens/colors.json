@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "name": "Mantenix Color Palette",
+  "version": "1.0.0",
+  "mode": {
+    "light": {
+      "primary": {
+        "base": "#0B2A4A",
+        "hover": "#123A63",
+        "active": "#082036",
+        "subtle": "#E7EDF3"
+      },
+      "accent": {
+        "base": "#E8792F",
+        "hover": "#D66B24",
+        "subtle": "#FDF1E9"
+      },
+      "background": "#F7F8F6",
+      "surface": {
+        "base": "#FFFFFF",
+        "elevated": "#FFFFFF",
+        "subtle": "#F0F2F0"
+      },
+      "border": {
+        "base": "#E1E4E2",
+        "subtle": "#EDF0EE",
+        "focus": "#0B2A4A"
+      },
+      "text": {
+        "primary": "#0B2A4A",
+        "secondary": "#4A5560",
+        "muted": "#8A94A0",
+        "inverse": "#FFFFFF"
+      },
+      "semantics": {
+        "success": {
+          "base": "#16A34A",
+          "subtle": "#DCFCE7",
+          "border": "#86EFAC"
+        },
+        "warning": {
+          "base": "#D97706",
+          "subtle": "#FEF3C7",
+          "border": "#FDE68A"
+        },
+        "danger": {
+          "base": "#DC2626",
+          "subtle": "#FEE2E2",
+          "border": "#FCA5A5"
+        },
+        "info": {
+          "base": "#2563EB",
+          "subtle": "#DBEAFE",
+          "border": "#93C5FD"
+        }
+      }
+    },
+    "dark": {
+      "primary": {
+        "base": "#4C86C9",
+        "hover": "#659CDC",
+        "active": "#3A6DA8",
+        "subtle": "#16324F"
+      },
+      "accent": {
+        "base": "#E8792F",
+        "hover": "#F28C49",
+        "subtle": "#2A1D15"
+      },
+      "background": "#0B1420",
+      "surface": {
+        "base": "#121D2B",
+        "elevated": "#172435",
+        "subtle": "#0E1824"
+      },
+      "border": {
+        "base": "#223347",
+        "subtle": "#1A2737",
+        "focus": "#4C86C9"
+      },
+      "text": {
+        "primary": "#F7F8F6",
+        "secondary": "#AAB4BF",
+        "muted": "#5C6B7B",
+        "inverse": "#0B1420"
+      },
+      "semantics": {
+        "success": {
+          "base": "#22C55E",
+          "subtle": "#052E16",
+          "border": "#14532D"
+        },
+        "warning": {
+          "base": "#F59E0B",
+          "subtle": "#451A03",
+          "border": "#78350F"
+        },
+        "danger": {
+          "base": "#EF4444",
+          "subtle": "#450A0A",
+          "border": "#7F1D1D"
+        },
+        "info": {
+          "base": "#3B82F6",
+          "subtle": "#172554",
+          "border": "#1E3A8A"
+        }
+      }
+    }
+  }
+}

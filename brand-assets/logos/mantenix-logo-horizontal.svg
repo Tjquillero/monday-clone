@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 180" width="700" height="180">
+  <defs>
+    <style>
+      .brand-name {
+        font-family: 'Syne', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-weight: 800;
+        font-size: 88px;
+        fill: #0B2A4A;
+        letter-spacing: -2px;
+      }
+    </style>
+  </defs>
+  
+  <g transform="translate(30, 20)">
+    <circle cx="70" cy="70" r="66" fill="#0B2A4A"/>
+    <path d="M 33 90 C 40 78, 48 81, 56 77 C 64 73, 71 55, 85 55 C 97 55, 103 77, 110 77" fill="none" stroke="#FFFFFF" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="85" cy="55" r="6.8" fill="#E8792F" stroke="#FFFFFF" stroke-width="1.8"/>
+  </g>
+  <text x="195" y="116" class="brand-name">Mantenix</text>
+</svg>

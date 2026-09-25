@@ -51,37 +51,37 @@ export const ExecutionForm: React.FC<ExecutionFormProps> = ({
   const jornalesUsed = (workerCount * hoursWorked) / 8.0;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 text-[var(--text-primary)]">
       {/* 1. Desglose de Magnitudes Físicas */}
-      <div className="bg-slate-50/70 border border-slate-200/80 rounded-xl p-3.5 space-y-2">
+      <div className="bg-[var(--color-surface-subtle)] border border-[var(--border-color)] rounded-[var(--radius-control)] p-3.5 space-y-2">
         <div className="flex items-center justify-between text-xs">
-          <span className="font-semibold text-slate-700">Actividad:</span>
-          <span className="font-bold text-slate-800 truncate max-w-[240px]">{taskName}</span>
+          <span className="font-semibold text-[var(--text-secondary)]">Actividad:</span>
+          <span className="font-bold text-[var(--text-primary)] truncate max-w-[240px]">{taskName}</span>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200/60 text-center">
+        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[var(--border-color)] text-center">
           <div>
-            <div className="text-[10px] text-slate-400 uppercase font-semibold">Meta Planificada</div>
-            <div className="text-sm font-bold text-slate-800">
-              {plannedQty} <span className="text-xs font-normal text-slate-500">{contractualUnit}</span>
+            <div className="text-[10px] text-[var(--text-muted)] uppercase font-semibold">Meta Planificada</div>
+            <div className="text-sm font-bold font-mono text-[var(--text-primary)]">
+              {plannedQty} <span className="text-xs font-normal text-[var(--text-muted)]">{contractualUnit}</span>
             </div>
           </div>
           <div>
-            <div className="text-[10px] text-slate-400 uppercase font-semibold">Reportado Previo</div>
-            <div className="text-sm font-bold text-slate-700">
-              {previouslyReportedQty} <span className="text-xs font-normal text-slate-500">{contractualUnit}</span>
+            <div className="text-[10px] text-[var(--text-muted)] uppercase font-semibold">Reportado Previo</div>
+            <div className="text-sm font-bold font-mono text-[var(--text-secondary)]">
+              {previouslyReportedQty} <span className="text-xs font-normal text-[var(--text-muted)]">{contractualUnit}</span>
             </div>
           </div>
           <div>
-            <div className="text-[10px] text-slate-400 uppercase font-semibold">Saldo Pendiente</div>
-            <div className="text-sm font-bold text-amber-700">
-              {remainingReportedQty} <span className="text-xs font-normal text-slate-500">{contractualUnit}</span>
+            <div className="text-[10px] text-[var(--text-muted)] uppercase font-semibold">Saldo Pendiente</div>
+            <div className="text-sm font-bold font-mono text-[var(--color-warning)]">
+              {remainingReportedQty} <span className="text-xs font-normal text-[var(--text-muted)]">{contractualUnit}</span>
             </div>
           </div>
         </div>
 
         {previouslyVerifiedQty > 0 && (
-          <div className="pt-2 border-t border-slate-200/60 text-[11px] text-emerald-700 flex items-center justify-center font-medium">
+          <div className="pt-2 border-t border-[var(--border-color)] text-[11px] text-[var(--color-success)] flex items-center justify-center font-medium">
             <ShieldCheck className="w-3.5 h-3.5 mr-1" />
             {previouslyVerifiedQty} {contractualUnit} aprobados formalmente por supervisión
           </div>
@@ -90,10 +90,10 @@ export const ExecutionForm: React.FC<ExecutionFormProps> = ({
 
       {/* 2. Campo de Cantidad Física Ejecutada */}
       <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide flex items-center justify-between">
+        <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide flex items-center justify-between">
           <span>Avance Físico de Hoy *</span>
-          <span className="text-[11px] font-normal text-slate-400">
-            Unidad contractual: <strong className="text-slate-700">{contractualUnit}</strong> (solo lectura)
+          <span className="text-[11px] font-normal text-[var(--text-muted)]">
+            Unidad contractual: <strong className="text-[var(--text-primary)]">{contractualUnit}</strong> (solo lectura)
           </span>
         </label>
         <div className="relative">
@@ -105,16 +105,16 @@ export const ExecutionForm: React.FC<ExecutionFormProps> = ({
             onChange={(e) => onExecutedQtyChange(parseFloat(e.target.value) || 0)}
             placeholder="0.0"
             disabled={disabled}
-            className="w-full text-base font-bold px-3 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-slate-800 pr-16"
+            className="w-full text-base font-bold font-mono px-3 py-2.5 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-control)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] text-[var(--text-primary)] pr-16"
           />
-          <div className="absolute right-3 top-2.5 text-sm font-semibold text-slate-400 select-none">
+          <div className="absolute right-3 top-2.5 text-sm font-semibold text-[var(--text-muted)] select-none">
             {contractualUnit}
           </div>
         </div>
         {executedQty > 0 && (
-          <div className="text-[11px] text-slate-500 flex items-center justify-between pt-0.5">
+          <div className="text-[11px] text-[var(--text-muted)] flex items-center justify-between pt-0.5">
             <span>Proyección total con este reporte:</span>
-            <span className="font-semibold text-slate-700">
+            <span className="font-semibold font-mono text-[var(--text-primary)]">
               {projectedTotalReported} / {plannedQty} {contractualUnit} ({Math.min(100, Math.round((projectedTotalReported / plannedQty) * 100))}%)
             </span>
           </div>
@@ -124,27 +124,29 @@ export const ExecutionForm: React.FC<ExecutionFormProps> = ({
       {/* 3. Personal y Duración (Cálculo de Jornales Equivalentes) */}
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-slate-700 flex items-center">
-            <Users className="w-3.5 h-3.5 mr-1 text-slate-500" />
+          <label htmlFor="worker-count-input" className="text-xs font-semibold text-[var(--text-secondary)] flex items-center">
+            <Users className="w-3.5 h-3.5 mr-1 text-[var(--text-muted)]" />
             N° Trabajadores *
           </label>
           <input
+            id="worker-count-input"
             type="number"
             min="1"
             max="50"
             value={workerCount}
             onChange={(e) => onWorkerCountChange(Math.max(1, parseInt(e.target.value, 10) || 1))}
             disabled={disabled}
-            className="w-full text-sm font-semibold px-3 py-2 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary text-slate-800"
+            className="w-full text-sm font-semibold font-mono px-3 py-2 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-control)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] text-[var(--text-primary)]"
           />
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-slate-700 flex items-center">
-            <Clock className="w-3.5 h-3.5 mr-1 text-slate-500" />
+          <label htmlFor="hours-worked-input" className="text-xs font-semibold text-[var(--text-secondary)] flex items-center">
+            <Clock className="w-3.5 h-3.5 mr-1 text-[var(--text-muted)]" />
             Horas Dedicadas *
           </label>
           <input
+            id="hours-worked-input"
             type="number"
             min="0.5"
             max="24"
@@ -152,21 +154,21 @@ export const ExecutionForm: React.FC<ExecutionFormProps> = ({
             value={hoursWorked}
             onChange={(e) => onHoursWorkedChange(Math.max(0.5, parseFloat(e.target.value) || 1))}
             disabled={disabled}
-            className="w-full text-sm font-semibold px-3 py-2 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary text-slate-800"
+            className="w-full text-sm font-semibold font-mono px-3 py-2 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-control)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] text-[var(--text-primary)]"
           />
         </div>
       </div>
 
-      <div className="text-[11px] text-slate-500 bg-slate-50 p-2.5 rounded-lg flex items-center justify-between border border-slate-100">
+      <div className="text-[11px] text-[var(--text-muted)] bg-[var(--color-surface-subtle)] p-2.5 rounded-[var(--radius-control)] flex items-center justify-between border border-[var(--border-color)]">
         <span>Jornales de turno equivalentes:</span>
-        <span className="font-bold text-slate-800">
-          {jornalesUsed.toFixed(2)} JR <span className="text-[10px] font-normal text-slate-400">({workerCount} trab. × {hoursWorked} h / 8h)</span>
+        <span className="font-bold font-mono text-[var(--text-primary)]">
+          {jornalesUsed.toFixed(2)} JR <span className="text-[10px] font-normal text-[var(--text-muted)]">({workerCount} trab. × {hoursWorked} h / 8h)</span>
         </span>
       </div>
 
       {/* 4. Decisión de Continuidad Operativa */}
-      <div className="space-y-2 pt-2 border-t border-slate-100">
-        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide block">
+      <div className="space-y-2 pt-2 border-t border-[var(--border-color)]">
+        <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide block">
           Decisión de Cierre de Jornada *
         </label>
         <div className="grid grid-cols-2 gap-3">
@@ -174,17 +176,17 @@ export const ExecutionForm: React.FC<ExecutionFormProps> = ({
             type="button"
             onClick={() => onContinuationDecisionChange('CONTINUA_MANANA')}
             disabled={disabled}
-            className={`p-3 rounded-xl border text-left transition-all ${
+            className={`p-3 rounded-[var(--radius-control)] border text-left transition-all ${
               continuationDecision === 'CONTINUA_MANANA'
-                ? 'bg-blue-50 border-blue-400 text-blue-900 ring-2 ring-blue-400/20'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                ? 'bg-[var(--color-info-subtle)] border-[var(--color-info)] text-[var(--color-info)] ring-2 ring-[var(--color-info)]/20'
+                : 'bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--color-surface-subtle)]'
             }`}
           >
             <div className="flex items-center space-x-1.5 text-xs font-bold">
-              <ArrowRight className="w-3.5 h-3.5 text-blue-600" />
+              <ArrowRight className="w-3.5 h-3.5 text-[var(--color-info)]" />
               <span>Continúa Mañana</span>
             </div>
-            <div className="text-[10px] text-slate-500 mt-1">
+            <div className="text-[10px] text-[var(--text-muted)] mt-1">
               La cuadrilla retomará esta actividad en el siguiente turno.
             </div>
           </button>
@@ -193,17 +195,17 @@ export const ExecutionForm: React.FC<ExecutionFormProps> = ({
             type="button"
             onClick={() => onContinuationDecisionChange('TERMINADA_HOY')}
             disabled={disabled}
-            className={`p-3 rounded-xl border text-left transition-all ${
+            className={`p-3 rounded-[var(--radius-control)] border text-left transition-all ${
               continuationDecision === 'TERMINADA_HOY'
-                ? 'bg-emerald-50 border-emerald-400 text-emerald-900 ring-2 ring-emerald-400/20'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                ? 'bg-[var(--color-success-subtle)] border-[var(--color-success)] text-[var(--color-success)] ring-2 ring-[var(--color-success)]/20'
+                : 'bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--color-surface-subtle)]'
             }`}
           >
             <div className="flex items-center space-x-1.5 text-xs font-bold">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <CheckCircle2 className="w-3.5 h-3.5 text-[var(--color-success)]" />
               <span>Terminada Hoy</span>
             </div>
-            <div className="text-[10px] text-slate-500 mt-1">
+            <div className="text-[10px] text-[var(--text-muted)] mt-1">
               Actividad concluida físicamente en este turno.
             </div>
           </button>
@@ -212,7 +214,7 @@ export const ExecutionForm: React.FC<ExecutionFormProps> = ({
 
       {/* 5. Observaciones de Campo (Opcional) */}
       <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-slate-700 block">
+        <label className="text-xs font-semibold text-[var(--text-secondary)] block">
           Notas de Campo (Opcional)
         </label>
         <textarea
@@ -221,7 +223,7 @@ export const ExecutionForm: React.FC<ExecutionFormProps> = ({
           onChange={(e) => onNotesChange(e.target.value)}
           placeholder="Condiciones climáticas, novedades del terreno..."
           disabled={disabled}
-          className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary text-slate-800 resize-none"
+          className="w-full text-xs px-3 py-2 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-control)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] text-[var(--text-primary)] resize-none"
         />
       </div>
     </div>

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="64" height="64">
+  <defs>
+    <style>
+      .terrain-line {
+        fill: none;
+        stroke: #FFFFFF;
+        stroke-width: 28;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+    </style>
+  </defs>
+  <circle cx="256" cy="256" r="240" fill="#0B2A4A"/>
+  <!-- Perfil de terreno continuo: superficie dura, valle suave, cresta de control, descenso operativo -->
+  <path class="terrain-line" d="M 120 330 C 145 285, 175 295, 205 280 C 235 265, 260 200, 310 200 C 355 200, 375 280, 400 280" />
+  <!-- Nodo de verificación activa / punto de control -->
+  <circle cx="310" cy="200" r="24" fill="#E8792F" stroke="#FFFFFF" stroke-width="6"/>
+</svg>

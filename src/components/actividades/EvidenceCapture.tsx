@@ -62,26 +62,26 @@ export const EvidenceCapture: React.FC<EvidenceCaptureProps> = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 text-[var(--text-primary)]">
       <div className="flex items-center justify-between">
-        <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-          <Camera className="w-4 h-4 text-primary shrink-0" />
+        <label className="text-xs font-bold font-brand text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-1.5">
+          <Camera className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
           <span>Evidencia Fotográfica de Trabajo</span>
         </label>
-        <span className="text-[11px] text-slate-400">Antes y Después</span>
+        <span className="text-[11px] text-[var(--text-muted)]">Antes y Después</span>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* BLOQUE FOTO ANTES */}
-        <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/90 flex flex-col justify-between space-y-3">
+        <div className="p-3.5 bg-[var(--color-surface-subtle)] rounded-[var(--radius-surface)] border border-[var(--border-color)] flex flex-col justify-between space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+            <span className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-[var(--color-info)]" />
               <span>ANTES (Inicio de labor)</span>
             </span>
             {beforePhoto && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                <CheckCircle className="w-3 h-3 mr-1 text-emerald-600 shrink-0" />
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-[var(--color-success-subtle)] text-[var(--color-success)] border border-[var(--color-success)]/30">
+                <CheckCircle className="w-3 h-3 mr-1 text-[var(--color-success)] shrink-0" />
                 ✓ Evidencia
               </span>
             )}
@@ -89,7 +89,7 @@ export const EvidenceCapture: React.FC<EvidenceCaptureProps> = ({
 
           {beforePhoto ? (
             <div className="space-y-2">
-              <div className="relative rounded-xl overflow-hidden border border-slate-300 aspect-video bg-black flex items-center justify-center">
+              <div className="relative rounded-[var(--radius-control)] overflow-hidden border border-[var(--border-color)] aspect-video bg-black flex items-center justify-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={beforePhoto.previewUrl}
@@ -100,7 +100,7 @@ export const EvidenceCapture: React.FC<EvidenceCaptureProps> = ({
                   type="button"
                   onClick={() => handleRemove('before')}
                   disabled={disabled}
-                  className="absolute top-2 right-2 p-1.5 bg-slate-900/80 hover:bg-slate-900 text-white rounded-full transition-colors shadow-sm"
+                  className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black text-white rounded-full transition-colors shadow-sm"
                   title="Eliminar foto"
                 >
                   <X className="w-4 h-4" />
@@ -111,9 +111,9 @@ export const EvidenceCapture: React.FC<EvidenceCaptureProps> = ({
                 type="button"
                 onClick={() => !disabled && beforeInputRef.current?.click()}
                 disabled={disabled}
-                className="w-full min-h-[44px] px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors active:scale-98 touch-manipulation"
+                className="w-full min-h-[44px] px-3 py-2 bg-[var(--color-surface-subtle)] hover:bg-[var(--border-color)]/30 text-[var(--text-primary)] rounded-[var(--radius-control)] text-xs font-bold flex items-center justify-center gap-1.5 transition-colors active:scale-98 touch-manipulation"
               >
-                <RefreshCw className="w-4 h-4 text-slate-600" />
+                <RefreshCw className="w-4 h-4 text-[var(--text-secondary)]" />
                 <span>TOMAR OTRA FOTO</span>
               </button>
             </div>
@@ -122,18 +122,18 @@ export const EvidenceCapture: React.FC<EvidenceCaptureProps> = ({
               type="button"
               onClick={() => !disabled && beforeInputRef.current?.click()}
               disabled={disabled}
-              className={`w-full min-h-[120px] p-4 border-2 border-dashed border-slate-300 hover:border-primary rounded-xl flex flex-col items-center justify-center gap-2 bg-white hover:bg-slate-50 transition-all active:scale-98 touch-manipulation ${
+              className={`w-full min-h-[120px] p-4 border-2 border-dashed border-[var(--border-color)] hover:border-[var(--color-primary)] rounded-[var(--radius-control)] flex flex-col items-center justify-center gap-2 bg-[var(--card-bg)] hover:bg-[var(--color-surface-subtle)] transition-all active:scale-98 touch-manipulation ${
                 disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
               }`}
             >
-              <div className="p-3 rounded-full bg-primary/10 text-primary">
+              <div className="p-3 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)]">
                 <Camera className="w-6 h-6" />
               </div>
               <div className="text-center">
-                <span className="text-sm font-extrabold text-slate-800 block">
+                <span className="text-sm font-extrabold text-[var(--text-primary)] block">
                   📷 TOMAR FOTO ANTES
                 </span>
-                <span className="text-[11px] text-slate-400 mt-0.5 block">
+                <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block">
                   Toca para abrir cámara o archivos
                 </span>
               </div>
@@ -152,15 +152,15 @@ export const EvidenceCapture: React.FC<EvidenceCaptureProps> = ({
         </div>
 
         {/* BLOQUE FOTO DESPUÉS */}
-        <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/90 flex flex-col justify-between space-y-3">
+        <div className="p-3.5 bg-[var(--color-surface-subtle)] rounded-[var(--radius-surface)] border border-[var(--border-color)] flex flex-col justify-between space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+            <span className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-[var(--color-success)]" />
               <span>DESPUÉS (Fin de labor)</span>
             </span>
             {afterPhoto && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                <CheckCircle className="w-3 h-3 mr-1 text-emerald-600 shrink-0" />
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-[var(--color-success-subtle)] text-[var(--color-success)] border border-[var(--color-success)]/30">
+                <CheckCircle className="w-3 h-3 mr-1 text-[var(--color-success)] shrink-0" />
                 ✓ Evidencia
               </span>
             )}
@@ -168,7 +168,7 @@ export const EvidenceCapture: React.FC<EvidenceCaptureProps> = ({
 
           {afterPhoto ? (
             <div className="space-y-2">
-              <div className="relative rounded-xl overflow-hidden border border-slate-300 aspect-video bg-black flex items-center justify-center">
+              <div className="relative rounded-[var(--radius-control)] overflow-hidden border border-[var(--border-color)] aspect-video bg-black flex items-center justify-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={afterPhoto.previewUrl}
@@ -179,7 +179,7 @@ export const EvidenceCapture: React.FC<EvidenceCaptureProps> = ({
                   type="button"
                   onClick={() => handleRemove('after')}
                   disabled={disabled}
-                  className="absolute top-2 right-2 p-1.5 bg-slate-900/80 hover:bg-slate-900 text-white rounded-full transition-colors shadow-sm"
+                  className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black text-white rounded-full transition-colors shadow-sm"
                   title="Eliminar foto"
                 >
                   <X className="w-4 h-4" />
@@ -190,9 +190,9 @@ export const EvidenceCapture: React.FC<EvidenceCaptureProps> = ({
                 type="button"
                 onClick={() => !disabled && afterInputRef.current?.click()}
                 disabled={disabled}
-                className="w-full min-h-[44px] px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors active:scale-98 touch-manipulation"
+                className="w-full min-h-[44px] px-3 py-2 bg-[var(--color-surface-subtle)] hover:bg-[var(--border-color)]/30 text-[var(--text-primary)] rounded-[var(--radius-control)] text-xs font-bold flex items-center justify-center gap-1.5 transition-colors active:scale-98 touch-manipulation"
               >
-                <RefreshCw className="w-4 h-4 text-slate-600" />
+                <RefreshCw className="w-4 h-4 text-[var(--text-secondary)]" />
                 <span>TOMAR OTRA FOTO</span>
               </button>
             </div>
@@ -201,18 +201,18 @@ export const EvidenceCapture: React.FC<EvidenceCaptureProps> = ({
               type="button"
               onClick={() => !disabled && afterInputRef.current?.click()}
               disabled={disabled}
-              className={`w-full min-h-[120px] p-4 border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-xl flex flex-col items-center justify-center gap-2 bg-white hover:bg-slate-50 transition-all active:scale-98 touch-manipulation ${
+              className={`w-full min-h-[120px] p-4 border-2 border-dashed border-[var(--border-color)] hover:border-[var(--color-success)] rounded-[var(--radius-control)] flex flex-col items-center justify-center gap-2 bg-[var(--card-bg)] hover:bg-[var(--color-surface-subtle)] transition-all active:scale-98 touch-manipulation ${
                 disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
               }`}
             >
-              <div className="p-3 rounded-full bg-emerald-100 text-emerald-700">
+              <div className="p-3 rounded-full bg-[var(--color-success-subtle)] text-[var(--color-success)]">
                 <Camera className="w-6 h-6" />
               </div>
               <div className="text-center">
-                <span className="text-sm font-extrabold text-slate-800 block">
+                <span className="text-sm font-extrabold text-[var(--text-primary)] block">
                   📷 TOMAR FOTO DESPUÉS
                 </span>
-                <span className="text-[11px] text-slate-400 mt-0.5 block">
+                <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block">
                   Toca para abrir cámara o archivos
                 </span>
               </div>

@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <style>
+      .og-title {
+        font-family: 'Syne', system-ui, -apple-system, sans-serif;
+        font-weight: 800;
+        font-size: 72px;
+        fill: #FFFFFF;
+        letter-spacing: -2px;
+      }
+      .og-subtitle {
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        font-weight: 500;
+        font-size: 26px;
+        fill: #AAB4BF;
+        line-height: 1.5;
+      }
+      .og-badge {
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        font-weight: 700;
+        font-size: 14px;
+        fill: #E8792F;
+        letter-spacing: 2px;
+      }
+    </style>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B1420" />
+      <stop offset="50%" stop-color="#0B2A4A" />
+      <stop offset="100%" stop-color="#082036" />
+    </linearGradient>
+  </defs>
+  
+  <rect width="1200" height="630" fill="url(#bg-grad)" />
+  <circle cx="1100" cy="150" r="350" fill="#123A63" opacity="0.3" />
+  <circle cx="200" cy="550" r="250" fill="#E8792F" opacity="0.08" />
+
+  <g transform="translate(100, 100)">
+    <circle cx="80" cy="80" r="76" fill="#0B2A4A" stroke="#223347" stroke-width="4"/>
+    <path d="M 38 103 C 46 89, 55 93, 64 88 C 73 83, 81 63, 97 63 C 111 63, 117 88, 125 88" fill="none" stroke="#FFFFFF" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="97" cy="63" r="7.8" fill="#E8792F" stroke="#FFFFFF" stroke-width="2"/>
+  </g>
+
+  <g transform="translate(290, 155)">
+    <text x="0" y="40" class="og-title">Mantenix</text>
+  </g>
+
+  <g transform="translate(100, 360)">
+    <rect x="0" y="0" width="220" height="34" rx="17" fill="#16324F" stroke="#223347" stroke-width="1.5"/>
+    <text x="20" y="22" class="og-badge">OPERACIONES &amp; POA</text>
+
+    <text x="0" y="85" class="og-subtitle">Control · Continuidad · Ejecución · Infraestructura</text>
+    <text x="0" y="125" style="font-family: 'Inter', system-ui, sans-serif; font-size: 20px; fill: #659CDC;">Sistema Integral de Gestión y Evidencia de Mantenimiento en Campo</text>
+  </g>
+
+  <line x1="100" y1="540" x2="1100" y2="540" stroke="#223347" stroke-width="1.5" />
+  <text x="100" y="580" style="font-family: 'Inter', system-ui, sans-serif; font-size: 16px; fill: #4A5560;">© 2026 Mantenix Platform · Control de Infraestructura y Actas</text>
+  <text x="1100" y="580" style="font-family: 'Inter', system-ui, sans-serif; font-size: 16px; fill: #E8792F; text-anchor: end; font-weight: 600;">v1.3.0</text>
+</svg>

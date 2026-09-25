@@ -97,10 +97,10 @@ export default function NotificationBell() {
 
     const getIcon = (type: string) => {
         switch (type) {
-            case 'alert': return <AlertTriangle size={16} className="text-rose-500" />;
-            case 'success': return <CheckCircle size={16} className="text-emerald-500" />;
-            case 'mention': return <Info size={16} className="text-blue-500" />;
-            default: return <Info size={16} className="text-slate-400" />;
+            case 'alert': return <AlertTriangle size={16} className="text-[var(--color-danger)]" />;
+            case 'success': return <CheckCircle size={16} className="text-[var(--color-success)]" />;
+            case 'mention': return <Info size={16} className="text-[var(--color-info)]" />;
+            default: return <Info size={16} className="text-[var(--text-muted)]" />;
         }
     };
 
@@ -108,11 +108,12 @@ export default function NotificationBell() {
         <div className="relative">
             <button 
                 onClick={() => setIsOpen(!isOpen)}
-                className="relative p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all rounded-xl border border-transparent hover:border-slate-100"
+                className="relative p-3 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-surface-subtle)] transition-all rounded-[var(--radius-control)]"
+                title="Notificaciones"
             >
                 <Bell size={20} />
                 {unreadCount > 0 && (
-                    <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-rose-500 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white">
+                    <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-[var(--color-danger)] text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-[var(--card-bg)]">
                         {unreadCount}
                     </span>
                 )}
@@ -126,41 +127,41 @@ export default function NotificationBell() {
                             initial={{ opacity: 0, x: -10, scale: 0.95 }}
                             animate={{ opacity: 1, x: 0, scale: 1 }}
                             exit={{ opacity: 0, x: -10, scale: 0.95 }}
-                            className="absolute left-full top-0 ml-4 w-80 bg-white rounded-[2rem] shadow-2xl shadow-slate-200/50 border border-slate-100 z-50 overflow-hidden font-sans"
+                            className="absolute left-full top-0 ml-4 w-80 bg-[var(--card-bg)] rounded-[var(--radius-surface)] shadow-[var(--shadow-floating)] border border-[var(--border-color)] z-50 overflow-hidden font-sans"
                         >
-                            <div className="p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
-                                <h3 className="text-slate-900 font-black text-sm uppercase tracking-widest">Notificaciones</h3>
-                                <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-slate-600">
+                            <div className="p-4 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--color-surface-subtle)]">
+                                <h3 className="text-[var(--text-primary)] brand-title text-sm tracking-tight">Notificaciones</h3>
+                                <button onClick={() => setIsOpen(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
                                     <X size={16} />
                                 </button>
                             </div>
 
-                            <div className="max-h-[350px] overflow-y-auto no-scrollbar">
+                            <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
                                 {notifications.length === 0 ? (
-                                    <div className="p-12 text-center text-slate-400 text-xs font-medium">
+                                    <div className="p-12 text-center text-[var(--text-muted)] text-xs font-medium">
                                         No hay notificaciones nuevas
                                     </div>
                                 ) : (
                                     notifications.map(n => (
                                         <div 
                                             key={n.id} 
-                                            className={`p-5 border-b border-slate-50 transition-colors hover:bg-slate-50 relative group ${!n.read ? 'bg-emerald-50/20' : ''}`}
+                                            className={`p-4 border-b border-[var(--border-color)] transition-colors hover:bg-[var(--color-surface-subtle)] relative group ${!n.read ? 'bg-[var(--color-primary-subtle)]/40' : ''}`}
                                         >
-                                            <div className="flex gap-4">
-                                                <div className="mt-1">{getIcon(n.type)}</div>
-                                                <div className="flex-1">
-                                                    <div className="flex justify-between items-start">
-                                                        <h4 className={`text-slate-800 font-bold text-xs ${!n.read ? 'text-emerald-700' : ''}`}>{n.title}</h4>
-                                                        <span className="text-[10px] text-slate-400 font-medium italic">
+                                            <div className="flex gap-3">
+                                                <div className="mt-0.5">{getIcon(n.type)}</div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex justify-between items-start gap-2">
+                                                        <h4 className={`text-xs font-bold truncate ${!n.read ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>{n.title}</h4>
+                                                        <span className="text-[10px] text-[var(--text-muted)] font-medium whitespace-nowrap">
                                                             {formatDistanceToNow(new Date(n.created_at), { addSuffix: true, locale: es })}
                                                         </span>
                                                     </div>
-                                                    <p className="text-slate-500 text-[11px] leading-relaxed mt-1">{n.message}</p>
+                                                    <p className="text-[var(--text-secondary)] text-[11px] leading-relaxed mt-1">{n.message}</p>
                                                     
                                                     {!n.read && (
                                                         <button 
                                                             onClick={() => markAsRead(n.id)}
-                                                            className="mt-3 flex items-center gap-1.5 text-[10px] font-black text-emerald-600 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity"
+                                                            className="mt-2.5 flex items-center gap-1.5 text-[10px] font-bold text-[var(--color-accent)] uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity"
                                                         >
                                                             <Check size={12} /> Marcar como leída
                                                         </button>
@@ -173,11 +174,11 @@ export default function NotificationBell() {
                             </div>
 
                             {notifications.length > 0 && (
-                                <div className="p-4 bg-slate-50/50 text-center">
+                                <div className="p-3 bg-[var(--color-surface-subtle)] text-center border-t border-[var(--border-color)]">
                                     <Link 
                                         href="/dashboard?view=notifications" 
                                         onClick={() => setIsOpen(false)}
-                                        className="text-[10px] font-black text-slate-400 hover:text-slate-600 uppercase tracking-widest block"
+                                        className="text-[10px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] uppercase tracking-wider block"
                                     >
                                         Ver Todo
                                     </Link>

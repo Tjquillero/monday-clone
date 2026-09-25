@@ -28,10 +28,10 @@ export default function OfflineIndicator() {
     <button
       onClick={() => setTrayOpen(true)}
       title={`${conflictCount} ${conflictCount === 1 ? 'conflicto' : 'conflictos'} de sincronización`}
-      className="relative p-3 text-rose-500 hover:bg-rose-500/10 rounded-2xl transition-all"
+      className="relative p-3 text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 rounded-[var(--radius-control)] transition-all"
     >
       <AlertOctagon className="w-5 h-5" />
-      <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-rose-500 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white">
+      <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-[var(--color-danger)] text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-[var(--card-bg)]">
         {conflictCount}
       </span>
     </button>
@@ -48,23 +48,23 @@ export default function OfflineIndicator() {
 
   let Icon = Wifi;
   let text = "Sincronizado";
-  let colorClass = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+  let colorClass = "bg-[var(--color-success)]/10 text-[var(--color-success)] border-[var(--color-success)]/30";
   let iconClass = "";
 
   if (!isOnline) {
     Icon = WifiOff;
     text = pendingCount === 0 ? "Sin conexión · Sin pendientes" : `Sin conexión · ${pendingCount} pendientes por sincronizar`;
-    colorClass = "bg-amber-500/10 text-amber-400 border-amber-500/20";
+    colorClass = "bg-[var(--color-warning)]/10 text-[var(--color-warning)] border-[var(--color-warning)]/30";
   } else if (syncStatus === 'syncing') {
     Icon = RefreshCw;
     // Progreso real (Incremento 4c) derivado exclusivamente de IndexedDB vía OfflineSyncContext
     text = syncProgress ? `Sincronizando ${syncProgress.done}/${syncProgress.total}...` : "Sincronizando...";
-    colorClass = "bg-blue-500/10 text-blue-400 border-blue-500/20";
+    colorClass = "bg-[var(--color-info)]/10 text-[var(--color-info)] border-[var(--color-info)]/30";
     iconClass = "animate-spin";
   } else if (syncStatus === 'error') {
     Icon = AlertTriangle;
     text = `Error al sincronizar · ${pendingCount} pendientes`;
-    colorClass = "bg-rose-500/10 text-rose-400 border-rose-500/20";
+    colorClass = "bg-[var(--color-danger)]/10 text-[var(--color-danger)] border-[var(--color-danger)]/30";
   }
 
   return (
@@ -72,17 +72,17 @@ export default function OfflineIndicator() {
       <button
         onClick={isOnline && syncStatus !== 'syncing' ? triggerSync : undefined}
         disabled={!isOnline || syncStatus === 'syncing'}
-        className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all ${colorClass} ${
-          isOnline && syncStatus !== 'syncing' ? 'hover:bg-white/5 cursor-pointer' : 'cursor-default'
+        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-[var(--radius-control)] border text-[10px] font-bold uppercase tracking-wider transition-all ${colorClass} ${
+          isOnline && syncStatus !== 'syncing' ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'
         }`}
       >
         <Icon className={`w-3.5 h-3.5 ${iconClass}`} />
-        <span>{text}</span>
+        <span className="truncate max-w-[160px]">{text}</span>
       </button>
       {syncProgress && (
-        <div className="hidden sm:block w-16 h-1 bg-slate-200 rounded-full overflow-hidden">
+        <div className="hidden sm:block w-16 h-1 bg-[var(--border-color)] rounded-full overflow-hidden">
           <div
-            className="h-full bg-blue-500 transition-all"
+            className="h-full bg-[var(--color-info)] transition-all"
             style={{ width: `${Math.round((syncProgress.done / Math.max(syncProgress.total, 1)) * 100)}%` }}
           />
         </div>
