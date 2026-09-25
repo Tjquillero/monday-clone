@@ -24,6 +24,8 @@ const SYSTEM_INSTRUCTION_BASE =
   'cuenta (por ejemplo, un total o un porcentaje) — si necesitas un cálculo, debe ' +
   'venir ya resuelto en la respuesta de una herramienta.';
 
+export const MAX_TOOL_TURNS = 4;
+
 // Fuente de un dato citado en la respuesta: qué tool se invocó, con qué
 // argumentos y cuánto tardó, tal cual se ejecutó — nunca lo que el modelo
 // "diga" que usó. Igual que las cifras (nunca las calcula el modelo), la
@@ -74,14 +76,32 @@ export async function runAiOrchestrator(args: {
 
   const citations: ToolCitation[] = [];
   let anyToolRejected = false;
-  const functionCalls = response.functionCalls as Array<{ name: string; args?: Record<string, unknown> }> | undefined;
+  let turn = 0;
+  let previousCallSignature = '';
 
-  if (functionCalls && functionCalls.length > 0) {
+  while (turn < MAX_TOOL_TURNS) {
+    const functionCalls = response.functionCalls as Array<{ name: string; args?: Record<string, unknown> }> | undefined;
+    if (!functionCalls || functionCalls.length === 0) {
+      break;
+    }
+
+    // Loop Guard: Detectar si el modelo pide exactamente las mismas herramientas
+    // con los mismos argumentos en turnos consecutivos para evitar loops infinitos.
+    const currentCallSignature = functionCalls
+      .map((c) => `${c.name}:${JSON.stringify(c.args || {})}`)
+      .sort()
+      .join('|');
+
+    if (currentCallSignature === previousCallSignature) {
+      break;
+    }
+    previousCallSignature = currentCallSignature;
+    turn++;
+
     // Reenviar el turno del modelo TAL CUAL lo devolvió (candidates[0].content),
     // no reconstruido a mano desde response.functionCalls — Gemini 3 adjunta un
     // thought_signature a cada parte de function call que debe viajar de vuelta
-    // sin modificar, o el segundo turno falla con INVALID_ARGUMENT (confirmado
-    // empíricamente, no documentado de forma obvia).
+    // sin modificar, o el siguiente turno falla con INVALID_ARGUMENT.
     const modelContent = response.candidates?.[0]?.content;
     contents.push(
       modelContent ?? { role: 'model', parts: functionCalls.map((call) => ({ functionCall: call })) }
@@ -119,8 +139,12 @@ export async function runAiOrchestrator(args: {
         p_error: errorMsg,
       });
 
-      if (isWhitelisted && !errorMsg) citations.push({ tool: call.name, args: call.args || {}, durationMs });
-      if (!isWhitelisted) anyToolRejected = true;
+      if (isWhitelisted && !errorMsg) {
+        citations.push({ tool: call.name, args: call.args || {}, durationMs });
+      }
+      if (!isWhitelisted) {
+        anyToolRejected = true;
+      }
 
       responseParts.push({
         functionResponse: {
@@ -132,10 +156,7 @@ export async function runAiOrchestrator(args: {
 
     contents.push({ role: 'user', parts: responseParts });
 
-    // Misma protección de cuota que la primera llamada (línea ~70) — sin
-    // esto, un 429 justo en esta segunda vuelta (la que convierte los
-    // resultados del tool en la respuesta final) tumbaba todo el turno en
-    // vez de reintentar con el modelo de respaldo.
+    // Protección de cuota y fallback de modelo en cada vuelta de herramientas
     ({ response } = await generateWithModelFallback(client, (model) =>
       client.models.generateContent({ model, contents, config })
     ));
