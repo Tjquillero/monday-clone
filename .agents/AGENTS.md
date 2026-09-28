@@ -1,80 +1,164 @@
-# Reglas de Desarrollo - Monday Clone (Mantenix)
+# Reglas de Desarrollo y Gobernanza Arquitectónica — Mantenix
 
-## Hito: Board Engine v1 Stable
+> **Propósito:** Definir los principios rectores, invariantes de dominio, directivas de persistencia y protocolos de evidencia de cumplimiento obligatorio en Mantenix.
+> **Precedencia:** Estas reglas son de cumplimiento universal e ineludible para todo agente o desarrollador.
 
-El motor de columnas de tableros (Board Engine v1) ha alcanzado un estado **estable** y queda oficialmente **congelado**. Las capacidades funcionales consolidadas y verificadas son:
-- [x] Separación estricta entre `id` (UUID del sistema) y `key` (semántica/legacy).
-- [x] CRUD completo de columnas (Creación, Lectura, Actualización, Eliminación).
-- [x] Plantillas de tableros (Templates) normalizadas.
-- [x] Soporte para Drag & Drop (reordenamiento de columnas y cambio de grupos).
-- [x] Vistas múltiples (Tablero, Gantt, Financiera).
-- [x] Filtros y persistencia de estado.
-- [x] Widgets financieros compatibles y cálculo unificado de métricas.
-- [x] Cobertura de pruebas unitarias robusta.
+---
 
-## Reglas Estrictas de Modificación del Motor
-1. **No más refactors preventivos o estéticos:** Queda estrictamente prohibida cualquier refactorización preventiva o de limpieza estética sobre la arquitectura de columnas, lógica de resolución de llaves, o componentes estructurales del motor.
-2. **Excepciones de Modificación:** Solo se permite modificar el motor de columnas o sus abstracciones bajo los siguientes tres escenarios específicos:
-   - Corrección de bugs funcionales comprobados.
-   - Resolución de problemas de rendimiento demostrables.
-   - Implementación de nuevas funcionalidades que requieran indispensablemente ampliar el modelo de datos.
-3. **Justificación de Cambios en Abstracciones:** *Antes de modificar una abstracción existente, el desarrollador o agente debe demostrar con evidencia que el cambio corrige un bug real o habilita una funcionalidad del roadmap de negocio.*
+## 1. Cadena Arquitectónica Rectora e Invariantes
 
-## Módulo Financiero y de Costos (Regla de Llaves Estables)
-- Para ítems financieros (`isFinancialItem` es `true`), se debe evitar la resolución dinámica de columnas y usar siempre las llaves estables e invariables de base de datos (`cant`, `unit_price`, `executed_qty`, `unit`, `rubro`, `category`).
-- El procesamiento y la extracción de datos financieros de los ítems **debe** hacerse exclusivamente a través de la utilidad centralizada `getFinancialValues(item, columns)`.
-- Para ítems de actividad (tareas estándar), sí se utiliza el mapeo dinámico resolviendo la llave con `getColumnValueKey(column)`.
+Toda extensión o flujo funcional en Mantenix debe respetar la cadena de verdad y soberanía de datos:
 
-## Cadena Arquitectónica Certificada (ADR-0007 → ADR-0012)
-ADR-0007 → ADR-0012 constituyen una cadena arquitectónica **congelada y certificada** (Audit 38.1 PASS, Baseline 2386465, 72/72 test suites, 0 errores TypeScript):
-- **ADR-0007**: 🟢 CLOSED / CERTIFIED
-- **ADR-0008**: 🟢 CLOSED / CERTIFIED
-- **ADR-0009**: 🟢 CLOSED / CERTIFIED
-- **ADR-0010**: 🟢 AUDITED / CERTIFIED
-- **ADR-0011**: 🟢 CLOSED / VERIFIED / CERTIFIED / FROZEN (Auditoría AS-IS: Soberanía física exclusiva en `status`, `verification_status` como compatibilidad DTO/runtime, RBAC estricto `can_verify_execution` en BD, `rejection_notes` obligatorio, evidencia read-only y Gate MEVID intacto)
-- **ADR-0012**: 🟢 CLOSED / VERIFIED / CERTIFIED
-- **ADR-0013**: 🟢 CLOSED / CERTIFIED / FROZEN (Hito 6.1 v1.2: Proyección, Diagnóstico y Reprogramación Gobernada con OCC)
+```text
+POA (contractual)
+  ↓
+WeeklyPlan (planificación operativa)
+  ↓
+ExecutionRecord (realidad física en campo)
+  ↓
+Verification (autoridad operacional)
+  ↓
+Certification (reconocimiento contractual)
+  ↓
+Acta (documento contractual con AIU 20/5/5)
+  ↓
+Billing (resultado financiero)
+```
 
-### Regla de Gobierno Arquitectónico:
-Las futuras extensiones deberán consumir los contratos expuestos por esta cadena y **no modificar retrospectivamente** sus fuentes de verdad ni sus invariantes congeladas:
-`POA (contractual) → WeeklyPlan (planificación) → ExecutionRecord (realidad física) → Verification (autoridad operacional) → Certification (reconocimiento contractual) → Acta (documento contractual) → Billing (resultado financiero) → MaintenanceSchedule (reprogramación gobernada con OCC)`
+### Invariantes de Dominio Congelados:
+1. **No Mutación Retrospectiva:** Los componentes y contratos congelados no deben modificarse retrospectivamente para resolver necesidades de un nuevo incremento.
+2. **Board Engine v1 Stable:** Queda prohibida cualquier refactorización preventiva o estética sobre la arquitectura de columnas, resolución de llaves o componentes estructurales del motor.
+3. **Módulo Financiero (Llaves Estables):** Para ítems financieros (`isFinancialItem === true`), la extracción de datos debe hacerse exclusivamente mediante `getFinancialValues(item, columns)`.
+4. **Prevención de Duplicados en Renderizado (React):** Al renderizar filas de tareas, tablas de planner, listas o barras de Gantt, validar siempre que el `id` sea único. **Nunca usar el índice del array (`index`) como `key`.**
 
-## Roadmap de Producto (Prioridades)
+---
 
-> - ~~Notificaciones en tiempo real~~ — **completado** (Fase 4 · Módulo 5: Read Model durable `user_notifications`, dispatcher de eventos, deduplicación concurrente, RLS y publicación Realtime).
-> - ~~Gatillo Independiente de Superficie para /my-work~~ — **completado y congelado** (Fase 5.1: Servicio determinista de lectura previa, matriz exhaustiva de estados, preservación de terminales/ejecuciones/overrides, persistencia delegada exclusivamente al Gateway V6 RPC sin mutaciones PostgREST directas, H8 STRICTLY NO-GO).
-> - ~~Asignación Operativa de Cuadrillas y Personal~~ — **completado y congelado** (Fase 5.2: `CrewAssignmentService`, elegibilidad estricta `board_id` + activos, autorización RBAC `user_board_roles`, regla unívoca de ejecuciones mixtas, invarianza total de demanda, protección de Actas emitidas $ADR-0012$, H8 STRICTLY NO-GO).
-> - ~~Seguimiento y Ejecución de Campo~~ — **completado y congelado** (Fase 5.3: `FieldWorkflowExecutionService`, realidad física única `weekly_plan_item_executions`, separación reported/verified/certifiable, jornales equivalentes de turno sin invadir H4.9/F3.1, idempotencia `source_mutation_id`, concurrencia optimista, compuerta de evidencias, RBAC estricto, `rejected` terminal y aislamiento H8).
-> - ~~Control de Costos Reales y Desviaciones Operativas~~ — **completado y congelado** (Fase 5.4: `RealCostVarianceService`, Read Model determinístico puro, invarianza $AC$ `UNDETERMINED_MONETARY_COST`, precedencia estricta de alcance, trazabilidad multifuente y multiprecio $ADR-0012$ `acta_item_sources`, diagnósticos `OVER_BILLED`/`PENDING_BILLING`, tolerancia M3 $\pm 0.05\text{ JR}$, semántica $\text{round2}(\sum \text{qty})$, aislamiento H8).
-> - ~~Dashboards Ejecutivos para Supervisores~~ — **completado y congelado** (Fase 5.5: `SupervisorExecutiveDashboardService` v1.3.2, Read Model consultivo puro, paridad física y financiera 1:1 desde F5.4, consumo soberano H4.9, matriz canónica de 7 categorías/9 alertas, redacción integral RBAC `TrustedAuthContext`, determinismo temporal `America/Bogota`, contrato `isStale` 15m / `INVALID_EVALUATED_AT_TIMESTAMP`, aislamiento H8).
-> - ~~Programación de tareas y cronogramas de mantenimiento~~ — **completado y congelado** (Hito 6.1 · ADR-0013 v1.2: Read Model consultivo puro `evaluateMaintenanceScheduleView`, Validator sextuple compuerta `validateRescheduleCommand`, Gateway con OCC condicional `planned_date` + `updated_at`, inmutabilidad histórica de `occurrence_key` (Opción B), append-only `override_reason`, consumo soberano de calendario `isOperationalWorkingDay` y capacidad H4.9, aislamiento estricto H8 vía AST).
-> - ~~Gestión de recursos y consumos de insumos~~ — **completado y congelado** (Gestión Operativa de Recursos de Ejecución v1 · Suite RCO-01 a RCO-24: Extensión multirecurso aditiva sobre `resourceConsumptionControlService`, modelo `quantity + unit` para Materiales, Equipo Menor y Mayor, separación estricta `requiredResources` != `usedResources`, precedencia de alcance físico, validación de integridad, desacoplamiento monetario, 0 DDL, H8 STRICTLY NO-GO — **Baseline rectora congelada: 108 suites / 871 tests / TS 0 errores**).
-> - ~~Persistencia Durable de Recursos Operativos Observados (POD-01 / F5.3 DB)~~ — **completado y congelado** (Persistencia física `used_resources JSONB` + `source_mutation_id TEXT` + índice único parcial en `weekly_plan_item_executions`, gateway F5.3 probado en integración real, 0 duplicados, Read Model DOB v1 — **Baseline rectora: 110 suites / 878 tests**).
-> - ~~Superficie Operativa de Campo y Evidencia Causal (/my-work v1.1 — Cuadrillas, Ejecución y Evidencia)~~ — **completado y congelado** (/my-work v1.1: DailyBriefBanner proyectando DOB soberano, DailyActivityExecutionModal con magnitudes físicas explícitas y unidad contractual read-only, inyección canónica de identidad `useAuth()` sin fallbacks ficticios, mutaciones cliente `mut_ui_*` con OCC idempotente, persistencia verificada en `weekly_plan_item_executions` (`created_by`), paridad causal 1:1 con `execution_attachments` en Storage bucket `attachments`, 0 mutaciones directas PostgREST, 0 DDL, H8 STRICTLY NO-GO — **Baseline rectora congelada: 123 suites / 1009 tests / TS 0 errores**).
-> - ~~Observabilidad Operativa / Memoria de Ejecución v1~~ — **completado y congelado** (Memoria de Ejecución v1 · Suite OMA-01 a OMA-20: `OperationalMemoryAnalyticsService` Read Model puro, 10 métricas deterministas con contratos matemáticos cerrados, 6 patrones con compuertas estadísticas explícitas e `INSUFFICIENT_EVIDENCE`, 0 DDL, 0 tablas/columnas nuevas, 0 nuevos SoT, H8 STRICTLY NO-GO — **Baseline rectora: 112 suites / 902 tests**).
-> - ~~Recommendation Engine / Advisory Layer v1.2~~ — **completado y congelado** (Advisory Layer v1.2 · Suite OAD-01 a OAD-20: `OperationalAdvisoryService` 100% puro en memoria, 4 familias R-01 a R-04 con contratos explicables, proposedTargetValue y projectedValue null, prioridad determinista cerrada, status PROPOSED, 0 Supabase imports, 0 DDL, 0 nuevos SoT, H8 STRICTLY NO-GO — **Baseline rectora congelada: 113 suites / 922 tests / TS 0 errores**).
-> - ~~Gobierno de Decisiones y Evaluación de Resultados (Decision Governance & Outcome Evaluation v1.3)~~ — **completado y congelado** (Hito Cognitivo v1 · Suite DEC-01..12, GAT-01..05, EVAL-01..12, ARCH-01..07, GOV-01..05: `DecisionGovernanceService` + `OutcomeEvaluationService`, SoT append-only `operational_advisory_decisions` con `ON DELETE RESTRICT` y trigger anti-tampering, RPC transaccional `record_advisory_decision` con `pg_advisory_xact_lock`, captura de colisión concurrente y RBAC por `board_id`, delegación soberana exclusiva a `poaService`, `crewAssignmentService` y `weeklyPlanService`, cohortes versionadas `COHORT_V1.0`, ventanas en días operativos `ADR-0007` (`America/Bogota`), 4 reglas versionadas R-01 a R-04 con criterio `AND` estricto, 0 mutaciones en RCO, H8 STRICTLY NO-GO — **Baseline rectora congelada: 117 suites / 955 tests / TS 0 errores**).
-> - ~~Automatizaciones de flujos de trabajo (Workflow Automation Engine v1.2)~~ — **completado y congelado** (Hito de Automatización v1.2 · Suite WF-01 a WF-25: `WorkflowAutomationEngine` + `domainEventDispatcher` + `automationRuleEvaluator`, SoT `automation_definitions` (inmutabilidad por versión con UUID físico y trigger anti-tampering) + `automation_executions` (SoT histórico con `gateway_idempotency_key` UNIQUE), Post-Commit Durable Event Delivery, Loop Guard determinista (`actorType === 'AUTOMATION'` / `causalityDepth >= 1`), delegación soberana exclusiva a `crewAssignmentService`, `maintenanceScheduleService` y `notificationDispatcherService`, 0 mutaciones directas PostgREST, H8 STRICTLY NO-GO — **Baseline rectora congelada: 120 suites / 980 tests / TS 0 errores**).
-> - ~~Transactional Outbox & Durable Recovery (WF-C08 v1.1)~~ — **completado y congelado** (Infraestructura de Eventos Durables v1.1 · Suite WF-C08-01 a WF-C08-20 + Suite G04/G15: SoT `domain_event_outbox` con `ON DELETE RESTRICT`, RPCs `claim_outbox_batch` con token individual UUID y CAS estricto sobre lease vigente, `complete_outbox_event` con limpieza total de tokens, `purge_processed_outbox_events` (>14d desde `updated_at`) y `requeue_dead_letter_event` restringidas a `service_role`, proyección tipada `get_board_outbox_audit_log`, desacoplamiento `PROCESSED` vs `automation_executions`, atomicidad en las 8 familias (G04) y ciclo completo de replay / crash recovery / CAS zombie worker protection (G15), 0 mutaciones directas PostgREST, H8 STRICTLY NO-GO — **Baseline rectora congelada: 123 suites / 1009 tests / TS 0 errores**).
-> - ~~Supervisión Visual y Control Gerencial de la Operación Diaria (H1 + H2 + H2.1)~~ — **completado y congelado** (Superficies Consultivas H1 + H2 v1.1 · Suite 7.1 a 7.5 + Suite 8.1 a 8.5: Read Models puros `useDailyOperationsVisual` + `useExecutiveProgressMatrix`, proyección `Consolidado → Sitio → Actividad`, extensión H2.1 `WeeklyProgressTrendCard` con serie temporal de 4 semanas en `America/Bogota`, SoT físico exclusivo `execution.status` (`verified`, `confirmed`, `closed` $ADR-0011$), preservación de unidades heterogéneas vía promedio del porcentaje de cumplimiento de los ítems físicos válidos de la semana (adimensional por ítem), aislamiento de jornales ($JR$), descarte de estándares triviales `name === activity_key`, 0 DDL, 0 tablas/columnas nuevas, H8 STRICTLY NO-GO — **Baseline rectora congelada: 124 suites / 1029 tests / TS 0 errores / Build 21/21 / Realtime Servidor: NO ACTIVO en BD / Seguridad: Acción administrativa pendiente**).
-> - ~~Reconciliación Financiera y Control de Actas (/financial — ADR-0012)~~ — **completado y verificado** (Superficie Consultiva Financiera Candidato B: `FinancialReconciliationView` + `useSiteFinancialVariance`, consumo soberano de `evaluateSiteExecutiveVariance` sin duplicar lógica de reconciliación, preservación estricta de indeterminaciones `UNDETERMINED_CONTRACT_VALUE` / `UNDETERMINED_MONETARY_COST` / `UNDETERMINED_RECONCILIATION` sin ceros ficticios, segregación física por tipo de unidad heterogénea ($M^2$, $ML$, $UND$), etiquetas fieles al contrato "Valorizado en Acta", inspector de trazabilidad 1:N `execution_id → acta_item_source`, 0 DDL, 0 tablas/columnas nuevas, 0 mutaciones a BD, 0 RPCs de escritura, H8 STRICTLY NO-GO — **Baseline rectora: 125 suites / 1040 tests / TS 0 errores / Build 21/21**).
-> - ~~Evidence Layer del Acta v1 (Informe de Ejecución de Actividades y Soporte Fotográfico)~~ — **completado y congelado** (Evidence Layer v1: `activityReportReadModelService.ts` + `activityReportAssetResolver.ts` + `ActivityExecutionReportTemplate.ts` + `/api/reports/activity-execution`, proyección consultiva de solo lectura, genealogía `Acta -> acta_item_sources -> execution -> attachments`, curaduría determinística `deterministic-v1` en `extractCuratedEvidencePair()` con $\le 2$ BEFORE + $\le 2$ AFTER por actividad, soporte de Certificados de Disposición Final PDF, inmutabilidad temporal en `ISSUED` vía `created_at <= actas.issued_at`, desacoplamiento estricto `executed_qty != certified_qty`, 0 DDL, 0 tablas/columnas nuevas, 0 mutaciones BD, 0 RPCs de escritura, H8 STRICTLY NO-GO — **Baseline rectora congelada: 126 suites / 1058 tests / TS 0 errores / Build 21/21**).
-> - ~~Simulación Operativa Multi-Sitio v1 (SIM-01)~~ — **completado y congelado** (SIM-01: `sim01DatasetManifest.json` + `sim01DatasetService.ts` + `sim01MultiSiteOperationalSimulation.test.ts`, dataset semántico local con licencias/atribución/SHA-256 en 8 sitios reales, 12 pasos de ciclo de vida extremo a extremo, curaduría `deterministic-v1`, deduplicación por binario SHA-256, soporte PDF de vertimiento/disposición final, inmutabilidad post-ISSUED, tag `source_type = 'SIMULATION'`, banner de advertencia visual `ENTORNO DE PRUEBA / EVIDENCIA FOTOGRÁFICA SIMULADA`, 0 red / 0 descargas Jest, 0 DDL, 0 tablas/columnas nuevas, 0 mutaciones BD, H8 STRICTLY NO-GO — **Baseline rectora congelada: 127 suites / 1071 tests / TS 0 errores**).
-> - ~~Harness Integrativo Técnico de Contratos (OPS-01A)~~ — **completado y verificado** (OPS-01A: `ops01OperationalJourneyHarness.ts` + `ops01RealSurfaceOperationalJourney.test.ts`, consumo soberano de `myWorkSurfaceTriggerService`, `crewAssignmentService`, `fieldWorkflowExecutionService`, `verificationService`, `actaService` y `activityReportReadModelService`, 8 sitios con UUIDs reales de Tablero Principal `3ea0326f-6ff7-409f-848a-1f296e6e3cc8`, 10 escenarios de riesgo operacional, idempotencia por `source_mutation_id` (Riesgo 5A), 5B `NOT SUPPORTED BY CURRENT CONTRACT` (0 OCC), regla inmutable `created_at <= actas.issued_at`, parada estricta en borrador de Acta sin invocar `issueActa()`, 0 DDL, 0 tablas/columnas nuevas, 0 mutaciones BD — **Baseline rectora congelada: 128 suites / 1079 tests / TS 0 errores**).
-> - ~~Piloto Humano en Campo (OPS-01B)~~ — **autorizado formalmente (GO)** (Pilot Readiness v3.0 APPROVED + `pilotPreparationManifest.json` FACTUAL_FROZEN + Expedientes A, B, C, D verified + Auditoría de flujo `/my-work` ➔ Gateway F5.3 ➔ Storage PASSED, 5 fases operacionales autorizadas con detención estricta en borrador de Acta sin invocar `issueActa()`, 0 DDL, 0 migraciones, 0 nuevas RPCs, 0 OCC — **Baseline rectora congelada: 128 suites / 1079 tests / TS 0 errores**).
-> - ~~Superficie Operativa de Campo y Jerarquía UX Progresiva (/my-work UX Progressive Hierarchy v1)~~ — **completado, verificado y congelado** (Jerarquía progresiva de 3 niveles `Semana -> Sitios (Nivel 1) -> Actividades del Sitio (Nivel 2) -> Registro de Ejecución (Nivel 3) -> Evidencia Fotográfica (ANTES/DESPUÉS)`, tarjetas de sitio priorizadas por pendientes 🔴/🟠/🟢, CTA explícito `📷 REGISTRAR EJECUCIÓN`, responsive mobile-first validado con 0 px overflow horizontal y touch targets $\ge 44\text{px}$, modal dinámico `92dvh` con safe areas, 0 DDL, 0 tablas nuevas, 0 mutaciones a contratos ADR-0007..0013, 0 mutaciones a SoT de persistencia — **Baseline rectora congelada: 129 suites / 1083 tests / TS 0 errores**).
-> - ~~Corrección Gobernada de Frecuencias Contractuales v1.0~~ — **completado, verificado, certificado y congelado** (`poaFrequencyNormalizer.ts` determinista 0 ad-hoc, migración SQL `20260923_fix_poa_activities_frequency_semantics.sql`, canonicalización `FREC = 1` semanal ➔ `4` canónica en BD, 1 ocurrencia/semana Lunes, reconciliación conservadora con preservación inmutable de `completed`, `in_progress`, `manual_override = true` y `executed_qty > 0`, 150 slots no elegibles por semana en todo el contrato, idempotencia $100\%$ demostrada con 0 duplicados y 0 mutaciones retrospectivas en POA/Execution/Verification/Actas, 0 DDL — **Baseline rectora congelada: 134 suites / 1101 tests / TS 0 errores**).
-> - ~~MantenixAgent — Detección Proactiva y Recomendaciones Operacionales Gobernadas v1.0~~ — **completado, verificado, certificado y congelado** (Observador proactivo event-driven / on-demand `evaluateProactive3DDiscrepancies` consultivo puro en memoria sobre Read Models canónicos POA ↔ WeeklyPlan ↔ Execution, patrón 3D `P-05_DISCREPANCIA_MATERIALIZADA`, recomendación `R-05_DISCREPANCIA_TRIDIMENSIONAL_MATERIALIZADA` con status `PROPOSED` e honestidad epistemológica `projectedValue = null`, huella digital determinista `computePatternFingerprint` anti-duplicación `SAME EVENT x N`, supresión de resurrección para decisiones registradas `EVENT -> REJECTED -> SAME EVENT = 0`, hook UI `useProactiveAdvisoryObserver` con 24h cooldown UI, AI Tool `get_proactive_advisories` registrado en whitelist, delegación soberana a `DecisionGovernanceService`, 0 DDL, 0 mutaciones autónomas, 0 polling background — **Baseline rectora congelada: 136 suites / 1106 tests / TS 0 errores**).
-> - ~~Product Operations Completion (PO-01 a PO-05)~~ — **completado, verificado, certificado y congelado** (PO-01: Experiencia de Reporte de Campo con feedback de estados e idempotencia; PO-02: Visibilidad de Rechazos con desempate determinista; PO-03: Filtrado Consultivo de Actividades por Cuadrilla; PO-04: Verificación Supervisora con notas de operador y recursos observados; PO-05: Certificación Contractual y Emisión Gobernada de Actas con elegibilidad previa, ajuste con prevalidación LIFO, modal AIU oficial y continuidad documental — **Baseline rectora congelada: 157 suites / 1.340 tests / TS 0 errores / Build 22/22 PASS**).
-> - ~~Auditoría Integral de Seguridad y Perímetro del Runtime de IA (AI-00 a AI-09)~~ — **completado, verificado y certificado** (Perímetro cerrado: 14 tools en whitelist 100% READ_ONLY, 0 escritores de dominio, 0 service_role, 0 shell/child_process, verificación estricta de objeto/board en PostgreSQL, bitácora inmutable en `ai_tool_call_attempts`, deslinde formal Copilot Runtime != H7 Governed Agent Runtime, 0 DDL, 0 mutaciones — **Baseline rectora: 157 suites / 1.340 tests / TS 0 errores**).
-> - ~~Auditoría de Calidad Funcional y Fidelidad Semántica de IA (AI-FQ.1 a AI-FQ.3)~~ — **completado, verificado, certificado y congelado** (16/16 trazas conductuales PASS con 0 drift en las 8 clases: contractProgress financiero != físico, conteos != cantidades, draft != issued != paid, PROPOSED != ACCEPTED, preservación de SoT, registro en backlog preventivo de AI-FQ-FUTURE-01 Answer Completeness y Unit Provenance, 0 DDL, 0 cambios de código — **Baseline rectora congelada: 157 suites / 1.340 tests / TS 0 errores / Build 22/22 PASS**).
-> - ~~Integridad Operativa y Trazabilidad Extremo a Extremo (E2E-01: C01 a C10)~~ — **completado, verificado, certificado y congelado** (Cadena unificada: C01 Soberanía POA escritor exclusivo `import_poa_version()`; C02 Demanda `planned_qty` inalterable; C03 Realidad física `executed_qty` sin capping; C04 Verificación Gate MEVID `certifiableExecutedQty` sobre `verified|confirmed|closed`; C05 Genealogía `acta_item_sources` + `ON DELETE RESTRICT` post-facturación; C06 Inmutabilidad de Acta emitida `trig_*_block_mutation` + AIU 20/5/5 exacto; C07 Read Models deterministas de cumplimiento por ítem sin sumas heterogéneas; C08 Copilot confinado 14 herramientas `READ_ONLY` 0 drift; C09 Gobernanza H7.7 `PROPOSED` con mutación soberana confinada a `weekly_plan_items`; C10 Trazabilidad causal `source_mutation_id` + `actor_user_id` + `domain_event_outbox` + `TIMESTAMPTZ` interpretado en `America/Bogota` — 0 GAPs, 0 DDL, 0 líneas de código modificadas — **Baseline rectora congelada: 157 suites / 1.340 tests / TS 0 errores / Build 22/22 PASS / FULLY TRACEABLE WITHIN AUDITED PERIMETER**).
-> - ~~Navegación Temporal y Divulgación Progresiva para /my-work (UX-01: UX01-01 a UX01-28)~~ — **completado, verificado, certificado y congelado** (Proyección temporal pura `myWorkTemporalProjection.ts`, Today-first dominante en `America/Bogota`, segregación interactiva de Resagadas `OverdueActivitiesSection.tsx` con progressive disclosure, supresión de tareas futuras en home, preservación estricta de `HISTORICAL_COMPLETED` (solo cerradas/confirmadas/verificadas), consumo unificado en `SiteListView.tsx` y `ActividadesView.tsx`, empty states contextuales diferenciados, 0 DDL, 0 tablas/columnas nuevas, 0 mutaciones contractuales — **Baseline rectora congelada: 159 suites / 1.367 tests / TS 0 errores / Build 22/22 PASS**).
-> - ~~Sistema de Identidad Visual Digital y Activos de Marca (BRAND-01: V01 a V11)~~ — **completado, verificado, aprobado y congelado** (Paquete oficial `brand-assets/` con 9 SVGs vectoriales nativos, paleta Navy `#0B2A4A` / Naranja `#E8792F`, Syne 700/800 (Marca/Display) + Inter 400/600/700 (UI/Datos), regla responsive `16px = micro-mark` / `≥48px = símbolo maestro`, estados operativos accesibles WCAG 2.2 `Color + Forma + Icono + Texto`, PWA/Favicon multi-resolución, tokens JSON W3C, cláusula de gobierno estricta anti-drift visual, 0 modificaciones en `src/`, 0 DDL, 0 SQL — **Baseline rectora congelada: 159 suites / 1.367 tests / TS 0 errores / Build 22/22 PASS**).
-> - ~~Fundamentos Globales de Identidad Visual (INCREMENT-01: V01 a V09)~~ — **completado, verificado, integrado y certificado** (Infraestructura visual global exclusiva: `Syne` 700/800 + `Inter` 400..700 + `JetBrains Mono` vía `next/font/google`, inyección de variables CSS `--font-*`, tokens `@theme` / `:root` / `.dark` en `globals.css` mapeados 1:1 contra `brand-assets/tokens/*.json`, assets públicos canónicos en `public/` (manifest, pwa, favicons, open graph), 0 ad-hoc hardcodes, 0 modificaciones de dominio/servicios, 0 DDL, 0 SQL — **Baseline rectora congelada: 159 suites / 1.367 tests / TS 0 errores / Build 22/22 PASS**).
-> - ~~App Navigation Shell (INCREMENT-02: V01 a V11)~~ — **completado, verificado, certificado y congelado** (Adopción de identidad visual sobre el shell global autenticado: `MantenixLogo` con SVG vectorial por escala (micro-mark 24px / symbol $\ge 32\text{px}$), `ProfessionalLayout` con `--color-primary` (`#0B2A4A`), `--color-accent` (`#E8792F`), `--radius-control` (10px) y `--radius-surface` (14px), menú de usuario adaptativo Light/Dark, `NotificationBell` y `OfflineIndicator` armonizados, 0 coincidencias `#3B7EF8` o `logo-new.png`, 15/15 Gates G01-G15 PASS, 0 modificaciones en `navigation.ts`, contratos de dominio, base de datos o lógica operativa — **Baseline rectora congelada: 159 suites / 1.354 tests / TS 0 errores / Build 22/22 PASS**).
-> - ~~Superficie Operativa de Campo (/my-work — INCREMENT-03)~~ — **completado, verificado, certificado y congelado** (Adopción integral de Identidad Visual Mantenix en 14 componentes autorizados de presentación: tipografía Syne/Inter/JetBrains Mono, paleta oficial Navy `#0B2A4A` / Naranja `#E8792F`, tokens de superficie/borde/radio/elevación, cero selectores ad-hoc o legacy `#3B7EF8`, cero desbordamiento horizontal $\text{scrollWidth} \le \text{clientWidth}$ en mobile/tablet/desktop, contrastes WCAG 2.2 AA certificados con ratios $\ge 4.5:1$ y $\ge 7:1$, preservación absoluta de contratos de dominio ADR-0007..ADR-0013, 0 DDL, 0 SQL, 0 mutaciones en servicios/hooks; `useFieldExecutionMutation.ts` clasificado como modificación preexistente de PO-01 fuera del incremento y `MyWorkSurfaceIntegration.test.tsx` 100% idéntico a HEAD con 0 diff; 16/16 Gates G01–G16 PASS — **Baseline rectora oficial corregida: 159 suites / 1.354 tests / 0 failures / 0 skips / TS 0 errores / Build 22/22 PASS**).
+## 2. Registro Rector de Hitos Congelados (Baseline)
 
-El esfuerzo de desarrollo continuará guiándose por las prioridades estratégicas y requerimientos del producto.
+Las especificaciones detalladas y bitácoras de auditoría completas se conservan de forma inmutable en [`docs/archive/ROADMAP_AUDIT_LOG.md`](file:///c:/desarrollo/monday-clone/docs/archive/ROADMAP_AUDIT_LOG.md).
+
+| Módulo / Hito | Estado de Certificación | Descripción / Invariante Principal |
+| :--- | :---: | :--- |
+| **ADR-0007 a ADR-0012** | 🟢 **FROZEN** | Cadena de Verificación, Certificación de Actas y Reconciliación Financiera. |
+| **ADR-0013 (Hito 6.1)** | 🟢 **FROZEN** | Reprogramación gobernada con OCC, calendario `isOperationalWorkingDay`. |
+| **C1.2 / ADR-C1.2C** | 🟢 **FROZEN** | Gobernanza de Movilidad de Personal, RPC transaccional `reassign_personnel_governed_xact`. |
+| **Frente 2 (Fase 2.1–2.4)**| 🟢 **FROZEN** | Membresía de cuadrillas y contexto de dotación por tablero en `/projects`. |
+| **BRAND-01 (Ola 1–3)** | 🟢 **FROZEN** | Identidad visual canónica (Tokens Navy/Orange, Syne/Inter/Mono) en Dashboard, Vistas y Planner. |
+| **AI Runtime Governance** | 🟢 **FROZEN** | Copilot confinado a 14 tools `READ_ONLY` en PostgreSQL con bitácora inmutable. |
+
+---
+
+## 3. Directiva Permanente de Base de Datos y Paridad de Esquema
+
+### A. Principio Rector de Paridad
+Una migración NO se considera válida únicamente porque termine exitosamente o aparezca como `APPLIED`. Debe demostrarse:
+```text
+LOCAL SOURCE → MIGRATION CONTRACT → REMOTE PHYSICAL SCHEMA → APPLICATION CONTRACT → SECURITY TESTS (pgTAP)
+```
+
+### B. Inmutabilidad y Versionamiento Único
+* **Inmutabilidad:** Toda migración aplicada a un entorno compartido queda **FROZEN**. Prohibido editar migraciones pasadas (`M1 → M2 → M3 → CORRECTION_M4`).
+* **Versionamiento:** Formato obligatorio único `YYYYMMDDNN_description.sql`.
+* **No Assumed Columns:** Prohibido crear índices, policies o queries sobre columnas sin verificación física previa en Supabase.
+
+### C. Stop Conditions Inmediatas (Parada Obligatoria)
+El agente DEBE detenerse y reportar ante cualquiera de las siguientes condiciones:
+```text
+LOCAL ≠ REMOTE
+Migración referencia columna o relación inexistente/obsoleta
+Colisión de versiones de migración
+RLS o firma RPC difiere del contrato esperado
+Se requiere SQL manual fuera de la cadena de migraciones
+```
+
+---
+
+## 4. Política de Evidencia y Testing Escalonado
+
+1. **Evidence First:** Toda acción debe responder previamente: *¿Qué nueva evidencia verificable producirá esta operación?*
+2. **Testing Escalonado:**
+   * **Nivel 1:** `npx jest src/path/affected.test.ts` (Tras cada edición unitaria).
+   * **Nivel 2:** `npx tsc --noEmit` + Tests del dominio (Al cerrar el scope).
+   * **Nivel PG:** `npm run test:db` (pgTAP real: única fuente de verdad para permisos, RLS y RPCs).
+   * **Nivel 5 & Build:** `npm test` y `npm run build` (Exclusivo en integración final / release).
+
+---
+
+## 5. Protocolo de Handoff Estándar
+
+Al finalizar una tarea en cualquier ámbito, el informe de entrega debe seguir esta estructura mínima:
+
+```text
+# HANDOFF REPORT
+
+## TASK: [Identificador y descripción de la tarea]
+## SCOPE: [UX-Brand | Domain-Personnel | Data-Migrations]
+## FILES_CHANGED: [Lista exacta de archivos modificados]
+## CONTRACTS_TOUCHED: [Tipos o servicios afectados]
+## TESTS_EXECUTED: [Resultados Nivel 1/2/PG y suites ejecutadas]
+## DATABASE: [0 DDL / Migración aplicada si aplica]
+## PRODUCTION_VERIFICATION: [N/A en tareas intermedias | PASS / BLOCKED en cierre de incremento]
+## RISKS_OR_BLOCKERS: [Ninguno | Lista de advertencias]
+## NEXT_ACTION: [Instrucción para el Orquestador o siguiente rol]
+```
+
+---
+
+## 6. Gobernanza de Despliegue en Producción (GATE-PROD-01)
+
+### A. Regla Transversal de Verificación
+Antes de declarar un incremento contractual como **cerrado (`CLOSED`), certificado (`CERTIFIED`), congelado (`FROZEN`) o disponible para el siguiente incremento**, el agente debe verificar explícitamente si el commit/versión correspondiente está efectivamente desplegado en producción.
+
+```text
+LOCAL COMMIT != PRODUCCIÓN DESPLEGADA
+El estado técnico de implementación (IMPLEMENTED) no equivale a despliegue (DEPLOYED).
+```
+
+### B. Matriz de Aplicación del Gate
+
+| Situación / Tipo de Tarea | ¿Requiere verificación de producción? |
+| :--- | :---: |
+| Analizar código o arquitectura | No |
+| Proponer una solución o diseño | No |
+| Revisión puramente visual o local | No |
+| Ejecutar pruebas locales / unitarias | No (no equivale a producción) |
+| **Implementar técnicamente un incremento** | No bloquea el estado técnico de implementación; **Sí es requisito previo antes de declarar `CLOSED`/`CERTIFIED`/`FROZEN` o habilitar el siguiente incremento** |
+| **Declarar Gate de Cierre (`CLOSED`)** | **Sí** |
+| **Declarar Certificación (`CERTIFIED`)** | **Sí** |
+| **Declarar Congelamiento (`FROZEN`)** | **Sí, si el cierre implica producción** |
+| **Autorizar apertura del siguiente incremento** | **Sí** |
+
+### C. Identidad de Producción (Production Identity)
+La identidad del artefacto desplegado debe verificarse mediante la evidencia primaria disponible en el mecanismo real de deployment (Vercel, GitHub Actions, Supabase migrations remote status).
+
+**Orden de Preferencia:**
+1. Commit SHA desplegado en producción.
+2. Deployment ID asociado inequívocamente al commit certificado.
+3. Release / Version ID asociado de forma inmutable al commit.
+
+**Prohibiciones Estrictas (No Asumir):**
+* Prohibido asumir: *"El deploy probablemente ocurrió tras el push"*.
+* Prohibido asumir: *"El último commit local seguramente está en producción"*.
+* Prohibido asumir: *"El build local pasó (`npm run build`), por tanto está desplegado"*.
+
+### D. Condición de Parada y Protocolo de Evidencia
+Si `expected_commit != production_commit` o la migración remota no está físicamente aplicada:
+```text
+STATUS: BLOCKED — NO DECLARAR CIERRE NI CERTIFICACIÓN
+```
+
+Toda certificación o handoff final debe incluir el bloque formal de evidencia:
+
+```text
+PRODUCTION VERIFICATION
+-----------------------
+Commit esperado:     <hash_commit_certificado>
+Commit en PROD:      <hash_commit_desplegado_real>
+Environment:         production
+Deployment:          VERIFIED
+Verified at:         YYYY-MM-DD HH:mm
+Verified by:         <agent/operator>
+Status:              PASS
+```
 
 

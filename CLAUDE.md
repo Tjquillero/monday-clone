@@ -13,12 +13,28 @@ npm run dev      # Dev server at http://localhost:3000
 npm run build    # Production build
 npm run lint     # ESLint
 npm run test     # Jest (jsdom environment)
+npm run typecheck # TypeScript verification (tsc --noEmit)
 ```
+
+> **Troubleshooting de Puerto en Windows (PowerShell):** Si existe un conflicto con el puerto 3000 ocupado, liberar el proceso con:
+> `Get-Process -Id (Get-NetTCPConnection -LocalPort 3000).OwningProcess | Stop-Process -Force`
 
 Run a single test file:
 ```bash
 npx jest src/path/to/file.test.ts
 ```
+
+## PostgreSQL Integration Tests (evidencia tipo E)
+
+Para Gates que requieran verificar permisos, RLS, RPCs o SECURITY DEFINER contra PostgreSQL real:
+
+```bash
+npm run test:db:setup     # Aplica fixtures pgTAP (supabase/test-hooks/00_setup.sql)
+npm run test:db           # Ejecuta supabase/tests/*.sql contra la instancia --linked
+npm run test:db:teardown  # Limpieza (supabase/test-hooks/99_teardown.sql)
+```
+
+Los tests Jest/jsdom (tipo A-D) no sustituyen a estos tests (tipo E). Si `test:db` no puede ejecutarse por entorno/credenciales, declararlo explícitamente como bloqueador del Gate — no crear mocks Jest como sustituto.
 
 ## Stack
 
