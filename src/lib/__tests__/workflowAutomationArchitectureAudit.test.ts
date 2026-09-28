@@ -21,7 +21,7 @@ describe('Workflow Automation Architectural Audit (WF-19 a WF-25)', () => {
   const rulesFilePath = path.join(__dirname, '../automationRuleEvaluator.ts');
   const dispatcherFilePath = path.join(__dirname, '../domainEventDispatcher.ts');
   const engineFilePath = path.join(__dirname, '../workflowAutomationEngine.ts');
-  const migrationFilePath = path.join(__dirname, '../../../supabase/migrations/20260913_workflow_automations_schema.sql');
+  const migrationFilePath = path.join(__dirname, '../../../supabase/migrations/2026091303_workflow_automations_schema.sql');
 
   test('WF-19: Aislamiento H8 (0 imports / 0 llamadas a Solvers en Workflow Automation)', () => {
     const filesToAudit = [typesFilePath, rulesFilePath, dispatcherFilePath, engineFilePath];

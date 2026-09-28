@@ -56,47 +56,51 @@ CREATE TABLE IF NOT EXISTS weekly_plan_items (
 );
 
 -- 3. Operational Indexes
-CREATE INDEX IF NOT EXISTS idx_weekly_plans_board_week ON weekly_plans(board_id, week_start_date);
-CREATE INDEX IF NOT EXISTS idx_weekly_plan_items_plan_id ON weekly_plan_items(weekly_plan_id);
-CREATE INDEX IF NOT EXISTS idx_weekly_plan_items_board_date ON weekly_plan_items(board_id, planned_date);
-CREATE INDEX IF NOT EXISTS idx_weekly_plan_items_status ON weekly_plan_items(status);
-CREATE INDEX IF NOT EXISTS idx_weekly_plan_items_occurrence ON weekly_plan_items(occurrence_key);
+-- Nota HM-09: weekly_plans y weekly_plan_items ya cuentan canónicamente con sus índices desde 20260709
+-- (weekly_plans_board_id_group_id_week_start_key, idx_weekly_plan_items_plan_date, uq_weekly_plan_items_plan_occurrence).
 
 -- 4. Enable RLS
 ALTER TABLE weekly_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE weekly_plan_items ENABLE ROW LEVEL SECURITY;
 
 -- 5. RLS Policies
+DROP POLICY IF EXISTS "Allow authenticated read weekly_plans" ON weekly_plans;
 CREATE POLICY "Allow authenticated read weekly_plans"
   ON weekly_plans FOR SELECT
   TO authenticated
   USING (true);
 
+DROP POLICY IF EXISTS "Allow authenticated insert weekly_plans" ON weekly_plans;
 CREATE POLICY "Allow authenticated insert weekly_plans"
   ON weekly_plans FOR INSERT
   TO authenticated
   WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Allow authenticated update weekly_plans" ON weekly_plans;
 CREATE POLICY "Allow authenticated update weekly_plans"
   ON weekly_plans FOR UPDATE
   TO authenticated
   USING (true);
 
+DROP POLICY IF EXISTS "Allow authenticated read weekly_plan_items" ON weekly_plan_items;
 CREATE POLICY "Allow authenticated read weekly_plan_items"
   ON weekly_plan_items FOR SELECT
   TO authenticated
   USING (true);
 
+DROP POLICY IF EXISTS "Allow authenticated insert weekly_plan_items" ON weekly_plan_items;
 CREATE POLICY "Allow authenticated insert weekly_plan_items"
   ON weekly_plan_items FOR INSERT
   TO authenticated
   WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Allow authenticated update weekly_plan_items" ON weekly_plan_items;
 CREATE POLICY "Allow authenticated update weekly_plan_items"
   ON weekly_plan_items FOR UPDATE
   TO authenticated
   USING (true);
 
+DROP POLICY IF EXISTS "Allow authenticated delete weekly_plan_items" ON weekly_plan_items;
 CREATE POLICY "Allow authenticated delete weekly_plan_items"
   ON weekly_plan_items FOR DELETE
   TO authenticated

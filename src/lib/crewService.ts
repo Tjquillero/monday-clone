@@ -4,6 +4,7 @@ import {
   CrewWithDetails,
   PersonnelVersion,
   PersonnelSiteAssignment,
+  ReassignPersonnelInput,
 } from '../types/crew';
 
 /**
@@ -173,35 +174,99 @@ export async function assignCrewToPlanItem(
 }
 
 /**
- * Gets or creates an active PersonnelVersion for a board.
+ * Retorna la fecha actual civil en America/Bogota (UTC-5) en formato YYYY-MM-DD.
  */
-export async function getActivePersonnelVersion(boardId: string): Promise<PersonnelVersion> {
-  const { data: existing, error: fetchErr } = await supabase
+export function getBogotaTodayISO(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Bogota',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
+/**
+ * Resolves the canonically active PersonnelVersion for a board at a specific target date.
+ * SOT Rule (ADR-C1.2C): status = 'PUBLISHED' AND effective_from <= targetDate ORDER BY effective_from DESC, created_at DESC LIMIT 1
+ */
+export async function resolvePersonnelVersionForDate(
+  boardId: string,
+  targetDate?: string
+): Promise<PersonnelVersion | null> {
+  const dateStr = targetDate || getBogotaTodayISO();
+
+  const { data, error } = await supabase
     .from('personnel_versions')
     .select('*')
     .eq('board_id', boardId)
-    .eq('is_active', true)
+    .eq('status', 'PUBLISHED')
+    .lte('effective_from', dateStr)
+    .order('effective_from', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  if (fetchErr) throw fetchErr;
-  if (existing) return existing;
+  if (error) throw error;
+  if (!data) return null;
 
-  // Auto-create initial version if none exists
-  const { data: created, error: createErr } = await supabase
-    .from('personnel_versions')
-    .insert([{
-      board_id: boardId,
-      version_name: 'V1 - Inicial',
-      is_active: true,
-      effective_from: new Date().toISOString().split('T')[0],
-    }])
-    .select()
-    .single();
+  return {
+    id: data.id,
+    board_id: data.board_id,
+    version_name: data.version_name,
+    status: data.status,
+    is_active: data.is_active,
+    effective_from: data.effective_from,
+    change_reason: data.change_reason,
+    created_by: data.created_by,
+    created_at: data.created_at,
+    updated_at: data.updated_at,
+  };
+}
 
-  if (createErr) throw createErr;
-  return created;
+/**
+ * Gets the canonical active PersonnelVersion for a board at today's date (Bogotá).
+ * Redirects to resolvePersonnelVersionForDate.
+ *
+ * NOTE (C1.2 INV-MOB-07): Auto-creation of initial versions via direct PostgREST
+ * INSERT has been REMOVED. Authenticated clients no longer have INSERT on
+ * personnel_versions. Initial version creation must occur via admin tooling
+ * or the governed RPC. If no PUBLISHED version exists, this returns null.
+ */
+export async function getActivePersonnelVersion(boardId: string): Promise<PersonnelVersion | null> {
+  return resolvePersonnelVersionForDate(boardId);
+}
+
+/**
+ * Executes a governed personnel reassignment creating a new snapshot version atomically.
+ * Gate C1.2: Invokes PostgreSQL RPC reassign_personnel_governed_xact.
+ */
+export async function reassignPersonnelGoverned(
+  input: ReassignPersonnelInput
+): Promise<{ newVersionId: string }> {
+  if (!input.boardId || !input.sourceVersionId || !input.personnelId) {
+    throw new Error('boardId, sourceVersionId y personnelId son requeridos para la reasignación');
+  }
+
+  if (!input.changeReason || input.changeReason.trim().length < 5) {
+    throw new Error('changeReason debe contener al menos 5 caracteres');
+  }
+
+  const { data: newVersionId, error } = await supabase.rpc(
+    'reassign_personnel_governed_xact',
+    {
+      p_board_id: input.boardId,
+      p_source_version_id: input.sourceVersionId,
+      p_personnel_id: input.personnelId,
+      p_target_group_id: input.targetGroupId || null,
+      p_target_zone: input.targetZone || 'GENERAL',
+      p_effective_from: input.effectiveFrom,
+      p_change_reason: input.changeReason.trim(),
+      p_actor_user_id: input.actorUserId || null,
+    }
+  );
+
+  if (error) throw error;
+  return { newVersionId };
 }
 
 /**
@@ -238,29 +303,37 @@ export async function getPersonnelSiteAssignments(
 }
 
 /**
- * Creates a site assignment for a person under a specific version.
+ * @deprecated RETIRED — C1.2 INV-MOB-07 ENFORCEMENT
+ *
+ * Direct PostgREST mutation on personnel_site_assignments is no longer permitted
+ * for authenticated clients. The `authenticated` role has had INSERT/UPDATE/DELETE
+ * REVOKED on both `personnel_versions` and `personnel_site_assignments`.
+ *
+ * All reassignments must go through: reassignPersonnelGoverned → reassign_personnel_governed_xact (RPC)
+ *
+ * This function is preserved only to avoid breaking existing import references while
+ * callers are migrated. It throws unconditionally and MUST NOT be invoked.
+ *
+ * Callers identified during audit:
+ *   - useCrews.ts / createAssignmentMutation: REMOVED
+ *   - PersonnelManagement.tsx / handleCreateAssignment: REMOVED
+ *
+ * Bootstrap path (personnelIngestionService.ts) is documented separately as
+ * BOOTSTRAP_ONLY / NOT_OPERATIONAL_MOBILITY. See section below.
  */
-export async function createPersonnelSiteAssignment(input: {
-  version_id: string;
-  personnel_id: string;
-  role_in_site?: string | null;
-  zone?: string; // 'ZV' | 'ZD' | 'ZP' | 'GENERAL'
-  dedication_percentage?: number;
-  daily_rate_override?: number | null;
-}): Promise<PersonnelSiteAssignment> {
-  const { data, error } = await supabase
-    .from('personnel_site_assignments')
-    .insert([{
-      version_id: input.version_id,
-      personnel_id: input.personnel_id,
-      role_in_site: input.role_in_site || null,
-      zone: input.zone || 'GENERAL',
-      dedication_percentage: input.dedication_percentage || 100,
-      daily_rate_override: input.daily_rate_override || null,
-    }])
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
+export async function createPersonnelSiteAssignment(
+  _input: {
+    version_id: string;
+    personnel_id: string;
+    role_in_site?: string | null;
+    zone?: string;
+    dedication_percentage?: number;
+    daily_rate_override?: number | null;
+  }
+): Promise<never> {
+  throw new Error(
+    'RETIRED_PATH: createPersonnelSiteAssignment is no longer executable. ' +
+    'C1.2 INV-MOB-07: authenticated clients have no direct write access to ' +
+    'personnel_site_assignments. Use reassignPersonnelGoverned instead.'
+  );
 }

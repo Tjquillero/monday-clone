@@ -96,6 +96,7 @@ export interface Column {
 
 export interface Personnel {
   id: string;
+  document_id?: string | null;
   name: string;
   role: string;
   default_rate?: number;
@@ -198,6 +199,14 @@ export interface ActaDetail {
 // ver docs/adr/ADR-0003-billing-source.md. Toda escritura pasa por RPC
 // (generate_acta_draft/adjust_acta_item_quantity/issue_acta) — estos tipos
 // son de solo lectura desde React.
+export interface CertifiedActaItemSource {
+  id: string;
+  acta_item_id: string;
+  execution_id: string;
+  cantidad_consumida: number;
+  created_at?: string;
+}
+
 export interface CertifiedActaItem {
   id: string;
   acta_id: string;
@@ -205,10 +214,13 @@ export interface CertifiedActaItem {
   descripcion_snapshot: string;
   unidad_snapshot: string;
   precio_unitario_snapshot: number;
+  activity_key_snapshot?: string | null;
+  zone_snapshot?: string | null;
   cantidad_facturada: number;
   valor_total: number;
   created_at: string;
   updated_at: string;
+  sources?: CertifiedActaItemSource[];
 }
 
 export interface CertifiedActaTotals {

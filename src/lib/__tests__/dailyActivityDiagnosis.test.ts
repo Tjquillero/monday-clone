@@ -78,6 +78,13 @@ describe('DIAGNÓSTICO COMPLETO: Trazabilidad de Actividades Diarias (Frecuencia
             { id: 'pa-3', activity_key: 'poda_arboles', frecuencia: 75 },
           ]);
         }
+        if (table === 'poa_activity_zones') {
+          return createChainableQuery([
+            { poa_activity_id: 'pa-1', zone_id: 'group-plaza', cantidad_contratada: 5000 },
+            { poa_activity_id: 'pa-2', zone_id: 'group-plaza', cantidad_contratada: 300 },
+            { poa_activity_id: 'pa-3', zone_id: 'group-plaza', cantidad_contratada: 50 },
+          ]);
+        }
         if (table === 'board_activity_standards') {
           return createChainableQuery([
             { id: 'std-1', board_id: 'board-1', activity_key: 'limpieza_zonas_duras', name: 'Limpieza General zonas duras', category: 'ZONA DURA', unit: 'm2/día', rendimiento: 10000, frecuencia: 1, requiere_rendimiento: true },

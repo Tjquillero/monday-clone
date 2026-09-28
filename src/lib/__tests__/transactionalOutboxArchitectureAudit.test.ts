@@ -9,7 +9,7 @@ import * as path from 'path';
 describe('Transactional Outbox Architecture Audit (WF-C08-13 a WF-C08-20)', () => {
   const typesFilePath = path.join(__dirname, '../../types/transactionalOutbox.ts');
   const serviceFilePath = path.join(__dirname, '../transactionalOutboxService.ts');
-  const migrationFilePath = path.join(__dirname, '../../../supabase/migrations/20260913_workflow_outbox_durable_schema.sql');
+  const migrationFilePath = path.join(__dirname, '../../../supabase/migrations/2026091304_workflow_outbox_durable_schema.sql');
 
   test('WF-C08-13: Aislamiento Total H8 (0 imports / 0 llamadas a solvers en el módulo Outbox)', () => {
     const filesToAudit = [typesFilePath, serviceFilePath];

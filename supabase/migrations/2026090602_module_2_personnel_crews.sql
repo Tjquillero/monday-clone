@@ -73,14 +73,17 @@ BEGIN
 END $$;
 
 -- 7. Triggers for updated_at
+DROP TRIGGER IF EXISTS trig_personnel_versions_updated_at ON public.personnel_versions;
 CREATE TRIGGER trig_personnel_versions_updated_at
   BEFORE UPDATE ON public.personnel_versions
   FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
 
+DROP TRIGGER IF EXISTS trig_personnel_site_assignments_updated_at ON public.personnel_site_assignments;
 CREATE TRIGGER trig_personnel_site_assignments_updated_at
   BEFORE UPDATE ON public.personnel_site_assignments
   FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
 
+DROP TRIGGER IF EXISTS trig_crews_updated_at ON public.crews;
 CREATE TRIGGER trig_crews_updated_at
   BEFORE UPDATE ON public.crews
   FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
@@ -101,14 +104,18 @@ ALTER TABLE public.personnel_site_assignments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.crews ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.crew_members ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Enable authenticated access for personnel_versions" ON public.personnel_versions;
 CREATE POLICY "Enable authenticated access for personnel_versions"
   ON public.personnel_versions FOR ALL USING (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Enable authenticated access for personnel_site_assignments" ON public.personnel_site_assignments;
 CREATE POLICY "Enable authenticated access for personnel_site_assignments"
   ON public.personnel_site_assignments FOR ALL USING (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Enable authenticated access for crews" ON public.crews;
 CREATE POLICY "Enable authenticated access for crews"
   ON public.crews FOR ALL USING (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Enable authenticated access for crew_members" ON public.crew_members;
 CREATE POLICY "Enable authenticated access for crew_members"
   ON public.crew_members FOR ALL USING (auth.role() = 'authenticated');

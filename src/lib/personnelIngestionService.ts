@@ -145,7 +145,64 @@ export interface IngestionOptions {
 
 /**
  * Ejecuta la ingestión e adscripción de personal operativo en Supabase.
+ *
+ * =============================================================================
+ * CLASIFICACION ARQUITECTONICA: BOOTSTRAP / INITIAL_DATA_LOAD
+ * =============================================================================
+ * Esta funcion es una herramienta de carga inicial de datos operativos.
+ * NO es un camino de movilidad operativa y NO viola INV-MOB-07 porque:
+ *
+ * 1. Solo opera sobre la VERSION INICIAL (V1) — la primera version PUBLISHED
+ *    que aun no tiene personal asignado (is_active=true, 0 asignaciones).
+ * 2. Si ya existe una version PUBLISHED con asignaciones, rechaza la operacion
+ *    y lanza error. No puede modificar versiones PUBLISHED existentes.
+ * 3. Las reasignaciones operativas (traslados, cambios de zona, etc.) DEBEN
+ *    usar exclusivamente reassignPersonnelGoverned -> reassign_personnel_governed_xact.
+ *
+ * EXCEPCION DOCUMENTADA A INV-MOB-07:
+ *   Este servicio crea la version V1 inicial via INSERT directo porque no existe
+ *   una version canonica origen desde la cual clonar (prerequisito del RPC).
+ *   Esta es la unica circunstancia en que el INSERT directo esta autorizado,
+ *   y solo puede ocurrir UNA VEZ por tablero (idempotencia por version activa existente).
+ *
+ * FRONTERA: Una vez que V1 esta cargada y PUBLISHED, toda modificacion
+ *   posterior de adscripciones debe ir por el RPC gobernado.
+ *
+ * =============================================================================
+ * CONTRATO DE LLAMADA — FRONTERA DE EJECUCION OBLIGATORIA (C1.2 HARDENING):
+ * =============================================================================
+ * Con 20260925_c12_security_hardening.sql aplicado:
+ *
+ *   REVOKE INSERT ON public.personnel_versions FROM authenticated;
+ *   REVOKE INSERT ON public.personnel_site_assignments FROM authenticated;
+ *
+ * Esta funcion SOLO puede ser invocada con un SupabaseClient que opere bajo
+ * service_role. El cliente normal (authenticated) provoca PERMISSION DENIED
+ * en los INSERT internos.
+ *
+ * UNICO PATH AUTORIZADO:
+ *
+ *   Browser/UI
+ *       POST /api/personnel/bootstrap  (multipart/form-data con el Excel)
+ *   Route Handler: src/app/api/personnel/bootstrap/route.ts
+ *       1. Verifica sesion de usuario (JWT cookie)
+ *       2. Verifica RBAC: admin del tablero
+ *       3. Parsea Excel en Node.js (server-side)
+ *       4. Llama createSupabaseAdminClient() — service_role, NUNCA al browser
+ *   executePersonnelIngestion(adminClient, boardId, rows)
+ *       INSERT personnel_versions         (service_role — bypasa REVOKE)
+ *       INSERT personnel_site_assignments
+ *
+ * PROHIBIDO:
+ *   - Llamar directamente desde componentes React o hooks.
+ *   - Pasar el cliente normal (authenticated) como parametro supabase.
+ *   - Invocar desde cualquier contexto fuera del Route Handler.
+ *
+ * El parametro `supabase: SupabaseClient` DEBE ser el resultado de
+ * createSupabaseAdminClient() (SERVICE_ROLE_KEY, server-side only).
+ * =============================================================================
  */
+
 export async function executePersonnelIngestion(
   supabase: SupabaseClient,
   boardId: string,
@@ -197,6 +254,23 @@ export async function executePersonnelIngestion(
       .maybeSingle();
 
     if (activeVer) {
+      // BOOTSTRAP GUARD: Si la version activa ya tiene asignaciones,
+      // rechazar la operacion. El bootstrap solo puede ejecutarse sobre
+      // una version vacia (recien creada, sin asignaciones previas).
+      const { count: existingCount } = await supabase
+        .from('personnel_site_assignments')
+        .select('id', { count: 'exact', head: true })
+        .eq('version_id', activeVer.id);
+
+      if (existingCount && existingCount > 0) {
+        report.errors.push(
+          `BOOTSTRAP_BLOCKED: La version activa (${activeVer.id}) ya tiene ${existingCount} asignaciones. ` +
+          'El bootstrap solo puede ejecutarse sobre una version sin asignaciones previas. ' +
+          'Para movilidad operativa use reassignPersonnelGoverned.'
+        );
+        return report;
+      }
+
       versionId = activeVer.id;
     } else {
       const { data: newVer, error: vErr } = await supabase

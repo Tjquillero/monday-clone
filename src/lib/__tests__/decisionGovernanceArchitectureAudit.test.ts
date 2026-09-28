@@ -23,7 +23,7 @@ import { OperationalRecommendation } from '../../types/operationalAdvisory';
 
 describe('Decision Governance & Outcome Evaluation — Architecture & Governance Audit (ARCH + GOV)', () => {
   const libDir = path.resolve(__dirname, '..');
-  const migrationPath = path.resolve(libDir, '../../supabase/migrations/20260913_operational_advisory_decisions.sql');
+  const migrationPath = path.resolve(libDir, '../../supabase/migrations/2026091302_operational_advisory_decisions.sql');
 
   test('ARCH-01: Aislamiento total del Solver H8 (0 imports, 0 calls)', () => {
     const filesToAudit = [

@@ -13,8 +13,7 @@ ALTER TABLE weekly_plan_item_executions
   ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ NULL;
 
 -- 2. Indexes for certifiable quantity aggregations and verification status queries
-CREATE INDEX IF NOT EXISTS idx_wpie_certifiable 
-  ON weekly_plan_item_executions(weekly_plan_item_id, verification_status);
+-- Nota HM-06: idx_wpie_plan_item_status (plan_item_id, status) ya existe canónicamente desde 20260709.
 
 CREATE INDEX IF NOT EXISTS idx_wpie_verification_audit 
   ON weekly_plan_item_executions(verified_by, rejected_by, confirmed_by);

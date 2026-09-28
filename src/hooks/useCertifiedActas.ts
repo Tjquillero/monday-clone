@@ -10,9 +10,40 @@ import { CertifiedActa, CertifiedActaTotals } from '@/types/monday';
 const certifiedActaKeys = {
   draft: (boardId?: string) => ['certified-acta-draft', boardId] as const,
   issued: (boardId?: string) => ['certified-actas-issued', boardId] as const,
+  pendingWork: (boardId?: string) => ['pending-billable-work', boardId] as const,
 };
 
-const ACTA_SELECT = '*, items:acta_items(*)';
+const ACTA_SELECT = '*, items:acta_items(*, sources:acta_item_sources(*))';
+
+export interface PendingBillableWork {
+  activities: number;
+  executions: number;
+  estimated_value: number;
+  currency: string;
+}
+
+export const usePendingBillableWork = (boardId?: string) => {
+  return useQuery({
+    queryKey: certifiedActaKeys.pendingWork(boardId),
+    queryFn: async () => {
+      if (!boardId) return null;
+      try {
+        const { data, error } = await supabase
+          .rpc('get_pending_billable_work', { p_board_id: boardId })
+          .single();
+        if (error) {
+          console.warn('get_pending_billable_work warning:', error.message);
+          return null;
+        }
+        return data as PendingBillableWork;
+      } catch (err: any) {
+        console.warn('get_pending_billable_work exception:', err.message);
+        return null;
+      }
+    },
+    enabled: !!boardId,
+  });
+};
 
 export const useCertifiedActaDraft = (boardId?: string) => {
   return useQuery({
@@ -71,6 +102,7 @@ export const useCertifiedActaMutations = (boardId?: string) => {
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: certifiedActaKeys.draft(boardId) });
     queryClient.invalidateQueries({ queryKey: certifiedActaKeys.issued(boardId) });
+    queryClient.invalidateQueries({ queryKey: certifiedActaKeys.pendingWork(boardId) });
   };
 
   const generateDraft = useMutation({

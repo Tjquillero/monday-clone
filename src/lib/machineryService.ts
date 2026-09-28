@@ -174,6 +174,7 @@ export async function evaluateMachineryAvailabilityForBoard(
 
   // Fetch personnel assignments for site version
   const version = await getActivePersonnelVersion(boardId);
+  if (!version) return [];
   const assignments = await getPersonnelSiteAssignments(version.id);
 
   // Fetch qualifications for assigned personnel

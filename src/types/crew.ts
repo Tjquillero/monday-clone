@@ -3,14 +3,30 @@
  * Baseline: 2386465 + ADR-0007..ADR-0012 + F3.1 (4084bcb)
  */
 
+export type PersonnelVersionStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+
 export interface PersonnelVersion {
   id: string;
   board_id: string;
   version_name: string;
-  is_active: boolean;
+  status: PersonnelVersionStatus;
+  is_active: boolean; // Legacy compatibility only
   effective_from: string; // YYYY-MM-DD
+  change_reason?: string | null;
+  created_by?: string | null;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface ReassignPersonnelInput {
+  boardId: string;
+  sourceVersionId: string;
+  personnelId: string;
+  targetGroupId?: string;
+  targetZone?: string;
+  effectiveFrom: string; // YYYY-MM-DD
+  changeReason: string;
+  actorUserId?: string;
 }
 
 export interface PersonnelSiteAssignment {

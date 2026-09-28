@@ -15,10 +15,4 @@ SET frecuencia = 4
 WHERE activity_key IN ('1.09', '1.10', '1.11')
   AND (frecuencia = 1 OR frecuencia IS NULL);
 
--- 2. Sincronizar el catálogo técnico de tableros (board_activity_standards)
-UPDATE public.board_activity_standards
-SET frecuencia = 4
-WHERE activity_key IN ('1.09', '1.10', '1.11')
-  AND (frecuencia = 1 OR frecuencia IS NULL);
-
 COMMIT;

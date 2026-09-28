@@ -31,8 +31,7 @@ CREATE TABLE IF NOT EXISTS weekly_plan_item_executions (
 );
 
 -- 2. Indexes for Query Performance & Audit
-CREATE INDEX IF NOT EXISTS idx_wpie_item_id ON weekly_plan_item_executions(weekly_plan_item_id);
-CREATE INDEX IF NOT EXISTS idx_wpie_verification_status ON weekly_plan_item_executions(verification_status);
+-- Nota HM-06: idx_wpie_plan_item_status (plan_item_id, status) ya existe canónicamente desde 20260709.
 CREATE INDEX IF NOT EXISTS idx_wpie_execution_date ON weekly_plan_item_executions(execution_date);
 
 -- 3. Enable RLS

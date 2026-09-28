@@ -28,7 +28,7 @@ export const generateItemPDF = async (item: Item, columns: Column[], evidence: a
   const pageWidth = doc.internal.pageSize.getWidth();
 
   // Header - Brand / Title
-  doc.setFillColor(36, 97, 75); // Mantenix Emerald
+  doc.setFillColor(11, 42, 74); // Mantenix Navy (#0B2A4A)
   doc.rect(0, 0, pageWidth, 40, 'F');
   
   doc.setTextColor(255, 255, 255);
@@ -64,7 +64,7 @@ export const generateItemPDF = async (item: Item, columns: Column[], evidence: a
     head: [['Campo', 'Valor']],
     body: metaData,
     theme: 'grid',
-    headStyles: { fillStyle: 'emerald', fillColor: [36, 97, 75] },
+    headStyles: { fillColor: [11, 42, 74] },
     margin: { left: 15, right: 15 }
   });
 

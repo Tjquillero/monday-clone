@@ -26,8 +26,11 @@ import { WeeklyPlanItemExecution } from '@/types/scheduler';
 export interface VerificationQueueItem extends WeeklyPlanItemExecution {
   activity_key: string;
   planned_unit: string;
+  planned_qty?: number;
+  group_id?: string;
   group_title: string;
   activity_name: string | null;
+  used_resources?: any[] | null;
 }
 
 function buildQueueItems(
@@ -46,8 +49,11 @@ function buildQueueItems(
       ...r,
       activity_key: activityKey,
       planned_unit: item?.unit ?? '',
+      planned_qty: item?.planned_qty ?? 0,
+      group_id: plan?.group_id ?? group?.id ?? '',
       group_title: group?.title ?? 'Sitio',
       activity_name: plan ? namesByKey.get(`${plan.board_id}|${activityKey}`) ?? null : null,
+      used_resources: r.used_resources ?? null,
     };
   });
 }

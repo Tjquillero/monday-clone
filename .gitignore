@@ -85,3 +85,8 @@ tmp/
 *.xlsb
 *.xlsx
 scratch/
+*audit*.json
+*drift*.json
+*.zip
+scripts/*.ttf
+scripts/*.min.js

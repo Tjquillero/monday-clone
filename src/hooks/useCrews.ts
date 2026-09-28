@@ -10,10 +10,11 @@ import {
   removeCrewMember,
   assignCrewToPlanItem,
   getActivePersonnelVersion,
+  resolvePersonnelVersionForDate,
   getPersonnelSiteAssignments,
-  createPersonnelSiteAssignment,
+  reassignPersonnelGoverned,
 } from '../lib/crewService';
-import { CrewWithDetails } from '../types/crew';
+import { CrewWithDetails, ReassignPersonnelInput } from '../types/crew';
 
 /**
  * Hook to query active crews for a board.
@@ -28,14 +29,30 @@ export function useCrews(boardId: string | undefined) {
 }
 
 /**
- * Hook to query personnel site assignments for a board's active version.
+ * Hook to resolve canonical PersonnelVersion for a board at a specific date.
  */
-export function usePersonnelAssignments(boardId: string | undefined) {
+export function usePersonnelVersionForDate(boardId: string | undefined, targetDate?: string) {
   return useQuery({
-    queryKey: ['personnel_assignments', boardId],
+    queryKey: ['personnel_version_date', boardId, targetDate],
+    queryFn: () => {
+      if (!boardId) return null;
+      return resolvePersonnelVersionForDate(boardId, targetDate);
+    },
+    enabled: !!boardId,
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Hook to query personnel site assignments for a board at a specific date (default: today).
+ */
+export function usePersonnelAssignments(boardId: string | undefined, targetDate?: string) {
+  return useQuery({
+    queryKey: ['personnel_assignments', boardId, targetDate],
     queryFn: async () => {
       if (!boardId) return [];
-      const version = await getActivePersonnelVersion(boardId);
+      const version = await resolvePersonnelVersionForDate(boardId, targetDate);
+      if (!version) return [];
       return getPersonnelSiteAssignments(version.id);
     },
     enabled: !!boardId,
@@ -44,7 +61,7 @@ export function usePersonnelAssignments(boardId: string | undefined) {
 }
 
 /**
- * Mutations for Crew management.
+ * Mutations for Crew & Governed Personnel Mobility management.
  */
 export function useCrewMutations(boardId: string | undefined) {
   const queryClient = useQueryClient();
@@ -113,23 +130,17 @@ export function useCrewMutations(boardId: string | undefined) {
     },
   });
 
-  const createAssignmentMutation = useMutation({
-    mutationFn: async (input: {
-      personnel_id: string;
-      role_in_site?: string;
-      zone?: string;
-      dedication_percentage?: number;
-      daily_rate_override?: number;
-    }) => {
+  const reassignPersonnelMutation = useMutation({
+    mutationFn: async (input: Omit<ReassignPersonnelInput, 'boardId'>) => {
       if (!boardId) throw new Error('Board ID es requerido');
-      const version = await getActivePersonnelVersion(boardId);
-      return createPersonnelSiteAssignment({
-        version_id: version.id,
+      return reassignPersonnelGoverned({
+        boardId,
         ...input,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['personnel_assignments', boardId] });
+      queryClient.invalidateQueries({ queryKey: ['personnel_version_date', boardId] });
     },
   });
 
@@ -140,6 +151,8 @@ export function useCrewMutations(boardId: string | undefined) {
     addMember: addMemberMutation,
     removeMember: removeMemberMutation,
     assignCrewToItem: assignCrewToItemMutation,
-    createAssignment: createAssignmentMutation,
+    reassignPersonnel: reassignPersonnelMutation,
+    // createAssignment REMOVED: C1.2 INV-MOB-07 enforcement.
+    // Use crewMutations.reassignPersonnel (governed RPC) for all mobility operations.
   };
 }
