@@ -24,6 +24,7 @@ describe('Materialización Gobernada de Actividades Rutinarias v1.0', () => {
     const q: any = {
       select: () => q,
       eq: () => q,
+      in: () => q,
       is: () => q,
       order: () => q,
       limit: () => q,
@@ -53,6 +54,15 @@ describe('Materialización Gobernada de Actividades Rutinarias v1.0', () => {
           return createChainQuery([
             { id: 'pa_1', activity_key: 'limpieza_zonas_duras', frecuencia: 1 },
             { id: 'pa_2', activity_key: 'poda_arboles', frecuencia: 75 },
+          ]);
+        }
+
+        if (table === 'poa_activity_zones') {
+          const qty1 = scopeDataMock['zona_dura'] ?? scopeDataMock['limpieza_zonas_duras'] ?? 5000;
+          const qty2 = scopeDataMock['arboles'] ?? scopeDataMock['poda_arboles'] ?? 0;
+          return createChainQuery([
+            { poa_activity_id: 'pa_1', zone_id: siteId, cantidad_contratada: qty1 },
+            { poa_activity_id: 'pa_2', zone_id: siteId, cantidad_contratada: qty2 },
           ]);
         }
 
@@ -139,8 +149,8 @@ describe('Materialización Gobernada de Actividades Rutinarias v1.0', () => {
     expect(storedWeeklyPlanItems.length).toBeGreaterThan(0);
   });
 
-  it('2. Actividad diaria (frecuencia = 1) sin resource_analysis debe generar exactamente 6 ocurrencias (L-S) con planned_qty = 0 y planned_jr = 0', async () => {
-    scopeDataMock = {}; // Cero metraje
+  it('2. Actividad diaria (frecuencia = 1) sin resource_analysis conserva planned_qty de poa_activity_zones y planned_jr calculado (H6.3)', async () => {
+    scopeDataMock = {}; // Cero registros en resource_analysis (RA null)
 
     await ensureWeeklyPlanMaterialized(mockSupabase, boardId, siteId, weekStartStr);
 
@@ -158,9 +168,9 @@ describe('Materialización Gobernada de Actividades Rutinarias v1.0', () => {
     ]);
 
     dailyItems.forEach((item) => {
-      expect(item.planned_qty).toBe(0);
+      expect(item.planned_qty).toBe(5000);
       const jr = item.theoretical_jr ?? item.planned_jr ?? 0;
-      expect(jr).toBe(0);
+      expect(jr).toBeGreaterThan(0);
     });
   });
 

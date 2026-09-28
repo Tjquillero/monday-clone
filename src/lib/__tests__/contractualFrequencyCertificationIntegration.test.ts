@@ -37,8 +37,11 @@ describe('Harness de Certificación Final — Corrección Gobernada de Frecuenci
     expect(normalizePoaFrequency({ frecExcel: 1, activityKey: '1.01', descripcion: 'Limpieza general' })).toBe(1);
     expect(normalizePoaFrequency({ frecExcel: 1, activityKey: '2.01', descripcion: 'Poda rutinaria' })).toBe(1);
 
-    // Actividades periódicas no rutinarias con FREC = 1 -> Deben canonicalizarse a 4 (1x/semana Lunes)
-    expect(normalizePoaFrequency({ frecExcel: 1, activityKey: '9.01', descripcion: 'Informe de gestión ambiental semestral', unit: 'INFORME' })).toBe(4);
+    // Actividades periódicas con texto explícito SEMANAL -> Deben canonicalizarse a 4 (1x/semana Lunes)
+    expect(normalizePoaFrequency({ frecExcel: 1, activityKey: '9.01', descripcion: 'Informe de gestión ambiental semanal', unit: 'INFORME' })).toBe(4);
+
+    // Actividades no rutinarias sin metadatos diarios ni semanales con FREC = 1 -> Deben retornar NULL (no inventar semántica silenciosamente)
+    expect(normalizePoaFrequency({ frecExcel: 1, activityKey: '9.01', descripcion: 'Informe de gestión ambiental semestral', unit: 'INFORME' })).toBeNull();
 
     // Frecuencias fraccionarias/periódicas -> Deben conservarse intactas
     expect(normalizePoaFrequency({ frecExcel: 0.5, activityKey: '2.08' })).toBe(0.5);

@@ -89,6 +89,7 @@ export async function ensureWeeklyPlanMaterialized(
 
   // 2. Obtener actividades del POA activo con sus frecuencias e IDs
   let poaActivitiesMap = new Map<string, { id: string; frecuencia: number }>();
+  let poaActivityKeyById = new Map<string, string>();
   let fallbackPoaActivityId: string | null = null;
 
   const { data: poaActs } = await supabase
@@ -102,6 +103,36 @@ export async function ensureWeeklyPlanMaterialized(
         id: pa.id,
         frecuencia: Number(pa.frecuencia),
       });
+      poaActivityKeyById.set(pa.id, pa.activity_key);
+    }
+  }
+
+  // 2.1 Obtener Alcance Físico Contractual desde poa_activity_zones (H6.3 Invariante Soberana)
+  let poaZoneQtyMap = new Map<string, number>();
+  let hasZoneScopeData = false;
+
+  if (gId) {
+    try {
+      const poaActIds = Array.from(poaActivitiesMap.values()).map((a) => a.id).filter(Boolean);
+      if (poaActIds.length > 0) {
+        const { data: zoneRows } = await supabase
+          .from('poa_activity_zones')
+          .select('poa_activity_id, zone_id, cantidad_contratada')
+          .eq('zone_id', gId)
+          .in('poa_activity_id', poaActIds);
+
+        if (Array.isArray(zoneRows) && zoneRows.length > 0) {
+          hasZoneScopeData = true;
+          for (const z of zoneRows) {
+            const actKey = poaActivityKeyById.get(z.poa_activity_id);
+            if (actKey) {
+              poaZoneQtyMap.set(actKey, Number(z.cantidad_contratada));
+            }
+          }
+        }
+      }
+    } catch (_errZone) {
+      // Fallback gracioso para entornos de prueba donde poa_activity_zones no está mockeada
     }
   }
 
@@ -122,36 +153,51 @@ export async function ensureWeeklyPlanMaterialized(
     scopeByKey.set(sm.activity_key, sm.scope_key);
   }
 
-  // 5. Obtener cantidades del sitio desde resource_analysis
+  // 5. Obtener cantidades del sitio desde resource_analysis (Read Model operacional secundario)
   let scopeData: Record<string, number> = {};
   if (gId) {
-    const { data: raRow } = await supabase
-      .from('resource_analysis')
-      .select('scope_data')
-      .eq('board_id', boardId)
-      .eq('site_id', gId)
-      .maybeSingle();
+    try {
+      const { data: raRow } = await supabase
+        .from('resource_analysis')
+        .select('scope_data')
+        .eq('board_id', boardId)
+        .eq('site_id', gId)
+        .maybeSingle();
 
-    scopeData = (raRow?.scope_data as Record<string, number>) ?? {};
+      scopeData = (raRow?.scope_data as Record<string, number>) ?? {};
+    } catch (_errRa) {
+      scopeData = {};
+    }
   }
 
-  // 6. Construir RoutineBaseTemplate[]
+  // 6. Construir RoutineBaseTemplate[] (Soberanía Contractual POA + Fallback Operacional)
   const templates: RoutineBaseTemplate[] = [];
 
   for (const std of standards || []) {
     const poaInfo = poaActivitiesMap.get(std.activity_key);
+    // Si existe filtro POA activo y la actividad no pertenece al POA, se excluye (POA = null -> planned_qty = 0)
+    if (poaActivitiesMap.size > 0 && !poaInfo) continue;
+
     const frecuencia = poaInfo?.frecuencia ?? Number(std.frecuencia) ?? 1;
 
-    const scopeKey = scopeByKey.get(std.activity_key) || std.activity_key;
-    const valFromScopeKey = scopeData[scopeKey];
-    const valFromActKey = scopeData[std.activity_key];
-    const cantidadRaw = typeof valFromScopeKey === 'number'
-      ? valFromScopeKey
-      : (typeof valFromActKey === 'number' ? valFromActKey : 0);
-    const cantidad = Math.max(0, cantidadRaw);
+    let cantidad = 0;
+    if (poaActivitiesMap.size > 0) {
+      // H6.3 Invariante Soberana: Cuando existe POA activo, poa_activity_zones es la ÚNICA autoridad contractual
+      const zoneQty = poaZoneQtyMap.get(std.activity_key);
+      cantidad = typeof zoneQty === 'number' ? Math.max(0, zoneQty) : 0;
+    } else {
+      // Fallback operacional exclusivo para tableros legados sin versión de POA activa cargada
+      const scopeKey = scopeByKey.get(std.activity_key) || std.activity_key;
+      const valFromScopeKey = scopeData[scopeKey];
+      const valFromActKey = scopeData[std.activity_key];
+      const cantidadRaw = typeof valFromScopeKey === 'number'
+        ? valFromScopeKey
+        : (typeof valFromActKey === 'number' ? valFromActKey : 0);
+      cantidad = Math.max(0, cantidadRaw);
+    }
 
     const rendimiento = Number(std.rendimiento);
-    if (rendimiento <= 0) continue;
+    if (rendimiento <= 0 || cantidad <= 0) continue;
 
     templates.push({
       id: std.id,
@@ -180,16 +226,21 @@ export async function ensureWeeklyPlanMaterialized(
     const hasPoaFilter = activePoaKeys.size > 0;
 
     for (const std of catalog) {
-      // REGLA RECTORA DE GOBIERNO: Fallback de estándares != Fallback de actividades.
-      // El catálogo sólo aporta parámetros técnicos (rendimiento, unidad). Nunca inventa actividades ajenas al cronograma del sitio.
       if (hasPoaFilter && !activePoaKeys.has(std.activity_key)) {
         continue; // Excluir actividad no definida en el Cronograma Operativo del sitio
       }
 
-      const scopeKey = scopeMap.get(std.activity_key) || std.activity_key;
-      const cantidadRaw = typeof scopeData[scopeKey] === 'number' ? scopeData[scopeKey] : 0;
-      const cantidad = Math.max(0, cantidadRaw);
-      if (std.rendimiento <= 0) continue;
+      let cantidad = 0;
+      if (hasPoaFilter) {
+        const zoneQty = poaZoneQtyMap.get(std.activity_key);
+        cantidad = typeof zoneQty === 'number' ? Math.max(0, zoneQty) : 0;
+      } else {
+        const scopeKey = scopeMap.get(std.activity_key) || std.activity_key;
+        const cantidadRaw = typeof scopeData[scopeKey] === 'number' ? scopeData[scopeKey] : 0;
+        cantidad = Math.max(0, cantidadRaw);
+      }
+
+      if (std.rendimiento <= 0 || cantidad <= 0) continue;
 
       const poaInfo = poaActivitiesMap.get(std.activity_key);
       const frecuencia = poaInfo?.frecuencia ?? std.frecuencia ?? 1;

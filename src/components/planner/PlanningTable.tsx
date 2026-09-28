@@ -14,7 +14,7 @@ interface Props {
 
 const PRIORITY_STYLE: Record<ActivityPriority, string> = {
   must_execute: 'bg-red-500/20 text-red-400 border-red-500/30',
-  preferred:    'bg-[#3B7EF8]/20 text-[#3B7EF8] border-[#3B7EF8]/30',
+  preferred:    'bg-[var(--color-primary-subtle)] text-[var(--color-primary)] border-[var(--color-primary)]/30 dark:text-[var(--text-primary)]',
   flexible:     'bg-slate-500/20 text-slate-400 border-slate-500/30',
 };
 
@@ -89,14 +89,14 @@ export default function PlanningTable({ activities, weeklyAvailable, weekStartSt
   if (activities.length === 0) return null;
 
   return (
-    <div className="industrial-card rounded-xl border border-[var(--border-color)] overflow-hidden">
+    <div className="bg-[var(--card-bg)] rounded-[var(--radius-surface)] border border-[var(--border-color)] shadow-[var(--shadow-card)] overflow-hidden">
       {/* Visual Header Indicator */}
-      <div className="px-4 py-2 bg-black/40 border-b border-[var(--border-color)] flex items-center justify-between">
-        <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
-          <Calendar className="w-3.5 h-3.5 text-[#3B7EF8]" />
+      <div className="px-4 py-2 bg-[var(--color-surface-subtle)] border-b border-[var(--border-color)] flex items-center justify-between">
+        <div className="flex items-center gap-2 text-[10px] text-[var(--text-muted)] font-mono">
+          <Calendar className="w-3.5 h-3.5 text-[var(--color-primary)] dark:text-[var(--color-accent)]" />
           <span>Calendario Operativo: Lunes – Sábado (Sujeto a festivos Ley Emiliani)</span>
         </div>
-        <span className="text-[9px] text-slate-500 uppercase tracking-widest font-black">
+        <span className="text-[9px] text-[var(--text-muted)] uppercase tracking-widest font-bold font-mono">
           {activities.length} Actividad{activities.length === 1 ? '' : 'es'}
         </span>
       </div>
@@ -253,10 +253,10 @@ function ActivityRow({
       {/* Total Weekly Journals */}
       <td className="px-4 py-3 text-right">
         <div className="flex items-center justify-end gap-2">
-          <div className="w-12 h-1.5 bg-slate-800 rounded-full overflow-hidden hidden sm:block">
-            <div className="h-full bg-[#3B7EF8] rounded-full" style={{ width: `${pct}%` }} />
+          <div className="w-12 h-1.5 bg-[var(--color-surface-subtle)] rounded-full overflow-hidden hidden sm:block border border-[var(--border-color)]">
+            <div className="h-full bg-[var(--color-primary)] dark:bg-[var(--color-accent)] rounded-full" style={{ width: `${pct}%` }} />
           </div>
-          <span className="text-xs font-black text-[var(--text-primary)] w-10 text-right">
+          <span className="text-xs font-mono font-bold text-[var(--text-primary)] w-10 text-right">
             {a.theoretical_journals_week.toFixed(2)}
           </span>
         </div>

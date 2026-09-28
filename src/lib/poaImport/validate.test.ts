@@ -144,7 +144,7 @@ describe('validateParsedPoa — subconjunto sin las 14 actividades ya resueltas 
     expect(result.valid).toBe(true);
     expect(result.activities).toHaveLength(35);
     for (const act of result.activities) {
-      expect(act.frecuencia).toBeGreaterThan(0);
+      expect(act.frecuencia === null || act.frecuencia > 0).toBe(true);
       expect(act.zonas.length).toBeGreaterThan(0);
       for (const z of act.zonas) {
         expect(z.groupId).toMatch(/^group-\d$/);

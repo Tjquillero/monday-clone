@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Group } from '@/types/monday';
 import { useWeeklyPlan } from '@/hooks/useWeeklyPlan';
@@ -10,11 +10,13 @@ import { usePoaActiveCatalog } from '@/hooks/usePoaActivities';
 import { WeeklyPlan } from '@/types/scheduler';
 import { getMonday, getBogotaToday } from '@/lib/weeklyPlanner';
 import WeeklyPlannerView from '@/components/planner/WeeklyPlannerView';
+import PlanningSiteSelector from '@/components/planner/PlanningSiteSelector';
 
 interface Props {
   boardId: string | undefined;
   selectedGroupId: string | null;
   groups: Group[] | undefined;
+  onSelectGroup?: (groupId: string | null) => void;
 }
 
 function shiftWeek(date: Date, direction: -1 | 1): Date {
@@ -25,18 +27,42 @@ function shiftWeek(date: Date, direction: -1 | 1): Date {
   ));
 }
 
-export default function WeeklyPlannerContainer({ boardId, selectedGroupId, groups }: Props) {
+export default function WeeklyPlannerContainer({ boardId, selectedGroupId, groups, onSelectGroup }: Props) {
   const router = useRouter();
   const [weekStart, setWeekStart] = useState<Date>(() => getMonday(getBogotaToday()));
   const [saveError, setSaveError] = useState<string | null>(null);
   const [confirmError, setConfirmError] = useState<Error | null>(null);
   const [closeError, setCloseError] = useState<Error | null>(null);
 
+  // 1. Filtrado canónico de Sitios Operativos (excluyendo grupos financieros)
+  const operationalSites = useMemo(() => {
+    if (!groups) return [];
+    return groups.filter(g => !g.title.toUpperCase().includes('PRESUPUESTO'));
+  }, [groups]);
+
+  // 2. Validación estricta de pertenencia de selectedGroupId a este board
+  const validSelectedGroup = useMemo(() => {
+    if (!selectedGroupId || !operationalSites.length) return undefined;
+    return operationalSites.find(g => g.id === selectedGroupId);
+  }, [selectedGroupId, operationalSites]);
+
+  // 3. Autoselección idempotente ÚNICAMENTE cuando existe exactamente 1 sitio operativo
+  useEffect(() => {
+    if (!selectedGroupId && operationalSites.length === 1 && onSelectGroup) {
+      onSelectGroup(operationalSites[0].id);
+    }
+  }, [selectedGroupId, operationalSites, onSelectGroup]);
+
+  // 4. Limpieza controlada si selectedGroupId es inválido o pertenece a otro board
+  useEffect(() => {
+    if (selectedGroupId && operationalSites.length > 0 && !validSelectedGroup && onSelectGroup) {
+      onSelectGroup(null);
+    }
+  }, [selectedGroupId, operationalSites, validSelectedGroup, onSelectGroup]);
+
   const group = useMemo(() => {
-    if (!selectedGroupId || !groups) return undefined;
-    const g = groups.find(g => g.id === selectedGroupId);
-    return g ? { id: g.id, title: g.title } : undefined;
-  }, [selectedGroupId, groups]);
+    return validSelectedGroup ? { id: validSelectedGroup.id, title: validSelectedGroup.title } : undefined;
+  }, [validSelectedGroup]);
 
   const weekStartISO = useMemo(
     () => weekStart.toISOString().split('T')[0],
@@ -47,7 +73,7 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
   const { plan, missingStandards, isLoading, isError, error } = useWeeklyPlan(boardId, group, weekStart);
 
   // Planes persistidos para este grupo — cache hit si el board ya cargó
-  const { data: savedPlans } = useWeeklyPlans(boardId, selectedGroupId ?? undefined);
+  const { data: savedPlans } = useWeeklyPlans(boardId, validSelectedGroup?.id);
 
   // Catálogo activo del POA (fuente contractual, ADR-0002) — cache hit, useWeeklyPlan ya lo fetcheó
   const { data: poaCatalog } = usePoaActiveCatalog(boardId);
@@ -156,6 +182,16 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
     router.push(`/dashboard?boardId=${boardId}&view=financial`);
   }, [boardId, router]);
 
+  // Si no hay sitio válido seleccionado, renderizar el selector contextual
+  if (!validSelectedGroup) {
+    return (
+      <PlanningSiteSelector
+        sites={operationalSites}
+        onSelectSite={(siteId) => onSelectGroup?.(siteId)}
+      />
+    );
+  }
+
   return (
     <WeeklyPlannerView
       boardId={boardId}
@@ -181,6 +217,7 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
       onGoToCosts={handleGoToCosts}
       onPrevWeek={() => setWeekStart(d => shiftWeek(d, -1))}
       onNextWeek={() => setWeekStart(d => shiftWeek(d, 1))}
+      onChangeSite={() => onSelectGroup?.(null)}
     />
   );
 }

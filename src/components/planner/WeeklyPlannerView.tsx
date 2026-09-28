@@ -53,6 +53,7 @@ interface Props {
   onGoToCosts:   () => void;
   onPrevWeek: () => void;
   onNextWeek: () => void;
+  onChangeSite?: () => void;
 }
 
 export default function WeeklyPlannerView({
@@ -60,7 +61,7 @@ export default function WeeklyPlannerView({
   group, weekStart,
   savedPlan, onSave, isSaving, onPublish, isPublishing, saveError,
   onConfirm, isConfirming, confirmError, onClose, isClosing, closeError, onGoToCosts,
-  onPrevWeek, onNextWeek,
+  onPrevWeek, onNextWeek, onChangeSite,
 }: Props) {
   const noGroupSelected     = !group;
   const hasMissingStandards = missingStandards.length > 0;
@@ -93,20 +94,30 @@ export default function WeeklyPlannerView({
       {/* ── Encabezado ──────────────────────────────────────────── */}
       <div className="flex items-center justify-between shrink-0">
         <div>
-          <h2 className="text-xs font-black uppercase tracking-widest text-white">
+          <h2 className="text-xs font-brand font-bold uppercase tracking-widest text-[var(--text-primary)]">
             Planificador Semanal
           </h2>
           {group && (
-            <p className="text-[10px] text-slate-500 mt-0.5 uppercase tracking-widest">
-              {group.title}
-            </p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-widest font-bold">
+                {group.title}
+              </p>
+              {onChangeSite && (
+                <button
+                  onClick={onChangeSite}
+                  className="text-[9px] font-bold uppercase tracking-wider text-[var(--color-primary)] dark:text-[var(--color-accent)] hover:underline transition-colors"
+                >
+                  · Cambiar sitio
+                </button>
+              )}
+            </div>
           )}
         </div>
         <div className="flex items-center gap-3">
           {boardId && group && (
             <Link
               href={`/dashboard?boardId=${boardId}&view=costos-operativos&groupId=${group.id}`}
-              className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg border border-[var(--border-color)] text-slate-400 hover:text-[#3B7EF8] hover:border-[#3B7EF8]/40 transition-colors"
+              className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest px-2.5 py-1.5 rounded-[var(--radius-control)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--color-primary)]/40 transition-colors"
             >
               <DollarSign className="w-3 h-3" /> Costos operativos
             </Link>
@@ -124,7 +135,7 @@ export default function WeeklyPlannerView({
               {STATUS_LABEL[savedPlan.status]}{hasMissingStandards ? ' · Parcial' : ''}
             </span>
           ) : (
-            <span className="text-[9px] text-slate-600 uppercase tracking-widest">
+            <span className="text-[9px] text-[var(--text-muted)] uppercase tracking-widest">
               Sin guardar{hasMissingStandards ? ' · Parcial' : ''}
             </span>
           )}
@@ -140,7 +151,7 @@ export default function WeeklyPlannerView({
               <button
                 onClick={onSave}
                 disabled={isSaving}
-                className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg bg-[#3B7EF8] text-white hover:bg-[#2563EB] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-[var(--radius-control)] bg-[var(--color-primary)] text-[var(--color-primary-foreground)] hover:bg-[var(--color-primary-hover)] transition-colors shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Save className="w-3 h-3" />
                 {isSaving ? 'Guardando…' : 'Guardar plan'}
@@ -150,7 +161,7 @@ export default function WeeklyPlannerView({
               <button
                 onClick={onPublish}
                 disabled={isPublishing}
-                className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-green-500/50 text-green-400 hover:bg-green-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-[var(--radius-control)] border border-green-500/50 text-green-400 hover:bg-green-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <CheckCircle className="w-3 h-3" />
                 {isPublishing ? 'Publicando…' : 'Publicar'}
@@ -184,8 +195,8 @@ export default function WeeklyPlannerView({
       {isLoading && (
         <div className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-2 border-[#3B7EF8] border-t-transparent rounded-full animate-spin" />
-            <p className="text-[10px] text-slate-500 uppercase tracking-widest">Calculando plan...</p>
+            <div className="w-8 h-8 border-2 border-[var(--color-primary)] dark:border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
+            <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-widest">Calculando plan...</p>
           </div>
         </div>
       )}
