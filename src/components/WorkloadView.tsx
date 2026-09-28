@@ -93,7 +93,7 @@ export default function WorkloadView() {
           </div>
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Equipo</p>
-            <p className="text-2xl font-black text-slate-800">{stats.length}</p>
+            <p className="text-2xl font-bold text-slate-800">{stats.length}</p>
           </div>
         </div>
         
@@ -103,7 +103,7 @@ export default function WorkloadView() {
           </div>
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tareas Listas</p>
-            <p className="text-2xl font-black text-slate-800">{stats.reduce((acc, s) => acc + s.done, 0)}</p>
+            <p className="text-2xl font-bold text-slate-800">{stats.reduce((acc, s) => acc + s.done, 0)}</p>
           </div>
         </div>
 
@@ -113,7 +113,7 @@ export default function WorkloadView() {
           </div>
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tareas Bloqueadas</p>
-            <p className="text-2xl font-black text-slate-800">{stats.reduce((acc, s) => acc + s.stuck, 0)}</p>
+            <p className="text-2xl font-bold text-slate-800">{stats.reduce((acc, s) => acc + s.stuck, 0)}</p>
           </div>
         </div>
       </div>
@@ -143,7 +143,7 @@ export default function WorkloadView() {
               <div key={person.name} className="space-y-3 group">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-500 ring-2 ring-white shadow-sm transition-all group-hover:scale-110 group-hover:shadow-md">
+                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500 ring-2 ring-white shadow-sm transition-all group-hover:scale-110 group-hover:shadow-md">
                       {person.name.charAt(0)}
                     </div>
                     <div>
@@ -152,7 +152,7 @@ export default function WorkloadView() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-black text-slate-800">{Math.round((person.done / person.total) * 100)}%</p>
+                    <p className="text-xs font-bold text-slate-800">{Math.round((person.done / person.total) * 100)}%</p>
                     <p className="text-[9px] text-slate-400 font-bold uppercase">Completado</p>
                   </div>
                 </div>

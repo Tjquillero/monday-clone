@@ -222,6 +222,31 @@ describe('AgentControlCenter — respuestas con citas', () => {
     ).toBeInTheDocument();
   });
 
+  it('muestra la fuente amigable para get_operational_activities con sus argumentos', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        text: 'La actividad 2.19 está contratada en Centro Gastronómico.',
+        citations: [{
+          tool: 'get_operational_activities',
+          args: { board_id: 'board-a', search: '2.19' },
+          durationMs: 42,
+        }],
+        history: { contents: [] },
+      }),
+    });
+
+    render(<AgentControlCenter />);
+    const input = await openWidget();
+    fireEvent.change(input, { target: { value: '¿Dónde está contratada 2.19?' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => expect(screen.getByText('La actividad 2.19 está contratada en Centro Gastronómico.')).toBeInTheDocument());
+    expect(
+      screen.getByText('Fuente: Actividades operativas y alcance contractual (board_id=board-a, search=2.19) — 42 ms')
+    ).toBeInTheDocument();
+  });
+
   it('cae al nombre técnico si una tool no tiene rótulo de presentación', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,

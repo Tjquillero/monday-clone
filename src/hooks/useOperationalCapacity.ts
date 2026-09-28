@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useOperationalStandards, useOperationalScopeMappings } from './useOperationalStandards';
-import { getCrewsForBoard, getActivePersonnelVersion, getPersonnelSiteAssignments } from '@/lib/crewService';
+import { getCrewsForBoard, resolvePersonnelVersionForDate, getPersonnelSiteAssignments } from '@/lib/crewService';
 import {
   calculateOperationalGap,
   calculateCrewWorkloads,
@@ -23,13 +23,19 @@ export function useOperationalCapacity({
   boardId,
   siteId,
   siteName,
+  targetDate,
+  weekStart,
   weeklyPlanItems = [],
 }: {
   boardId: string | undefined;
   siteId: string | undefined;
   siteName?: string;
+  targetDate?: string;
+  weekStart?: string;
   weeklyPlanItems?: WeeklyPlanItem[];
 }) {
+  const effectiveDate = targetDate || weekStart;
+
   // 1. Obtener datos de Resource Analysis para el sitio
   const { data: resourceAnalysisRow, isLoading: isLoadingResourceAnalysis } = useQuery({
     queryKey: ['resource_analysis_row', boardId, siteId],
@@ -57,12 +63,12 @@ export function useOperationalCapacity({
   const { data: standards = [], isLoading: isLoadingStandards } = useOperationalStandards(effectiveSiteName);
   const { data: scopeMappings = [], isLoading: isLoadingMappings } = useOperationalScopeMappings(effectiveSiteName);
 
-  // 3. Adscripciones activas de personal del Módulo 2
+  // 3. Adscripciones activas de personal resueltas canónicamente para la fecha efectiva
   const { data: siteAssignments = [], isLoading: isLoadingAssignments } = useQuery({
-    queryKey: ['site_assignments_active', boardId],
+    queryKey: ['site_assignments_active', boardId, effectiveDate],
     queryFn: async () => {
       if (!boardId) return [];
-      const version = await getActivePersonnelVersion(boardId);
+      const version = await resolvePersonnelVersionForDate(boardId, effectiveDate);
       if (!version) return [];
       return await getPersonnelSiteAssignments(version.id);
     },
