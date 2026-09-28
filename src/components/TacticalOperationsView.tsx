@@ -243,7 +243,7 @@ export default function TacticalOperationsView({
                                         <XAxis dataKey="name" stroke="#64748b" fontSize={9} fontWeight="bold" tickLine={false} axisLine={false} />
                                         <Tooltip 
                                             contentStyle={{ backgroundColor: '#161B30', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
-                                            itemStyle={{ color: '#fff', fontSize: '10px', fontWeight: '900' }}
+                                            itemStyle={{ color: '#fff', fontSize: '10px', fontWeight: '700' }}
                                         />
                                         <Bar dataKey="val" radius={[8, 8, 0, 0]}>
                                             {
@@ -288,8 +288,8 @@ export default function TacticalOperationsView({
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="5 5" stroke="rgba(255,255,255,0.03)" vertical={false} />
-                                <XAxis dataKey="day" stroke="#475569" fontSize={10} fontWeight="900" axisLine={false} tickLine={false} label={{ value: 'Días del Mes', position: 'insideBottom', offset: -10, fill: '#475569', fontSize: 10, fontWeight: 'bold' }} />
-                                <YAxis stroke="#475569" fontSize={10} fontWeight="900" axisLine={false} tickLine={false} label={{ value: '% Avance', angle: -90, position: 'insideLeft', fill: '#475569', fontSize: 10, fontWeight: 'bold' }} />
+                                <XAxis dataKey="day" stroke="#475569" fontSize={10} fontWeight="700" axisLine={false} tickLine={false} label={{ value: 'Días del Mes', position: 'insideBottom', offset: -10, fill: '#475569', fontSize: 10, fontWeight: 'bold' }} />
+                                <YAxis stroke="#475569" fontSize={10} fontWeight="700" axisLine={false} tickLine={false} label={{ value: '% Avance', angle: -90, position: 'insideLeft', fill: '#475569', fontSize: 10, fontWeight: 'bold' }} />
                                 <Tooltip 
                                     contentStyle={{ backgroundColor: '#0C0F1A', border: '1px solid rgba(59,126,248,0.2)', borderRadius: '16px', boxShadow: '0 20px 40px rgba(0,0,0,0.5)' }}
                                     itemStyle={{ fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase' }}

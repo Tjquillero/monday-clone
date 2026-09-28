@@ -140,4 +140,22 @@ describe('SITE LIST VIEW LEVEL 1 (Unit Tests)', () => {
 
     expect(handleSelectSite).toHaveBeenCalledWith('group-plaza');
   });
+
+  it('SLV-04 (C1.1): debe renderizar el badge de personal disponible cuando se proporciona personnelAssignments', () => {
+    const mockAssignments = [
+      { id: 'a1', personnel_id: 'p1', role_in_site: 'Supervisor' },
+      { id: 'a2', personnel_id: 'p2', role_in_site: 'Operario' },
+      { id: 'a3', personnel_id: 'p3', role_in_site: 'Operario' },
+    ];
+    render(
+      <SiteListView
+        plans={mockPlans}
+        onSelectSite={jest.fn()}
+        personnelAssignments={mockAssignments}
+      />
+    );
+
+    const persBadges = screen.getAllByText('3 pers.');
+    expect(persBadges.length).toBeGreaterThan(0);
+  });
 });

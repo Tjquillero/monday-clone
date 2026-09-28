@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import puppeteer from 'puppeteer';
 import { generateBoardReportHtml } from '@/components/reports/BoardReportTemplate';
+import { wrapReportHtml } from '@/lib/reportFontHelper';
 
 export async function POST(req: NextRequest) {
   console.log('Received request for Board Report');
@@ -15,44 +16,11 @@ export async function POST(req: NextRequest) {
     // Generate HTML string directly
     const componentHtml = generateBoardReportHtml(boardName || 'Tablero', groups, columns);
 
-    // Full HTML document with Tailwind CDN
-    const fullHtml = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <script src="https://cdn.tailwindcss.com"></script>
-          <script>
-            tailwind.config = {
-              theme: {
-                extend: {
-                  colors: {
-                    primary: '#24614b',
-                  }
-                }
-              }
-            }
-          </script>
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-            body { 
-              font-family: 'Inter', sans-serif;
-              -webkit-print-color-adjust: exact;
-            }
-            .break-inside-avoid {
-              break-inside: avoid;
-            }
-            table { page-break-inside: auto }
-            tr    { page-break-inside: avoid; page-break-after: auto }
-            thead { display: table-header-group }
-            tfoot { display: table-footer-group }
-          </style>
-        </head>
-        <body>
-          ${componentHtml}
-        </body>
-      </html>
-    `;
+    // Full HTML document with local versioned IBM Plex fonts
+    const fullHtml = wrapReportHtml({
+      title: `Reporte de Tablero - ${boardName || 'Mantenix'}`,
+      bodyContent: componentHtml,
+    });
 
     // Launch puppeteer
     const browser = await puppeteer.launch({
@@ -62,8 +30,9 @@ export async function POST(req: NextRequest) {
 
     const page = await browser.newPage();
     
-    // Set content and wait for network idle
-    await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
+    // Set content and wait for DOM and local fonts ready
+    await page.setContent(fullHtml, { waitUntil: 'domcontentloaded' });
+    await page.evaluateHandle('document.fonts.ready');
 
     // Generate PDF
     const pdfBuffer = await page.pdf({

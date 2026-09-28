@@ -35,6 +35,7 @@ interface Props {
   onExecutionSuccess?: (result: FieldReportResult) => void;
   operationalTodayISO?: string;
   showAllWeek?: boolean;
+  personnelAssignments?: any[];
 }
 
 const PRIORITY_LABEL: Record<ActivityPriority, { text: string; cls: string }> = {
@@ -133,8 +134,8 @@ export function SingleActivityCard({
           </div>
         </div>
 
-        {/* Proyección Consultiva de Cuadrilla e Integrantes Asignados (H6.4 / H6.6) */}
-        {item.crew && (
+        {/* Proyección Consultiva de Cuadrilla e Integrantes Asignados (H6.4 / H6.6 / C1.1) */}
+        {item.crew ? (
           <div className="space-y-1.5 text-xs text-[var(--text-secondary)] bg-[var(--color-surface-subtle)] p-2.5 rounded-[var(--radius-control)] border border-[var(--border-color)]">
             <div className="flex flex-wrap items-center justify-between gap-1.5">
               <div className="flex items-center gap-1.5 min-w-0">
@@ -173,6 +174,11 @@ export function SingleActivityCard({
                 ))}
               </div>
             )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] bg-[var(--color-surface-subtle)] px-2.5 py-1.5 rounded-[var(--radius-control)] border border-[var(--border-color)] w-fit" data-testid="unassigned-crew-badge">
+            <Users className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />
+            <span className="font-medium">Sin asignar</span>
           </div>
         )}
 
@@ -222,7 +228,7 @@ export function SingleActivityCard({
               <div className="pt-1.5 border-t border-[var(--border-color)] flex flex-wrap gap-3" data-testid="evidence-preview-container">
                 {item.executionsSummary.evidencePreview.before.length > 0 && (
                   <div className="space-y-1">
-                    <span className="text-[10px] font-extrabold uppercase text-[var(--text-muted)] tracking-wider">Antes ({item.executionsSummary.evidencePreview.before.length})</span>
+                    <span className="text-[10px] font-bold uppercase text-[var(--text-muted)] tracking-wider">Antes ({item.executionsSummary.evidencePreview.before.length})</span>
                     <div className="flex gap-1.5">
                       {item.executionsSummary.evidencePreview.before.map((img) => (
                         <div key={img.id} className="relative w-12 h-12 rounded-[var(--radius-control)] bg-[var(--color-surface-subtle)] border border-[var(--border-color)] overflow-hidden shadow-2xs">
@@ -235,7 +241,7 @@ export function SingleActivityCard({
 
                 {item.executionsSummary.evidencePreview.after.length > 0 && (
                   <div className="space-y-1">
-                    <span className="text-[10px] font-extrabold uppercase text-[var(--text-muted)] tracking-wider">Después ({item.executionsSummary.evidencePreview.after.length})</span>
+                    <span className="text-[10px] font-bold uppercase text-[var(--text-muted)] tracking-wider">Después ({item.executionsSummary.evidencePreview.after.length})</span>
                     <div className="flex gap-1.5">
                       {item.executionsSummary.evidencePreview.after.map((img) => (
                         <div key={img.id} className="relative w-12 h-12 rounded-[var(--radius-control)] bg-[var(--color-surface-subtle)] border border-[var(--border-color)] overflow-hidden shadow-2xs">
@@ -380,6 +386,7 @@ interface SiteActivitiesPlanSectionProps {
   onExecutionSuccess?: (result: FieldReportResult) => void;
   operationalTodayISO?: string;
   showAllWeek?: boolean;
+  personnelAssignments?: any[];
 }
 
 export function SiteActivitiesPlanSection({
@@ -390,8 +397,10 @@ export function SiteActivitiesPlanSection({
   onExecutionSuccess,
   operationalTodayISO,
   showAllWeek = false,
+  personnelAssignments,
 }: SiteActivitiesPlanSectionProps) {
   const [selectedCrewFilter, setSelectedCrewFilter] = useState<string>('all');
+  const [showPersonnelList, setShowPersonnelList] = useState<boolean>(false);
   const siteName = plan.group?.title ?? 'Sitio General';
 
   let rawItems = plan.items || [];
@@ -487,7 +496,7 @@ export function SiteActivitiesPlanSection({
               <MapPin className="w-3.5 h-3.5 text-[var(--color-primary)] shrink-0" />
               <span>Sitio Seleccionado</span>
             </div>
-            <h2 className="text-xl sm:text-2xl font-brand font-extrabold text-[var(--text-primary)] leading-tight truncate">
+            <h2 className="text-xl sm:text-2xl font-brand font-bold text-[var(--text-primary)] leading-tight truncate">
               {siteName}
             </h2>
           </div>
@@ -497,6 +506,54 @@ export function SiteActivitiesPlanSection({
           <span>{allItems.length} actividades totales</span>
         </div>
       </header>
+
+      {/* C1.1: Personal Adscrito y Disponible en el Frente */}
+      {personnelAssignments && personnelAssignments.length > 0 && (
+        <div className="bg-[var(--card-bg)] rounded-[var(--radius-surface)] border border-[var(--border-color)] p-4 shadow-2xs space-y-3 transition-colors" data-testid="site-personnel-section">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="p-2 rounded-[var(--radius-control)] bg-[var(--color-primary-subtle)] text-[var(--color-primary)] shrink-0">
+                <Users className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-primary)] truncate">
+                  Personal Adscrito al Frente ({personnelAssignments.length} personas)
+                </h3>
+                <p className="text-[11px] text-[var(--text-muted)] truncate">
+                  Personal disponible registrado en el catálogo de asignaciones
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPersonnelList((v) => !v)}
+              className="text-xs font-semibold text-[var(--color-primary)] hover:underline flex items-center gap-1 select-none shrink-0"
+              aria-expanded={showPersonnelList}
+            >
+              <span>{showPersonnelList ? 'Ocultar personal' : 'Ver personal'}</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showPersonnelList ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
+
+          {showPersonnelList && (
+            <div className="pt-2 border-t border-[var(--border-color)] grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2" data-testid="site-personnel-list">
+              {personnelAssignments.map((p: any) => (
+                <div key={p.id} className="p-2.5 rounded-[var(--radius-control)] bg-[var(--color-surface-subtle)] border border-[var(--border-color)] text-xs flex items-center justify-between">
+                  <div className="min-w-0 pr-2">
+                    <p className="font-semibold text-[var(--text-primary)] truncate">{p.personnel_name || p.personnel?.name || 'Operario'}</p>
+                    {(p.personnel_document_id || p.personnel?.document_id) && (
+                      <p className="text-[10px] text-[var(--text-muted)] font-mono">CC: {p.personnel_document_id || p.personnel?.document_id}</p>
+                    )}
+                  </div>
+                  <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--border-color)] text-[var(--text-secondary)] uppercase">
+                    {p.role_in_site || p.zone || 'General'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* PO-03: BARRA DE FILTRADO CONSULTIVO POR CUADRILLA */}
       {allItems.length > 0 && (
@@ -533,7 +590,7 @@ export function SiteActivitiesPlanSection({
             >
               <span>Todas</span>
               <span
-                className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold font-mono ${
+                className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold font-mono ${
                   selectedCrewFilter === 'all' ? 'bg-white/20 text-white' : 'bg-[var(--border-color)] text-[var(--text-primary)]'
                 }`}
               >
@@ -561,7 +618,7 @@ export function SiteActivitiesPlanSection({
                 >
                   <span className="truncate max-w-[160px]">{crew.name}</span>
                   <span
-                    className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold font-mono ${
+                    className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold font-mono ${
                       isSelected ? 'bg-white/20 text-white' : 'bg-[var(--border-color)] text-[var(--text-primary)]'
                     }`}
                   >
@@ -587,7 +644,7 @@ export function SiteActivitiesPlanSection({
               >
                 <span>Sin asignar</span>
                 <span
-                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold font-mono ${
+                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold font-mono ${
                     selectedCrewFilter === 'unassigned' ? 'bg-white/20 text-white' : 'bg-[var(--border-color)] text-[var(--text-primary)]'
                   }`}
                 >
@@ -604,7 +661,7 @@ export function SiteActivitiesPlanSection({
         <div className="space-y-3">
           <div className="flex items-center gap-2 px-1">
             <span className="w-2.5 h-2.5 rounded-full bg-[var(--color-danger)] animate-pulse" />
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-[var(--color-danger)] flex items-center gap-1.5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-danger)] flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 text-[var(--color-danger)]" />
               <span>Pendientes ({pendingItems.length})</span>
             </h3>
@@ -632,7 +689,7 @@ export function SiteActivitiesPlanSection({
         <div className="space-y-3 pt-2">
           <div className="flex items-center gap-2 px-1">
             <span className="w-2.5 h-2.5 rounded-full bg-[var(--color-warning)]" />
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-[var(--color-warning)] flex items-center gap-1.5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-warning)] flex items-center gap-1.5">
               <Clock className="w-4 h-4 text-[var(--color-warning)]" />
               <span>En Ejecución ({inProgressItems.length})</span>
             </h3>
@@ -660,7 +717,7 @@ export function SiteActivitiesPlanSection({
         <div className="space-y-3 pt-2">
           <div className="flex items-center gap-2 px-1">
             <span className="w-2.5 h-2.5 rounded-full bg-[var(--color-success)]" />
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-[var(--color-success)] flex items-center gap-1.5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-success)] flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 text-[var(--color-success)]" />
               <span>Completadas ({completedItems.length})</span>
             </h3>
@@ -720,6 +777,7 @@ export default function ActividadesView({
   onExecutionSuccess,
   operationalTodayISO,
   showAllWeek,
+  personnelAssignments,
 }: Props) {
   // Filtrar planes al grupo/sitio seleccionado si existe
   const targetPlans = selectedGroupId
@@ -758,6 +816,7 @@ export default function ActividadesView({
           onExecutionSuccess={onExecutionSuccess}
           operationalTodayISO={operationalTodayISO}
           showAllWeek={showAllWeek}
+          personnelAssignments={personnelAssignments}
         />
       ))}
     </div>

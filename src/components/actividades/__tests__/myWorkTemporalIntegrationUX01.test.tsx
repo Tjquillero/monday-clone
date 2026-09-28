@@ -15,11 +15,14 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import ActividadesContainer, { getBogotaCivilDateISO } from '../ActividadesContainer';
+import ActividadesContainer, { getBogotaCivilDateISO, getMondayCivilISO } from '../ActividadesContainer';
 import { usePublishedWeekPlans, PublishedWeekPlan, PublishedWeekPlanItem } from '@/hooks/useWeeklyPlans';
 import { useAuth } from '@/contexts/AuthContext';
 
 jest.mock('@/hooks/useWeeklyPlans');
+jest.mock('@/hooks/useCrews', () => ({
+  usePersonnelAssignments: jest.fn(() => ({ data: [] })),
+}));
 jest.mock('@/contexts/AuthContext');
 
 describe('UX-01-F: Integration Tests for /my-work (Today-First & Overdue)', () => {
@@ -28,6 +31,16 @@ describe('UX-01-F: Integration Tests for /my-work (Today-First & Overdue)', () =
 
   // Fijar la fecha operativa de Bogotá para los tests a la fecha de hoy
   const TODAY_BOGOTA = getBogotaCivilDateISO();
+
+  function addDaysISO(isoDate: string, days: number): string {
+    const parts = isoDate.split('-').map(Number);
+    const date = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+    date.setUTCDate(date.getUTCDate() + days);
+    const y = date.getUTCFullYear();
+    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(date.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
 
   const createMockItem = (overrides: Partial<PublishedWeekPlanItem>): PublishedWeekPlanItem => {
     const name = overrides.name || 'Poda de Zonas Verdes';
@@ -67,7 +80,7 @@ describe('UX-01-F: Integration Tests for /my-work (Today-First & Overdue)', () =
       id: 'plan-1',
       board_id: 'board-1',
       group_id: 'group-1',
-      week_start: '2026-09-21',
+      week_start: getMondayCivilISO(TODAY_BOGOTA),
       period_number: 1,
       status: 'published',
       published_by: null,
@@ -95,7 +108,7 @@ describe('UX-01-F: Integration Tests for /my-work (Today-First & Overdue)', () =
         createMockItem({
           id: 'item-overdue-1',
           name: 'Reparación de Bordillos Resagada',
-          planned_date: '2026-09-20',
+          planned_date: addDaysISO(TODAY_BOGOTA, -1),
           planned_qty: 30,
           executed_qty: 0,
         }),
@@ -103,7 +116,7 @@ describe('UX-01-F: Integration Tests for /my-work (Today-First & Overdue)', () =
         createMockItem({
           id: 'item-overdue-2',
           name: 'Pintura Vial Resagada',
-          planned_date: '2026-09-19',
+          planned_date: addDaysISO(TODAY_BOGOTA, -2),
           planned_qty: 80,
           executed_qty: 20,
         }),
@@ -111,7 +124,7 @@ describe('UX-01-F: Integration Tests for /my-work (Today-First & Overdue)', () =
         createMockItem({
           id: 'item-future-1',
           name: 'Poda de Palmeras Futura',
-          planned_date: '2026-09-28',
+          planned_date: addDaysISO(TODAY_BOGOTA, 2),
           planned_qty: 40,
           executed_qty: 0,
         }),
@@ -119,12 +132,12 @@ describe('UX-01-F: Integration Tests for /my-work (Today-First & Overdue)', () =
         createMockItem({
           id: 'item-done-1',
           name: 'Siembra de Arbustos Cerrada',
-          planned_date: '2026-09-20',
+          planned_date: addDaysISO(TODAY_BOGOTA, -1),
           planned_qty: 100,
           executed_qty: 100,
           executionsSummary: {
             totalExecutions: 1,
-            lastExecutionDate: '2026-09-20',
+            lastExecutionDate: addDaysISO(TODAY_BOGOTA, -1),
             verificationStatus: 'verified',
             evidencePreview: { before: [], after: [] },
           },

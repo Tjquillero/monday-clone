@@ -18,7 +18,7 @@ export default function MyWorkPage() {
           <ChevronRight className="w-3 h-3" />
           <span className="text-[var(--text-secondary)] font-medium">Mis actividades</span>
         </div>
-        <h1 className="text-2xl md:text-3xl font-brand font-extrabold text-[var(--text-primary)] flex items-center tracking-tight">
+        <h1 className="text-2xl md:text-3xl font-brand font-bold text-[var(--text-primary)] flex items-center tracking-tight">
           <ClipboardList className="w-8 h-8 mr-3 text-[var(--color-primary)] shrink-0" />
           Mis actividades
         </h1>

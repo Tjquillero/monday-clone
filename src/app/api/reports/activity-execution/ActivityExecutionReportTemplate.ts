@@ -7,6 +7,7 @@
  */
 
 import { ResolvedActivityExecutionReportDTO } from '../../../../lib/activityReportAssetResolver';
+import { getReportFontFaceStyles } from '../../../../lib/reportFontHelper';
 
 export function renderActivityExecutionReportHTML(report: ResolvedActivityExecutionReportDTO): string {
   const { header, fronts, signatories } = report;
@@ -138,17 +139,21 @@ export function renderActivityExecutionReportHTML(report: ResolvedActivityExecut
   <meta charset="UTF-8">
   <title>Informe de Ejecución de Actividades y Soporte Fotográfico</title>
   <style>
+    ${getReportFontFaceStyles()}
+
     @page {
       size: letter portrait;
       margin: 15mm;
     }
     body {
-      font-family: 'Helvetica Neue', Arial, sans-serif;
+      font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       color: #1e293b;
       background: #ffffff;
       margin: 0;
       padding: 0;
       font-size: 11pt;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
     .watermark {
       position: fixed;

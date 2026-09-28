@@ -5,9 +5,21 @@
 // verifyExecution ({ executionId, planItemId }) -> verify_execution
 // rejectExecution ({ executionId, planItemId, notes }) -> reject_execution
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Loader2, CalendarX2, AlertTriangle, Check, TriangleAlert, Camera, Users, Clock, Image as ImageIcon } from 'lucide-react';
+import {
+  Loader2,
+  CalendarX2,
+  AlertTriangle,
+  Check,
+  TriangleAlert,
+  Camera,
+  Users,
+  Clock,
+  MessageSquare,
+  Package,
+  MapPin,
+} from 'lucide-react';
 import { CardSkeleton } from '@/components/ui/Skeleton';
 import { useVerificationQueue, VerificationQueueItem } from '@/hooks/useVerificationQueue';
 import { useWeeklyPlanMutations } from '@/hooks/useWeeklyPlanMutations';
@@ -70,12 +82,22 @@ function VerificationItemCard({
         </span>
       </div>
 
-      {/* Métricas y Datos Contextuales */}
+      {/* Métricas y Datos Contextuales: Meta Planificada y Avance Físico (PO-04 / AC-03) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-50/70 p-3.5 rounded-xl border border-slate-100/80 text-xs">
-        <div>
-          <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider mb-0.5">Ejecutado</span>
-          <span className="font-extrabold text-slate-900 text-sm sm:text-base">{formatNumber(item.executed_qty)}</span>{' '}
-          <span className="text-slate-500 font-medium">{item.planned_unit}</span>
+        <div data-testid="execution-quantities">
+          <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider mb-0.5">Avance Físico</span>
+          <div className="flex items-baseline gap-1.5 flex-wrap">
+            <div>
+              <span className="font-extrabold text-slate-900 text-sm sm:text-base">{formatNumber(item.executed_qty)}</span>{' '}
+              <span className="text-slate-500 font-medium">{item.planned_unit}</span>
+              <span className="text-[10px] font-bold text-slate-400 ml-1 uppercase">ejecutado</span>
+            </div>
+            {typeof item.planned_qty === 'number' && item.planned_qty > 0 && (
+              <span className="text-xs text-slate-400 font-medium">
+                / {formatNumber(item.planned_qty)} {item.planned_unit} <span className="text-[10px] font-semibold text-slate-400">planificado</span>
+              </span>
+            )}
+          </div>
         </div>
         <div>
           <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider mb-0.5">Fecha y Horario</span>
@@ -93,6 +115,54 @@ function VerificationItemCard({
           </span>
         </div>
       </div>
+
+      {/* PO-04 / AC-01: Proyección de Notas del Operador de Campo */}
+      {item.notes && item.notes.trim().length > 0 && (
+        <div
+          className="p-3 bg-slate-50/90 rounded-xl border border-slate-200/80 space-y-1 text-xs"
+          data-testid="operator-notes-banner"
+        >
+          <div className="flex items-center gap-1.5 font-bold text-slate-700">
+            <MessageSquare className="w-3.5 h-3.5 text-primary shrink-0" />
+            <span>Observación del Operador en Campo</span>
+          </div>
+          <p className="text-slate-700 font-medium pl-5 leading-relaxed whitespace-pre-wrap">
+            {item.notes.trim()}
+          </p>
+        </div>
+      )}
+
+      {/* PO-04 / AC-02: Proyección Consultiva de Recursos Operativos Consumidos (POD-01) */}
+      {Array.isArray(item.used_resources) && item.used_resources.length > 0 && (
+        <div className="space-y-2 bg-slate-50/60 p-3 rounded-xl border border-slate-200/70" data-testid="used-resources-section">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
+            <Package className="w-3.5 h-3.5 text-primary shrink-0" />
+            <span>Recursos Reportados ({item.used_resources.length}):</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {item.used_resources.map((res: any, idx: number) => {
+              const rName = res.resourceName ?? res.resource_name ?? res.name ?? 'Insumo';
+              const rQty = res.quantity ?? res.qty ?? 0;
+              const rUnit = res.unit ?? '';
+              const rCat = res.category ?? 'MATERIAL';
+              return (
+                <div
+                  key={res.resourceKey || res.id || idx}
+                  className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-slate-200/80 text-xs shadow-2xs"
+                >
+                  <span className="font-semibold text-slate-800">{rName}</span>
+                  <span className="font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded text-[11px]">
+                    {rQty} {rUnit}
+                  </span>
+                  <span className="text-[9px] uppercase font-extrabold text-slate-400 bg-slate-100 px-1 rounded">
+                    {rCat}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Strip de Miniaturas de Evidencia Fotográfica */}
       <div className="space-y-2">
@@ -212,6 +282,7 @@ export default function VerificationContainer() {
 
   const invalidateQueue = () => queryClient.invalidateQueries({ queryKey: ['verification_queue'] });
 
+  const [selectedSiteFilter, setSelectedSiteFilter] = useState<string>('all');
   const [observingId, setObservingId] = useState<string | null>(null);
   const [observationNotes, setObservationNotes] = useState('');
   const [evidenceExecId, setEvidenceExecId] = useState<string | null>(null);
@@ -219,6 +290,46 @@ export default function VerificationContainer() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const busy = verifyExecution.isPending || rejectExecution.isPending;
+
+  // PO-04 / AC-04: Catálogo determinista de sitios presentes en la cola
+  const sitesList = useMemo(() => {
+    if (!queue) return [];
+    const sitesMap = new Map<string, { id: string; title: string }>();
+    for (const item of queue) {
+      const siteId = item.group_id || item.group_title;
+      if (siteId && !sitesMap.has(siteId)) {
+        sitesMap.set(siteId, {
+          id: siteId,
+          title: item.group_title || 'Sitio',
+        });
+      }
+    }
+    return Array.from(sitesMap.values()).sort((a, b) => {
+      const cmp = a.title.localeCompare(b.title, 'es', { sensitivity: 'base' });
+      if (cmp !== 0) return cmp;
+      return a.id.localeCompare(b.id);
+    });
+  }, [queue]);
+
+  // PO-04 / AC-04: Contadores estables por sitio
+  const siteCounts = useMemo(() => {
+    if (!queue) return { all: 0 };
+    const counts: Record<string, number> = { all: queue.length };
+    for (const item of queue) {
+      const siteId = item.group_id || item.group_title;
+      if (siteId) {
+        counts[siteId] = (counts[siteId] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [queue]);
+
+  // PO-04 / AC-04: Filtrado en memoria por sitio
+  const filteredQueue = useMemo(() => {
+    if (!queue) return [];
+    if (selectedSiteFilter === 'all') return queue;
+    return queue.filter((item) => (item.group_id === selectedSiteFilter || item.group_title === selectedSiteFilter));
+  }, [queue, selectedSiteFilter]);
 
   const handleVerify = (item: VerificationQueueItem) => {
     setActionError(null);
@@ -280,6 +391,7 @@ export default function VerificationContainer() {
 
   return (
     <div className="space-y-4">
+      {/* Resumen de Cola */}
       <div className="flex items-center justify-between pb-1">
         <p className="text-sm font-semibold text-slate-600">
           <span className="font-extrabold text-slate-900">{queue.length}</span>{' '}
@@ -287,32 +399,128 @@ export default function VerificationContainer() {
         </p>
       </div>
 
-      <div className="space-y-4">
-        {queue.map((item) => (
-          <VerificationItemCard
-            key={item.id}
-            item={item}
-            isObserving={observingId === item.id}
-            observationNotes={observationNotes}
-            setObservationNotes={setObservationNotes}
-            onStartObserving={() => {
-              setActionError(null);
-              setObservingId(item.id);
-              setObservationNotes('');
-            }}
-            onCancelObserving={() => {
-              setObservingId(null);
-              setObservationNotes('');
-            }}
-            onVerify={() => handleVerify(item)}
-            onObserve={() => handleObserve(item)}
-            onOpenEvidence={(atts) => handleOpenEvidence(item.id, atts)}
-            busy={busy}
-            isVerifying={verifyExecution.isPending && verifyExecution.variables?.executionId === item.id}
-            isRejecting={rejectExecution.isPending && rejectExecution.variables?.executionId === item.id}
-          />
-        ))}
-      </div>
+      {/* PO-04 / AC-04: BARRA DE FILTRADO CONSULTIVO POR SITIO */}
+      {sitesList.length > 1 && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-3 shadow-2xs space-y-2" data-testid="verification-site-filter-bar">
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
+              <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+              <span>Filtro por Sitio:</span>
+            </div>
+            {selectedSiteFilter !== 'all' && (
+              <button
+                type="button"
+                onClick={() => setSelectedSiteFilter('all')}
+                className="text-[11px] font-semibold text-primary hover:text-primary/80 transition-colors"
+              >
+                Ver todos
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 no-scrollbar" role="tablist" aria-label="Filtro de sitio">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={selectedSiteFilter === 'all'}
+              onClick={() => setSelectedSiteFilter('all')}
+              data-testid="verification-site-filter-all"
+              className={`min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 select-none touch-manipulation ${
+                selectedSiteFilter === 'all'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+              }`}
+            >
+              <span>Todos</span>
+              <span
+                className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                  selectedSiteFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                }`}
+              >
+                {siteCounts.all}
+              </span>
+            </button>
+
+            {sitesList.map((site) => {
+              const isSelected = selectedSiteFilter === site.id;
+              const count = siteCounts[site.id] || 0;
+              return (
+                <button
+                  key={site.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isSelected}
+                  onClick={() => setSelectedSiteFilter(site.id)}
+                  data-testid={`verification-site-filter-${site.id}`}
+                  className={`min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 select-none touch-manipulation ${
+                    isSelected
+                      ? 'bg-primary text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                  }`}
+                >
+                  <span className="truncate max-w-[160px]">{site.title}</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                      isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Lista de Jornadas Filtradas */}
+      {filteredQueue.length > 0 && (
+        <div className="space-y-4">
+          {filteredQueue.map((item) => (
+            <VerificationItemCard
+              key={item.id}
+              item={item}
+              isObserving={observingId === item.id}
+              observationNotes={observationNotes}
+              setObservationNotes={setObservationNotes}
+              onStartObserving={() => {
+                setActionError(null);
+                setObservingId(item.id);
+                setObservationNotes('');
+              }}
+              onCancelObserving={() => {
+                setObservingId(null);
+                setObservationNotes('');
+              }}
+              onVerify={() => handleVerify(item)}
+              onObserve={() => handleObserve(item)}
+              onOpenEvidence={(atts) => handleOpenEvidence(item.id, atts)}
+              busy={busy}
+              isVerifying={verifyExecution.isPending && verifyExecution.variables?.executionId === item.id}
+              isRejecting={rejectExecution.isPending && rejectExecution.variables?.executionId === item.id}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Estado vacío por filtro de sitio */}
+      {queue.length > 0 && filteredQueue.length === 0 && (
+        <div
+          className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200"
+          data-testid="verification-site-empty-state"
+        >
+          <p className="text-sm font-semibold text-slate-600">
+            No hay jornadas pendientes de verificación para el sitio seleccionado.
+          </p>
+          <button
+            type="button"
+            onClick={() => setSelectedSiteFilter('all')}
+            className="mt-3 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors"
+          >
+            Mostrar todas las jornadas
+          </button>
+        </div>
+      )}
 
       {actionError && (
         <p className="text-xs font-semibold text-red-500 bg-red-50 p-3 rounded-xl border border-red-200">

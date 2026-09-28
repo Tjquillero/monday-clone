@@ -112,25 +112,26 @@
   },
   "typography": {
     "$schema": "http://json-schema.org/draft-07/schema#",
-    "name": "Mantenix Typography Tokens",
+    "name": "Mantenix Typography Tokens — Visual System 1.1",
     "fontFamilies": {
-      "brand": "Syne, system-ui, -apple-system, sans-serif",
-      "ui": "Inter, system-ui, -apple-system, sans-serif",
-      "mono": "JetBrains Mono, monospace"
+      "brand": "IBM Plex Sans, system-ui, -apple-system, sans-serif",
+      "ui": "IBM Plex Sans, system-ui, -apple-system, sans-serif",
+      "mono": "IBM Plex Mono, monospace",
+      "wordmark": "Manrope 800 (vectorized SVG, 0 runtime dependency)"
     },
     "scales": {
       "display": {
         "family": "brand",
         "size": "56px",
         "lineHeight": "1.1",
-        "weight": 800,
+        "weight": 700,
         "tracking": "-0.03em"
       },
       "h1": {
         "family": "brand",
         "size": "40px",
         "lineHeight": "1.15",
-        "weight": 800,
+        "weight": 700,
         "tracking": "-0.02em"
       },
       "h2": {

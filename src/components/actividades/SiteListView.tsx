@@ -5,7 +5,7 @@
 // Cero tablas nuevas, cero mutaciones. Cálculo determinista en memoria desde PublishedWeekPlan.
 
 import React from 'react';
-import { MapPin, AlertCircle, Clock, CheckCircle2, ChevronRight, ClipboardList } from 'lucide-react';
+import { MapPin, AlertCircle, Clock, CheckCircle2, ChevronRight, ClipboardList, Users } from 'lucide-react';
 import { PublishedWeekPlan, PublishedWeekPlanItem } from '@/hooks/useWeeklyPlans';
 import { classifyItemTemporalStatus } from '@/lib/myWorkTemporalProjection';
 
@@ -28,6 +28,7 @@ interface SiteListViewProps {
   onSelectSite: (groupId: string) => void;
   operationalTodayISO?: string;
   showAllWeek?: boolean;
+  personnelAssignments?: any[];
 }
 
 export function computeSiteSummaries(
@@ -103,6 +104,7 @@ export const SiteListView: React.FC<SiteListViewProps> = ({
   onSelectSite,
   operationalTodayISO,
   showAllWeek = false,
+  personnelAssignments,
 }) => {
   const summaries = computeSiteSummaries(plans, operationalTodayISO, showAllWeek);
 
@@ -174,12 +176,20 @@ export const SiteListView: React.FC<SiteListViewProps> = ({
                     )}
                   </div>
 
-                  <p className="text-xs text-[var(--text-muted)] mt-1 pl-7">
-                    {site.totalCount} {site.totalCount === 1 ? 'actividad' : 'actividades'} ·{' '}
-                    <span className="font-semibold text-[var(--text-secondary)] font-mono">
-                      {site.totalPlannedJr.toFixed(1)} JR
-                    </span>
-                  </p>
+                  <div className="flex items-center justify-between gap-2 mt-1 pl-7">
+                    <p className="text-xs text-[var(--text-muted)]">
+                      {site.totalCount} {site.totalCount === 1 ? 'actividad' : 'actividades'} ·{' '}
+                      <span className="font-semibold text-[var(--text-secondary)] font-mono">
+                        {site.totalPlannedJr.toFixed(1)} JR
+                      </span>
+                    </p>
+                    {personnelAssignments && personnelAssignments.length > 0 && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[var(--color-primary)] bg-[var(--color-primary-subtle)] px-2 py-0.5 rounded-full border border-[var(--color-primary)]/20" title="Personal adscrito registrado">
+                        <Users className="w-3 h-3 shrink-0" />
+                        <span>{personnelAssignments.length} pers.</span>
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Badges explicativos de estado (Texto + Número + Ícono) */}

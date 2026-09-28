@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import NextImage from 'next/image';
+import MantenixLogo from '@/components/ui/MantenixLogo';
 import { 
   ArrowRight, CheckCircle2, Zap, Shield, BarChart3, 
   Users, Layers, Globe, Star, Play
@@ -14,12 +15,9 @@ export default function LandingPage() {
       {/* Navbar */}
       <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="relative w-10 h-10">
-              <NextImage src="/logo-new.png" alt="Mantenix Logo" fill className="object-contain" />
-            </div>
-            <span className="text-2xl font-black tracking-tight">Mantenix</span>
-          </div>
+          <Link href="/" className="flex items-center">
+            <MantenixLogo size="md" withText={true} />
+          </Link>
           <div className="hidden md:flex items-center space-x-10 text-sm font-bold text-gray-600">
             <a href="#features" className="hover:text-[#0073ea] transition-colors">Características</a>
             <a href="#solutions" className="hover:text-[#0073ea] transition-colors">Soluciones</a>
@@ -48,7 +46,7 @@ export default function LandingPage() {
               <Zap className="w-3 h-3" />
               <span>Nuevo: Automatizaciones con AI</span>
             </div>
-            <h1 className="text-6xl md:text-8xl font-black tracking-tighter mb-8 leading-[1.1]">
+            <h1 className="text-6xl md:text-8xl font-bold tracking-tighter mb-8 leading-[1.1]">
               Gestiona tus<br />
               <span className="text-primary italic">flujos de trabajo</span> con Mantenix
             </h1>
@@ -129,7 +127,7 @@ export default function LandingPage() {
                               <circle cx="50%" cy="50%" r="45%" stroke="currentColor" strokeWidth="8" fill="transparent" strokeDasharray="283" strokeDashoffset="70" className="text-primary transition-all duration-1000" />
                            </svg>
                            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                              <span className="text-xl md:text-2xl font-black text-primary">75%</span>
+                              <span className="text-xl md:text-2xl font-bold text-primary">75%</span>
                               <span className="text-[10px] text-gray-400 font-bold uppercase">KPI Global</span>
                            </div>
                         </div>
@@ -149,7 +147,7 @@ export default function LandingPage() {
                     </div>
                     <div>
                       <div className="text-[10px] md:text-xs text-gray-400 font-bold uppercase tracking-wider">Flujo Completado</div>
-                      <div className="text-sm md:text-base font-black text-[#1e1f21]">Despliegue Mantenix v1.0</div>
+                      <div className="text-sm md:text-base font-bold text-[#1e1f21]">Despliegue Mantenix v1.0</div>
                     </div>
                   </motion.div>
 
@@ -178,7 +176,7 @@ export default function LandingPage() {
       <section id="features" className="py-32 bg-white">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-20">
-            <h2 className="text-4xl md:text-5xl font-black mb-6">Todo lo que necesitas para ganar</h2>
+            <h2 className="text-4xl md:text-5xl font-bold mb-6">Todo lo que necesitas para ganar</h2>
             <p className="text-gray-500 text-xl max-w-2xl mx-auto">Mantenix integra todas las herramientas de productividad en una única plataforma colaborativa.</p>
           </div>
 
@@ -205,7 +203,7 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto px-6">
           <div className="bg-[#1e1f21] rounded-[3rem] p-12 md:p-20 text-center relative overflow-hidden">
             <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 blur-[100px] -translate-y-1/2 translate-x-1/2"></div>
-            <h2 className="text-4xl md:text-6xl font-extrabold text-white mb-8">¿Listo para transformar<br />tu equipo?</h2>
+            <h2 className="text-4xl md:text-6xl font-bold text-white mb-8">¿Listo para transformar<br />tu equipo?</h2>
             <p className="text-[#a1a1a6] text-xl mb-12 max-w-xl mx-auto">Únete a más de 100,000 equipos que ya están usando Mantenix para escalar sus operaciones.</p>
             <Link href="/login" className="bg-white text-[#1e1f21] px-12 py-5 rounded-full text-xl font-bold hover:bg-gray-100 transition-all flex items-center justify-center mx-auto w-full sm:w-auto shadow-2xl">
               Empezar ahora — Es gratis
@@ -217,12 +215,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="py-20 border-t border-gray-100">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-8">
-          <div className="flex items-center space-x-3">
-            <div className="relative w-10 h-10">
-              <NextImage src="/logo-new.png" alt="Mantenix Logo" fill className="object-contain" />
-            </div>
-            <span className="text-xl font-black">Mantenix</span>
-          </div>
+          <MantenixLogo size="sm" withText={true} />
           <div className="flex space-x-8 text-sm font-bold text-gray-400">
             <a href="#" className="hover:text-gray-900">Twitter</a>
             <a href="#" className="hover:text-gray-900">LinkedIn</a>

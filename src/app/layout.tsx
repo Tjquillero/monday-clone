@@ -3,25 +3,19 @@ import { Suspense } from 'react';
 import { Providers } from '@/components/Providers';
 import { Metadata } from 'next';
 import AgentControlCenter from '@/components/AgentControlCenter';
-import { Syne, Inter, JetBrains_Mono } from 'next/font/google';
+import { IBM_Plex_Sans, IBM_Plex_Mono } from 'next/font/google';
 
-const syne = Syne({ 
+const ibmPlexSans = IBM_Plex_Sans({
   subsets: ['latin'],
-  weight: ['700', '800'],
-  variable: '--font-syne',
+  weight: ['400', '600', '700'],
+  variable: '--font-plex-sans',
   display: 'swap',
 });
 
-const inter = Inter({ 
+const ibmPlexMono = IBM_Plex_Mono({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-inter',
-  display: 'swap',
-});
-
-const jetbrainsMono = JetBrains_Mono({ 
-  subsets: ['latin'],
-  variable: '--font-mono',
+  weight: ['400', '600'],
+  variable: '--font-plex-mono',
   display: 'swap',
 });
 
@@ -63,7 +57,7 @@ export default function RootLayout({
     <html 
       lang="es" 
       suppressHydrationWarning 
-      className={`${syne.variable} ${inter.variable} ${jetbrainsMono.variable}`}
+      className={`${ibmPlexSans.variable} ${ibmPlexMono.variable}`}
     >
       <body className="font-sans antialiased text-slate-900 dark:text-slate-100">
         <Providers>

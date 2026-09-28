@@ -169,6 +169,18 @@ function DashboardContent() {
   const handleExportPDF = () => { alert('Generando PDF técnico...'); setIsExportMenuOpen(false); };
   const handleExportExcel = () => { alert('Exportando a Excel...'); setIsExportMenuOpen(false); };
 
+  const handleSelectGroup = (newGroupId: string | null) => {
+    setSelectedGroupId(newGroupId);
+    const currentParams = new URLSearchParams(searchParams ? searchParams.toString() : '');
+    if (newGroupId) {
+      currentParams.set('groupId', newGroupId);
+    } else {
+      currentParams.delete('groupId');
+    }
+    const queryString = currentParams.toString();
+    router.replace(`/dashboard${queryString ? `?${queryString}` : ''}`, { scroll: false });
+  };
+
   if (boardLoading) return (
     <div className={`flex h-screen items-center justify-center transition-colors duration-500 ${isDarkMode ? 'bg-[var(--bg-primary)]' : 'bg-[#fefbf6]'}`}>
       <div className="flex flex-col items-center gap-4">
@@ -209,7 +221,7 @@ function DashboardContent() {
           <div className="w-20 h-20 bg-slate-500/10 rounded-full flex items-center justify-center mx-auto text-slate-400 border border-slate-500/30">
             <AlertTriangle className="w-10 h-10" />
           </div>
-          <h2 className="text-xl font-black text-white uppercase tracking-widest italic">No perteneces a ningún tablero</h2>
+          <h2 className="text-xl font-bold text-white uppercase tracking-widest italic">No perteneces a ningún tablero</h2>
           <p className="text-slate-500 text-sm">Pide al administrador que te agregue como miembro de un tablero para poder continuar.</p>
         </div>
       </div>
@@ -347,10 +359,17 @@ function DashboardContent() {
             {currentView === 'kanban' && <div className="h-full overflow-auto p-8 custom-scrollbar"><KanbanViewContainer boardId={board?.id} searchQuery={searchQuery} selectedGroupId={selectedGroupId} filters={activeFilters} onOpenItem={openItemModal} /></div>}
             {currentView === 'reports' && <div className="h-full overflow-auto custom-scrollbar"><ReportsViewContainer boardId={board?.id} /></div>}
             {currentView === 'notifications' && <div className="h-full overflow-auto custom-scrollbar"><NotificationsView /></div>}
-            {currentView === 'planner' && <WeeklyPlannerContainer boardId={board?.id} selectedGroupId={selectedGroupId} groups={groups} />}
+            {currentView === 'planner' && (
+              <WeeklyPlannerContainer
+                boardId={board?.id}
+                selectedGroupId={selectedGroupId}
+                groups={groups}
+                onSelectGroup={handleSelectGroup}
+              />
+            )}
             {currentView === 'agenda' && <AgendaOperativaContainer boardId={board?.id} />}
             {currentView === 'catalogo-tecnico' && <CatalogoTecnicoContainer boardId={board?.id} />}
-            {currentView === 'costos-operativos' && <CostosOperativosContainer boardId={board?.id} selectedGroupId={selectedGroupId} groups={groups} onSelectGroup={setSelectedGroupId} />}
+            {currentView === 'costos-operativos' && <CostosOperativosContainer boardId={board?.id} selectedGroupId={selectedGroupId} groups={groups} onSelectGroup={handleSelectGroup} />}
           </motion.div>
         </AnimatePresence>
       </main>
@@ -378,10 +397,10 @@ function DashboardContent() {
       <AnimatePresence>
         {isLocationMenuOpen && (
           <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="fixed z-[300] bg-[var(--bg-secondary)] border border-[var(--border-color)] shadow-2xl rounded-xl p-1 w-64" style={{ top: '55px', right: '180px' }}>
-             <button onClick={() => { setSelectedGroupId(null); setIsLocationMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 hover:bg-slate-500/5 rounded-lg text-left text-xs font-black uppercase tracking-widest text-[#3B7EF8]">Global Coverage</button>
+             <button onClick={() => { handleSelectGroup(null); setIsLocationMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 hover:bg-slate-500/5 rounded-lg text-left text-xs font-black uppercase tracking-widest text-[#3B7EF8]">Global Coverage</button>
              <div className="h-px bg-slate-500/5 my-1" />
              {groups?.filter(g => !g.title.toUpperCase().includes('PRESUPUESTO')).map((g, locIdx) => (
-                <button key={g.id || `loc-site-${locIdx}`} onClick={() => { setSelectedGroupId(g.id); setIsLocationMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 hover:bg-slate-500/5 rounded-lg text-left text-xs font-medium"><div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: g.color }} /> {g.title}</button>
+                <button key={g.id || `loc-site-${locIdx}`} onClick={() => { handleSelectGroup(g.id); setIsLocationMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 hover:bg-slate-500/5 rounded-lg text-left text-xs font-medium"><div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: g.color }} /> {g.title}</button>
              ))}
           </motion.div>
         )}

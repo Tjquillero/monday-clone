@@ -98,14 +98,14 @@ export const SiteFinancialBreakdownCard: React.FC<SiteFinancialBreakdownCardProp
   const roundedBilled = hasUndeterminedBilled ? 'UNDETERMINED_CONTRACT_VALUE' : Math.round(siteBilled);
 
   return (
-    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-5 mb-4 shadow-sm">
-      <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-gray-100 dark:border-gray-800 gap-3">
+    <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-surface)] p-5 mb-4 shadow-[var(--shadow-card)]">
+      <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-[var(--border-color)] gap-3">
         <div className="flex items-center gap-2">
-          <MapPin className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-          <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wide">
+          <MapPin className="w-5 h-5 text-[var(--color-accent)]" />
+          <h3 className="text-lg font-brand font-bold text-[var(--text-primary)] uppercase tracking-wide">
             {siteTitle || 'SITIO DE TRABAJO GENERAL'}
           </h3>
-          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+          <span className="text-xs px-2.5 py-0.5 rounded-[var(--radius-control)] font-medium bg-[var(--color-surface-subtle)] text-[var(--text-secondary)]">
             {occurrences.length} actividades
           </span>
         </div>
@@ -113,19 +113,19 @@ export const SiteFinancialBreakdownCard: React.FC<SiteFinancialBreakdownCardProp
         {/* Diagnósticos de Reconciliación */}
         <div className="flex flex-wrap items-center gap-2">
           {statusCounts.PENDING_BILLING > 0 && (
-            <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+            <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-[var(--radius-control)] font-medium bg-[var(--color-primary-subtle)] text-[var(--color-primary)] border border-[var(--color-primary)]/20">
               <ShieldCheck className="w-3.5 h-3.5" />
               {statusCounts.PENDING_BILLING} Pendientes de Acta
             </span>
           )}
           {statusCounts.OVER_BILLED > 0 && (
-            <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+            <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-[var(--radius-control)] font-medium bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
               <AlertCircle className="w-3.5 h-3.5" />
               {statusCounts.OVER_BILLED} Sobre-facturados
             </span>
           )}
           {statusCounts.BALANCED > 0 && (
-            <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+            <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-[var(--radius-control)] font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
               <ShieldCheck className="w-3.5 h-3.5" />
               {statusCounts.BALANCED} Conciliados
             </span>
@@ -134,22 +134,22 @@ export const SiteFinancialBreakdownCard: React.FC<SiteFinancialBreakdownCardProp
       </div>
 
       {/* Resumen Monetario COP */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 my-4 p-3 bg-gray-50 dark:bg-gray-800/40 rounded-lg">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 my-4 p-3 bg-[var(--color-surface-subtle)] rounded-[var(--radius-control)]">
         <div>
-          <span className="text-xs text-gray-500 dark:text-gray-400 block font-medium">Valor Planificado (PV)</span>
-          <span className="text-base font-bold text-gray-900 dark:text-gray-100">
+          <span className="text-xs text-[var(--text-muted)] block font-medium">Valor Planificado (PV)</span>
+          <span className="text-base font-bold font-mono text-[var(--text-primary)]">
             {formatCopCurrency(roundedPv)}
           </span>
         </div>
         <div>
-          <span className="text-xs text-gray-500 dark:text-gray-400 block font-medium">Valor Ganado Verificado (EV)</span>
-          <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">
+          <span className="text-xs text-[var(--text-muted)] block font-medium">Valor Ganado Verificado (EV)</span>
+          <span className="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">
             {formatCopCurrency(roundedEv)}
           </span>
         </div>
         <div>
-          <span className="text-xs text-gray-500 dark:text-gray-400 block font-medium">Valorizado En Acta</span>
-          <span className="text-base font-bold text-purple-600 dark:text-purple-400">
+          <span className="text-xs text-[var(--text-muted)] block font-medium">Valorizado En Acta</span>
+          <span className="text-base font-bold font-mono text-[var(--color-primary)] dark:text-[var(--text-primary)]">
             {formatCopCurrency(roundedBilled)}
           </span>
         </div>
@@ -157,33 +157,33 @@ export const SiteFinancialBreakdownCard: React.FC<SiteFinancialBreakdownCardProp
 
       {/* Segregación de Magnitudes Físicas por Unidad Homogénea */}
       <div className="mt-3">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">
           Desglose de Avance Físico por Unidad Heterogénea
         </h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {Array.from(unitBreakdowns.values()).map((ub) => (
             <div
               key={ub.unit}
-              className="p-3 border border-gray-200 dark:border-gray-800 rounded-lg bg-white dark:bg-gray-900 text-xs"
+              className="p-3 border border-[var(--border-color)] rounded-[var(--radius-control)] bg-[var(--bg-secondary)] text-xs"
             >
-              <div className="font-bold text-gray-800 dark:text-gray-200 mb-1">
-                Unidad: <span className="text-blue-600 dark:text-blue-400">{ub.unit}</span>
+              <div className="font-bold text-[var(--text-primary)] mb-1">
+                Unidad: <span className="text-[var(--color-primary)] dark:text-[var(--text-primary)] font-mono font-bold">{ub.unit}</span>
               </div>
-              <div className="flex justify-between py-0.5 text-gray-600 dark:text-gray-400">
+              <div className="flex justify-between py-0.5 text-[var(--text-secondary)]">
                 <span>Planificado (Q planned):</span>
-                <span className="font-semibold text-gray-900 dark:text-gray-100">{ub.planned.toLocaleString()} {ub.unit}</span>
+                <span className="font-semibold font-mono text-[var(--text-primary)]">{ub.planned.toLocaleString()} {ub.unit}</span>
               </div>
-              <div className="flex justify-between py-0.5 text-gray-600 dark:text-gray-400">
+              <div className="flex justify-between py-0.5 text-[var(--text-secondary)]">
                 <span>Verificado (Q verified):</span>
-                <span className="font-semibold text-emerald-600 dark:text-emerald-400">{ub.verified.toLocaleString()} {ub.unit}</span>
+                <span className="font-semibold font-mono text-emerald-600 dark:text-emerald-400">{ub.verified.toLocaleString()} {ub.unit}</span>
               </div>
-              <div className="flex justify-between py-0.5 text-gray-600 dark:text-gray-400">
+              <div className="flex justify-between py-0.5 text-[var(--text-secondary)]">
                 <span>En Acta (Q acta):</span>
-                <span className="font-semibold text-purple-600 dark:text-purple-400">{ub.billed.toLocaleString()} {ub.unit}</span>
+                <span className="font-semibold font-mono text-[var(--color-accent)]">{ub.billed.toLocaleString()} {ub.unit}</span>
               </div>
-              <div className="flex justify-between py-0.5 border-t border-gray-100 dark:border-gray-800 mt-1 pt-1 font-semibold">
+              <div className="flex justify-between py-0.5 border-t border-[var(--border-color)] mt-1 pt-1 font-semibold">
                 <span>Saldo Liquidable:</span>
-                <span className="text-blue-600 dark:text-blue-400">{ub.pending.toLocaleString()} {ub.unit}</span>
+                <span className="text-[var(--color-primary)] dark:text-[var(--text-primary)] font-mono font-bold">{ub.pending.toLocaleString()} {ub.unit}</span>
               </div>
             </div>
           ))}

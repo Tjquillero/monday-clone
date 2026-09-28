@@ -67,10 +67,16 @@ export default function LoginPage() {
         className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md border border-gray-100"
       >
         {/* Brand Header */}
-        <div className="text-center mb-10">
-          <Image src="/logo-new.png" alt="Mantenix Logo" width={96} height={96} className="mx-auto mb-4 object-contain" />
-          <h1 className="text-4xl font-black text-[#1e1f21] tracking-tight">Mantenix</h1>
-          <p className="text-gray-500 mt-2 font-medium">Gestión inteligente de flujos</p>
+        <div className="text-center mb-8 flex flex-col items-center">
+          <Image
+            src="/logos/mantenix-logo-vertical.svg"
+            alt="Mantenix Logo"
+            width={180}
+            height={153}
+            priority
+            className="mb-2 object-contain"
+          />
+          <p className="text-[var(--text-muted)] text-sm font-medium">Plataforma Operativa de Infraestructura</p>
         </div>
 
         {/* Toggle Login/Signup */}

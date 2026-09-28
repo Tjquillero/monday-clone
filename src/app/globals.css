@@ -4,10 +4,10 @@
 @import "tailwindcss";
 
 @theme {
-  /* Tipografía oficial BRAND-01 */
-  --font-brand: var(--font-syne), "Syne", system-ui, sans-serif;
-  --font-sans: var(--font-inter), "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: var(--font-mono), "JetBrains Mono", monospace;
+  /* Tipografía oficial Visual System 1.1 */
+  --font-brand: var(--font-plex-sans), "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans: var(--font-plex-sans), "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-plex-mono), "IBM Plex Mono", monospace;
 
   /* Paleta Light Mode (Default) */
   --color-primary: #0B2A4A;
@@ -97,8 +97,96 @@ body {
 @layer utilities {
   .brand-title {
     font-family: var(--font-brand);
-    font-weight: 800;
+    font-weight: 700;
     letter-spacing: -0.02em;
+  }
+
+  /* Escala tipográfica canónica (brand-assets/tokens/typography.json) */
+  .font-display {
+    font-family: var(--font-brand);
+    font-weight: 700;
+    font-size: 56px;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+  }
+
+  .font-h1 {
+    font-family: var(--font-brand);
+    font-weight: 700;
+    font-size: 40px;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+
+  .font-h2 {
+    font-family: var(--font-brand);
+    font-weight: 700;
+    font-size: 32px;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+
+  .font-h3 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 24px;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+  }
+
+  .font-h4 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 20px;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+  }
+
+  .font-body {
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .font-body-sm {
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .font-caption {
+    font-family: var(--font-sans);
+    font-weight: 500;
+    font-size: 12px;
+    line-height: 1.35;
+    letter-spacing: 0.01em;
+  }
+
+  .font-numeric {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 15px;
+    line-height: 1.4;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .font-numeric-lg {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: 36px;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .font-tech {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .numeric-tabular {
+    font-variant-numeric: tabular-nums;
   }
 
   .industrial-card {

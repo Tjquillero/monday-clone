@@ -68,6 +68,7 @@ export async function GET(req: NextRequest) {
       waitUntil: 'networkidle0',
       timeout: 60000,
     });
+    await page.evaluateHandle('document.fonts.ready');
 
     const pdfBuffer = await page.pdf({
       format: 'Letter',

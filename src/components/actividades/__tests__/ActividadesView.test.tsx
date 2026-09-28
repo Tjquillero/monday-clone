@@ -144,4 +144,27 @@ describe('SITE ACTIVITIES VIEW LEVEL 2 (ActividadesView Unit Tests)', () => {
     expect(screen.getByText('Actividad Huérfana')).toBeInTheDocument();
     expect(screen.getAllByText('Corte de césped').length).toBe(2);
   });
+
+  it('Caso 7 (C1.1): debe renderizar la dotación de personal disponible en el sitio cuando se proporciona personnelAssignments', () => {
+    const mockAssignments = [
+      { id: 'a1', personnel_id: 'p1', personnel_name: 'Carlos Ruiz', personnel_document_id: '12345', role_in_site: 'Supervisor' },
+      { id: 'a2', personnel_id: 'p2', personnel_name: 'Ana Gomez', personnel_document_id: '67890', role_in_site: 'Operario' },
+    ];
+    render(
+      <ActividadesView
+        plans={[mockPlan]}
+        selectedGroupId="group-1"
+        personnelAssignments={mockAssignments}
+      />
+    );
+    expect(screen.getByText(/Personal Adscrito al Frente \(2 personas\)/i)).toBeInTheDocument();
+    expect(screen.getByTestId('site-personnel-section')).toBeInTheDocument();
+  });
+
+  it('Caso 8 (C1.1): debe renderizar la insignia Sin asignar en las actividades cuando crew_id es nulo', () => {
+    render(<ActividadesView plans={[mockPlan]} selectedGroupId="group-1" />);
+    const unassignedBadges = screen.getAllByTestId('unassigned-crew-badge');
+    expect(unassignedBadges.length).toBe(4);
+    expect(unassignedBadges[0]).toHaveTextContent('Sin asignar');
+  });
 });

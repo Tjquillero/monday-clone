@@ -62,12 +62,12 @@ function FilterChip({ rule, column, onUpdate, onRemove }: FilterChipProps) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className={`flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[10px] font-bold border transition-all ${open ? 'bg-[#3B7EF8]/10 border-[#3B7EF8]/40 text-[#3B7EF8]' : 'bg-[var(--bg-secondary)]/30 border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[#3B7EF8]/30'}`}
+        className={`flex items-center gap-1.5 h-7 px-2.5 rounded-[var(--radius-control)] text-[10px] font-bold border transition-all ${open ? 'bg-[var(--color-primary-subtle)] border-[var(--color-primary)]/40 text-[var(--color-primary)] dark:text-[var(--text-primary)]' : 'bg-[var(--card-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--color-primary)]/40 hover:text-[var(--text-primary)]'}`}
       >
-        <span className="font-black">{column?.title ?? rule.columnKey}</span>
+        <span className="font-bold">{column?.title ?? rule.columnKey}</span>
         <span className="opacity-60">{OPERATOR_LABELS[rule.operator]}</span>
         {needsValue && selectedValues.length > 0 && (
-          <span className="bg-[#3B7EF8] text-white rounded px-1">{selectedValues.length > 1 ? `${selectedValues.length}` : (isLabelType ? labels.find(l => l.id === selectedValues[0])?.title : selectedValues[0]) ?? selectedValues[0]}</span>
+          <span className="bg-[var(--color-primary)] text-[var(--color-primary-foreground)] rounded-[var(--radius-control)] px-1.5">{selectedValues.length > 1 ? `${selectedValues.length}` : (isLabelType ? labels.find(l => l.id === selectedValues[0])?.title : selectedValues[0]) ?? selectedValues[0]}</span>
         )}
         <ChevronDown size={10} className="opacity-40" />
       </button>
@@ -76,16 +76,16 @@ function FilterChip({ rule, column, onUpdate, onRemove }: FilterChipProps) {
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 w-56 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl shadow-2xl z-50 overflow-hidden">
+        <div className="absolute top-full left-0 mt-1 w-56 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-surface)] shadow-[var(--shadow-floating)] z-50 overflow-hidden">
           {/* Operator */}
           <div className="p-2 border-b border-[var(--border-color)]">
-            <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Condición</p>
+            <p className="text-[9px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1.5">Condición</p>
             <div className="flex flex-wrap gap-1">
               {operators.map(op => (
                 <button
                   key={op}
                   onClick={() => onUpdate({ operator: op })}
-                  className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${rule.operator === op ? 'bg-[#3B7EF8] text-white' : 'bg-[var(--bg-secondary)]/30 text-[var(--text-secondary)] hover:bg-[#3B7EF8]/10'}`}
+                  className={`px-2 py-0.5 rounded-[var(--radius-control)] text-[9px] font-bold transition-all ${rule.operator === op ? 'bg-[var(--color-primary)] text-[var(--color-primary-foreground)]' : 'bg-[var(--color-surface-subtle)] text-[var(--text-secondary)] hover:bg-[var(--color-primary-subtle)]'}`}
                 >
                   {OPERATOR_LABELS[op]}
                 </button>
@@ -96,18 +96,18 @@ function FilterChip({ rule, column, onUpdate, onRemove }: FilterChipProps) {
           {/* Value */}
           {needsValue && (
             <div className="p-2">
-              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Valor</p>
+              <p className="text-[9px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1.5">Valor</p>
               {isLabelType ? (
                 <div className="space-y-1">
                   {labels.map(l => (
                     <button
                       key={l.id}
                       onClick={() => toggleLabel(l.id)}
-                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-secondary)]/30 transition-all text-left"
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-[var(--radius-control)] hover:bg-[var(--color-surface-subtle)] transition-all text-left"
                     >
                       <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: l.color }} />
                       <span className="text-[11px] font-medium text-[var(--text-primary)] flex-1">{l.title}</span>
-                      {selectedValues.includes(l.id) && <Check size={11} className="text-[#3B7EF8]" />}
+                      {selectedValues.includes(l.id) && <Check size={11} className="text-[var(--color-primary)] dark:text-[var(--text-primary)]" />}
                     </button>
                   ))}
                 </div>
@@ -116,7 +116,7 @@ function FilterChip({ rule, column, onUpdate, onRemove }: FilterChipProps) {
                   value={Array.isArray(rule.value) ? rule.value[0] ?? '' : rule.value ?? ''}
                   onChange={e => onUpdate({ value: e.target.value })}
                   placeholder="Valor..."
-                  className="w-full text-[11px] px-2 py-1.5 bg-[var(--bg-secondary)]/30 border border-[var(--border-color)] rounded-lg outline-none focus:border-[#3B7EF8]/50"
+                  className="w-full text-[11px] px-2 py-1.5 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-[var(--radius-control)] outline-none focus:border-[var(--color-primary)] text-[var(--text-primary)]"
                 />
               )}
             </div>
@@ -137,9 +137,9 @@ interface SortPillProps {
 
 function SortPill({ rule, onToggle, onRemove }: SortPillProps) {
   return (
-    <div className="group relative flex items-center gap-1 h-7 px-2.5 bg-[var(--bg-secondary)]/30 border border-[var(--border-color)] rounded-lg text-[10px] font-bold text-[var(--text-secondary)] hover:border-[#3B7EF8]/30 transition-all">
+    <div className="group relative flex items-center gap-1 h-7 px-2.5 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-control)] text-[10px] font-bold text-[var(--text-secondary)] hover:border-[var(--color-primary)]/40 hover:text-[var(--text-primary)] transition-all">
       <span>{rule.columnTitle}</span>
-      <button onClick={onToggle} className="text-[#3B7EF8] font-black">{rule.direction === 'asc' ? '↑' : '↓'}</button>
+      <button onClick={onToggle} className="text-[var(--color-primary)] dark:text-[var(--text-primary)] font-bold">{rule.direction === 'asc' ? '↑' : '↓'}</button>
       <button onClick={onRemove} className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
         <X size={8} />
       </button>
@@ -167,9 +167,9 @@ function ColumnToggle({ columns, visibleIds, onToggle, onClose }: ColumnTogglePr
   const effectiveVisible = visibleIds.length ? visibleIds : columns.map(c => getColumnValueKey(c));
 
   return (
-    <div ref={ref} className="absolute top-full right-0 mt-1 w-52 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl shadow-2xl z-50 overflow-hidden">
+    <div ref={ref} className="absolute top-full right-0 mt-1 w-52 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-surface)] shadow-[var(--shadow-floating)] z-50 overflow-hidden">
       <div className="px-3 py-2 border-b border-[var(--border-color)]">
-        <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)]">Columnas visibles</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)]">Columnas visibles</p>
       </div>
       <div className="py-1 max-h-64 overflow-y-auto custom-scrollbar">
         {columns.map(col => {
@@ -179,10 +179,10 @@ function ColumnToggle({ columns, visibleIds, onToggle, onClose }: ColumnTogglePr
             <button
               key={col.id}
               onClick={() => onToggle(colKey)}
-              className="w-full flex items-center gap-3 px-3 py-2 hover:bg-[var(--bg-secondary)]/30 transition-all text-left"
+              className="w-full flex items-center gap-3 px-3 py-2 hover:bg-[var(--color-surface-subtle)] transition-all text-left"
             >
-              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${visible ? 'bg-[#3B7EF8] border-[#3B7EF8]' : 'border-[var(--border-color)]'}`}>
-                {visible && <Check size={10} className="text-white" />}
+              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${visible ? 'bg-[var(--color-primary)] border-[var(--color-primary)]' : 'border-[var(--border-color)]'}`}>
+                {visible && <Check size={10} className="text-[var(--color-primary-foreground)]" />}
               </div>
               <span className="text-[11px] font-medium text-[var(--text-primary)]">{col.title}</span>
             </button>
@@ -212,9 +212,9 @@ function AddFilterPopover({ columns, onAdd, onClose }: AddFilterProps) {
   }, [onClose]);
 
   return (
-    <div ref={ref} className="absolute top-full left-0 mt-1 w-52 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl shadow-2xl z-50 overflow-hidden">
+    <div ref={ref} className="absolute top-full left-0 mt-1 w-52 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-surface)] shadow-[var(--shadow-floating)] z-50 overflow-hidden">
       <div className="px-3 py-2 border-b border-[var(--border-color)]">
-        <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)]">Filtrar por columna</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)]">Filtrar por columna</p>
       </div>
       <div className="py-1 max-h-60 overflow-y-auto custom-scrollbar">
         {columns.map(col => {
@@ -228,10 +228,10 @@ function AddFilterPopover({ columns, onAdd, onClose }: AddFilterProps) {
                 onAdd({ id: `${uid}-${col.id}`, columnKey: getColumnValueKey(col), columnType: col.type, operator: defaultOp, value: defaultVal });
                 onClose();
               }}
-              className="w-full flex items-center gap-3 px-3 py-2 hover:bg-[#3B7EF8]/5 transition-all text-left"
+              className="w-full flex items-center gap-3 px-3 py-2 hover:bg-[var(--color-surface-subtle)] transition-all text-left"
             >
               <span className="text-[11px] font-medium text-[var(--text-primary)]">{col.title}</span>
-              <span className="ml-auto text-[9px] text-slate-500 uppercase">{col.type}</span>
+              <span className="ml-auto text-[9px] text-[var(--text-muted)] font-mono uppercase">{col.type}</span>
             </button>
           );
         })}
@@ -251,26 +251,26 @@ interface SaveViewModalProps {
 function SaveViewModal({ currentName, onSave, onClose }: SaveViewModalProps) {
   const [name, setName] = useState(currentName === 'Sin filtros' ? '' : currentName);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="w-80 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-2xl shadow-2xl p-5">
-        <h3 className="text-sm font-black uppercase tracking-wider text-[var(--text-primary)] mb-4">Guardar vista</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs">
+      <div className="w-80 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-surface)] shadow-[var(--shadow-modal)] p-5">
+        <h3 className="text-sm font-brand font-bold uppercase tracking-wider text-[var(--text-primary)] mb-4">Guardar vista</h3>
         <input
           value={name}
           onChange={e => setName(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && name.trim() && onSave(name.trim())}
           placeholder="Nombre de la vista..."
           autoFocus
-          className="w-full px-3 py-2 bg-[var(--bg-secondary)]/30 border border-[var(--border-color)] rounded-xl text-sm text-[var(--text-primary)] outline-none focus:border-[#3B7EF8]/50 mb-4"
+          className="w-full px-3 py-2 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-[var(--radius-control)] text-sm text-[var(--text-primary)] outline-none focus:border-[var(--color-primary)] mb-4"
         />
         <div className="flex gap-2">
           <button
             onClick={() => name.trim() && onSave(name.trim())}
             disabled={!name.trim()}
-            className="flex-1 py-2 bg-[#3B7EF8] hover:bg-[#2563EB] text-white rounded-xl text-[11px] font-black uppercase tracking-widest transition-all disabled:opacity-40"
+            className="flex-1 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-[var(--color-primary-foreground)] rounded-[var(--radius-control)] text-[11px] font-bold uppercase tracking-widest transition-all disabled:opacity-40"
           >
             Guardar
           </button>
-          <button onClick={onClose} className="flex-1 py-2 border border-[var(--border-color)] text-[var(--text-secondary)] rounded-xl text-[11px] font-black uppercase tracking-widest hover:border-slate-400 transition-all">
+          <button onClick={onClose} className="flex-1 py-2 border border-[var(--border-color)] text-[var(--text-secondary)] rounded-[var(--radius-control)] text-[11px] font-bold uppercase tracking-widest hover:bg-[var(--color-surface-subtle)] hover:text-[var(--text-primary)] transition-all">
             Cancelar
           </button>
         </div>
@@ -332,22 +332,22 @@ export function ViewBar({
 
   return (
     <>
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-[var(--border-color)] bg-[var(--bg-primary)]/50 backdrop-blur-sm overflow-x-auto custom-scrollbar flex-nowrap">
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-[var(--border-color)] bg-[var(--bg-primary)]/80 backdrop-blur-sm overflow-x-auto custom-scrollbar flex-nowrap">
 
         {/* Saved views tabs */}
         <div ref={viewMenuRef} className="relative flex-shrink-0">
           <button
             onClick={() => setShowViewMenu(!showViewMenu)}
-            className={`flex items-center gap-1.5 h-7 px-3 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border ${showViewMenu ? 'bg-[#3B7EF8]/10 border-[#3B7EF8]/30 text-[#3B7EF8]' : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[#3B7EF8]/20'}`}
+            className={`flex items-center gap-1.5 h-7 px-3 rounded-[var(--radius-control)] text-[10px] font-bold uppercase tracking-widest transition-all border ${showViewMenu ? 'bg-[var(--color-primary-subtle)] border-[var(--color-primary)]/40 text-[var(--color-primary)] dark:text-[var(--text-primary)]' : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--color-primary)]/40 hover:text-[var(--text-primary)]'}`}
           >
             {isLocalView ? 'Vista actual' : activeView.name}
             <ChevronDown size={10} />
           </button>
           {showViewMenu && (
-            <div className="absolute top-full left-0 mt-1 w-52 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl shadow-2xl z-50 overflow-hidden">
+            <div className="absolute top-full left-0 mt-1 w-52 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-surface)] shadow-[var(--shadow-floating)] z-50 overflow-hidden">
               <button
                 onClick={() => { onReset(); setShowViewMenu(false); }}
-                className="w-full px-3 py-2 text-left text-[11px] font-medium hover:bg-[var(--bg-secondary)]/30 transition-all text-[var(--text-secondary)]"
+                className="w-full px-3 py-2 text-left text-[11px] font-medium hover:bg-[var(--color-surface-subtle)] transition-all text-[var(--text-secondary)]"
               >
                 Sin filtros
               </button>
@@ -356,10 +356,10 @@ export function ViewBar({
                 <div key={v.id} className="flex items-center group/vi">
                   <button
                     onClick={() => { onLoadView(v); setShowViewMenu(false); }}
-                    className={`flex-1 px-3 py-2 text-left text-[11px] font-medium hover:bg-[var(--bg-secondary)]/30 transition-all ${activeView.id === v.id ? 'text-[#3B7EF8] font-bold' : 'text-[var(--text-primary)]'}`}
+                    className={`flex-1 px-3 py-2 text-left text-[11px] font-medium hover:bg-[var(--color-surface-subtle)] transition-all ${activeView.id === v.id ? 'text-[var(--color-primary)] dark:text-[var(--text-primary)] font-bold' : 'text-[var(--text-primary)]'}`}
                   >
                     {v.name}
-                    {v.isDefault && <span className="ml-2 text-[9px] text-slate-500 uppercase">def</span>}
+                    {v.isDefault && <span className="ml-2 text-[9px] text-[var(--text-muted)] font-mono uppercase">def</span>}
                   </button>
                   {onDeleteView && (
                     <button
@@ -406,11 +406,11 @@ export function ViewBar({
         <div className="relative flex-shrink-0">
           <button
             onClick={() => setShowAddFilter(!showAddFilter)}
-            className={`flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all ${hasFilters ? 'bg-[#3B7EF8]/10 border-[#3B7EF8]/30 text-[#3B7EF8]' : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[#3B7EF8]/20 hover:text-[#3B7EF8]'}`}
+            className={`flex items-center gap-1.5 h-7 px-2.5 rounded-[var(--radius-control)] text-[10px] font-bold uppercase tracking-widest border transition-all ${hasFilters ? 'bg-[var(--color-primary-subtle)] border-[var(--color-primary)]/40 text-[var(--color-primary)] dark:text-[var(--text-primary)]' : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--color-primary)]/40 hover:text-[var(--text-primary)]'}`}
           >
             <Filter size={11} />
             Filtrar
-            {hasFilters && <span className="bg-[#3B7EF8] text-white rounded-full w-4 h-4 flex items-center justify-center text-[9px]">{activeView.filters.length}</span>}
+            {hasFilters && <span className="bg-[var(--color-primary)] text-[var(--color-primary-foreground)] rounded-full w-4 h-4 flex items-center justify-center text-[9px]">{activeView.filters.length}</span>}
           </button>
           {showAddFilter && (
             <AddFilterPopover
@@ -425,15 +425,15 @@ export function ViewBar({
         <div ref={sortRef} className="relative flex-shrink-0">
           <button
             onClick={() => setShowSortPicker(!showSortPicker)}
-            className={`flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all ${hasSorts ? 'bg-[#3B7EF8]/10 border-[#3B7EF8]/30 text-[#3B7EF8]' : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[#3B7EF8]/20 hover:text-[#3B7EF8]'}`}
+            className={`flex items-center gap-1.5 h-7 px-2.5 rounded-[var(--radius-control)] text-[10px] font-bold uppercase tracking-widest border transition-all ${hasSorts ? 'bg-[var(--color-primary-subtle)] border-[var(--color-primary)]/40 text-[var(--color-primary)] dark:text-[var(--text-primary)]' : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--color-primary)]/40 hover:text-[var(--text-primary)]'}`}
           >
             <ArrowUpDown size={11} />
             Ordenar
           </button>
           {showSortPicker && (
-            <div className="absolute top-full right-0 mt-1 w-52 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl shadow-2xl z-50 overflow-hidden">
+            <div className="absolute top-full right-0 mt-1 w-52 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-[var(--radius-surface)] shadow-[var(--shadow-floating)] z-50 overflow-hidden">
               <div className="px-3 py-2 border-b border-[var(--border-color)]">
-                <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)]">Ordenar por</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)]">Ordenar por</p>
               </div>
               <div className="py-1 max-h-60 overflow-y-auto custom-scrollbar">
                 {columns.map(col => {
@@ -450,10 +450,10 @@ export function ViewBar({
                         }
                         setShowSortPicker(false);
                       }}
-                      className="w-full flex items-center gap-3 px-3 py-2 hover:bg-[#3B7EF8]/5 transition-all text-left"
+                      className="w-full flex items-center gap-3 px-3 py-2 hover:bg-[var(--color-surface-subtle)] transition-all text-left"
                     >
                       <span className="text-[11px] font-medium text-[var(--text-primary)] flex-1">{col.title}</span>
-                      {existing && <span className="text-[#3B7EF8] font-black text-sm">{existing.direction === 'asc' ? '↑' : '↓'}</span>}
+                      {existing && <span className="text-[var(--color-primary)] dark:text-[var(--text-primary)] font-bold text-sm">{existing.direction === 'asc' ? '↑' : '↓'}</span>}
                     </button>
                   );
                 })}
@@ -466,7 +466,7 @@ export function ViewBar({
         <div className="relative flex-shrink-0">
           <button
             onClick={() => setShowColToggle(!showColToggle)}
-            className={`flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all ${hiddenCount > 0 ? 'bg-amber-500/10 border-amber-500/30 text-amber-500' : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[#3B7EF8]/20 hover:text-[#3B7EF8]'}`}
+            className={`flex items-center gap-1.5 h-7 px-2.5 rounded-[var(--radius-control)] text-[10px] font-bold uppercase tracking-widest border transition-all ${hiddenCount > 0 ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400' : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--color-primary)]/40 hover:text-[var(--text-primary)]'}`}
           >
             <Columns3 size={11} />
             Columnas
@@ -485,13 +485,13 @@ export function ViewBar({
         {/* Clear / Save */}
         {(hasFilters || hasSorts || hiddenCount > 0) && (
           <>
-            <button onClick={onClearFilters} className="flex items-center gap-1 h-7 px-2 rounded-lg text-[10px] font-black text-slate-500 hover:text-rose-500 transition-all" title="Limpiar filtros">
+            <button onClick={onClearFilters} className="flex items-center gap-1 h-7 px-2 rounded-[var(--radius-control)] text-[10px] font-bold text-[var(--text-muted)] hover:text-rose-500 transition-all" title="Limpiar filtros">
               <X size={11} /> Limpiar
             </button>
             {isDirty && (
               <button
                 onClick={() => setShowSaveModal(true)}
-                className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest bg-[#3B7EF8] text-white hover:bg-[#2563EB] transition-all"
+                className="flex items-center gap-1.5 h-7 px-2.5 rounded-[var(--radius-control)] text-[10px] font-bold uppercase tracking-widest bg-[var(--color-accent)] text-[var(--color-accent-foreground)] hover:bg-[var(--color-accent-hover)] transition-all shadow-2xs"
               >
                 <Save size={11} /> Guardar vista
               </button>

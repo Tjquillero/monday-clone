@@ -16,9 +16,12 @@ import {
   Clock,
   Sparkles,
   Layers,
+  LogIn,
 } from 'lucide-react';
+import Link from 'next/link';
 import { CardSkeleton } from '@/components/ui/Skeleton';
 import { usePublishedWeekPlans } from '@/hooks/useWeeklyPlans';
+import { usePersonnelAssignments } from '@/hooks/useCrews';
 import { useAuth } from '@/contexts/AuthContext';
 import { getMonday, getWeekBounds, getBogotaToday } from '@/lib/weeklyPlanner';
 import { evaluateDailyOperationalBrief, DailyOperationalBrief } from '@/lib/dailyOperationalBriefService';
@@ -90,6 +93,8 @@ export default function ActividadesContainer() {
   }, [selectedWeekStart]);
 
   const { data: plans, isLoading, isError, error, refetch } = usePublishedWeekPlans(week.start);
+  const activeBoardId = plans?.[0]?.board_id;
+  const { data: personnelAssignments = [] } = usePersonnelAssignments(activeBoardId, todayBogotaISO);
 
   // Proyección temporal única UX-01 (Today / Overdue / Future / Historical)
   const temporalData = useMemo(() => {
@@ -183,7 +188,7 @@ export default function ActividadesContainer() {
               Jornada de Campo
             </p>
           </div>
-          <h1 className="text-xl sm:text-2xl font-brand font-extrabold text-[var(--text-primary)] tracking-tight flex items-center gap-2 flex-wrap">
+          <h1 className="text-xl sm:text-2xl font-brand font-bold text-[var(--text-primary)] tracking-tight flex items-center gap-2 flex-wrap">
             <span>Hoy · {friendlyToday}</span>
           </h1>
           <p className="text-xs font-medium text-[var(--text-secondary)]">
@@ -201,7 +206,7 @@ export default function ActividadesContainer() {
               onClick={() => setViewMode('today')}
               className={`min-h-[38px] px-3.5 py-1.5 rounded-[var(--radius-control)] text-xs font-bold flex items-center gap-1.5 transition-all touch-manipulation ${
                 viewMode === 'today'
-                  ? 'bg-[var(--card-bg)] text-[var(--text-primary)] shadow-2xs font-extrabold'
+                  ? 'bg-[var(--card-bg)] text-[var(--text-primary)] shadow-2xs font-bold'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
             >
@@ -216,7 +221,7 @@ export default function ActividadesContainer() {
               onClick={() => setViewMode('allWeek')}
               className={`min-h-[38px] px-3.5 py-1.5 rounded-[var(--radius-control)] text-xs font-bold flex items-center gap-1.5 transition-all touch-manipulation ${
                 viewMode === 'allWeek'
-                  ? 'bg-[var(--card-bg)] text-[var(--text-primary)] shadow-2xs font-extrabold'
+                  ? 'bg-[var(--card-bg)] text-[var(--text-primary)] shadow-2xs font-bold'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
             >
@@ -300,15 +305,31 @@ export default function ActividadesContainer() {
         </div>
       )}
 
-      {/* 5. Estado Vacío General: Sin planes publicados en la semana */}
+      {/* 5. Estado Vacío General: Sin planes publicados en la semana o sesión requerida */}
       {!isLoading && !isError && (plans?.length ?? 0) === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 px-4 bg-[var(--color-surface-subtle)] rounded-[var(--radius-surface)] border-2 border-dashed border-[var(--border-color)] text-center">
-          <CalendarX2 className="w-10 h-10 text-[var(--text-muted)] mb-3" />
-          <p className="text-[var(--text-primary)] font-bold text-base">No hay plan publicado para esta semana.</p>
-          <p className="text-xs text-[var(--text-muted)] mt-1 max-w-md">
-            Utiliza las flechas superiores para navegar a semanas anteriores o futuras con planes publicados.
-          </p>
-        </div>
+        !user ? (
+          <div className="flex flex-col items-center justify-center py-16 px-4 bg-[var(--color-surface-subtle)] rounded-[var(--radius-surface)] border-2 border-dashed border-[var(--border-color)] text-center" data-testid="auth-required-state">
+            <LogIn className="w-10 h-10 text-[var(--color-primary)] mb-3" />
+            <p className="text-[var(--text-primary)] font-bold text-base">Inicia sesión para ver tu programación</p>
+            <p className="text-xs text-[var(--text-muted)] mt-1 max-w-md">
+              La visualización de las actividades operativas y el personal de campo requiere autenticación de usuario.
+            </p>
+            <Link
+              href="/login"
+              className="mt-4 px-4 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-xs font-bold rounded-[var(--radius-control)] transition-colors inline-flex items-center gap-1.5"
+            >
+              <span>Ir a Iniciar Sesión</span>
+            </Link>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-16 px-4 bg-[var(--color-surface-subtle)] rounded-[var(--radius-surface)] border-2 border-dashed border-[var(--border-color)] text-center">
+            <CalendarX2 className="w-10 h-10 text-[var(--text-muted)] mb-3" />
+            <p className="text-[var(--text-primary)] font-bold text-base">No hay plan publicado para esta semana.</p>
+            <p className="text-xs text-[var(--text-muted)] mt-1 max-w-md">
+              Utiliza las flechas superiores para navegar a semanas anteriores o futuras con planes publicados.
+            </p>
+          </div>
+        )
       )}
 
       {/* 6. ESTADO VACÍO CONTEXTUAL (UX-01-D: Hoy sin actividades, pero con o sin resagadas) */}
@@ -355,6 +376,7 @@ export default function ActividadesContainer() {
             onSelectSite={(groupId) => setSelectedGroupId(groupId)}
             operationalTodayISO={todayBogotaISO}
             showAllWeek={viewMode === 'allWeek'}
+            personnelAssignments={personnelAssignments}
           />
         ) : (
           <ActividadesView
@@ -365,6 +387,7 @@ export default function ActividadesContainer() {
             onExecutionSuccess={handleExecutionSuccess}
             operationalTodayISO={todayBogotaISO}
             showAllWeek={viewMode === 'allWeek'}
+            personnelAssignments={personnelAssignments}
           />
         )
       )}

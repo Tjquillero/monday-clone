@@ -228,7 +228,7 @@ const ActasHotTable: React.FC<ActasHotTableProps> = React.memo(({
   );
 
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', fontFamily: "Inter,'system-ui',sans-serif", overflow: 'hidden', position: 'relative' }}>
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', fontFamily: 'var(--font-sans), system-ui, sans-serif', fontVariantNumeric: 'tabular-nums', overflow: 'hidden', position: 'relative' }}>
       
       {/* Toast Notification para Guardado */}
       <div style={{
@@ -259,7 +259,7 @@ const ActasHotTable: React.FC<ActasHotTableProps> = React.memo(({
               <th colSpan={2} style={thStyle(COL_WIDTHS.prevQty + COL_WIDTHS.prevVal, { background: '#f1f5f9' })}>
                 ACTAS ANTERIORES
               </th>
-              <th colSpan={3} style={thStyle(COL_WIDTHS.curQty + COL_WIDTHS.curVal + COL_WIDTHS.curPct, { background: '#dbeafe', color: '#1d4ed8', fontWeight: 900 })}>
+              <th colSpan={3} style={thStyle(COL_WIDTHS.curQty + COL_WIDTHS.curVal + COL_WIDTHS.curPct, { background: '#dbeafe', color: '#1d4ed8', fontWeight: 700 })}>
                 {actaName.toUpperCase()} (ACTUAL)
               </th>
               <th colSpan={2} style={thStyle(COL_WIDTHS.accQty + COL_WIDTHS.accVal, { background: '#f8fafc' })}>
@@ -279,9 +279,9 @@ const ActasHotTable: React.FC<ActasHotTableProps> = React.memo(({
               <th style={thStyle(COL_WIDTHS.budgetTotal,{ background: '#f1f5f9' })}>V/TOTAL</th>
               <th style={thStyle(COL_WIDTHS.prevQty,    { background: '#f1f5f9' })}>CANT.</th>
               <th style={thStyle(COL_WIDTHS.prevVal,    { background: '#f1f5f9' })}>V/TOTAL</th>
-              <th style={thStyle(COL_WIDTHS.curQty,     { background: '#dbeafe', color: '#1d4ed8', fontWeight: 900 })}>CANT.</th>
-              <th style={thStyle(COL_WIDTHS.curVal,     { background: '#dbeafe', color: '#1d4ed8', fontWeight: 900 })}>V/TOTAL</th>
-              <th style={thStyle(COL_WIDTHS.curPct,     { background: '#dbeafe', color: '#1d4ed8', fontWeight: 900 })}>%</th>
+              <th style={thStyle(COL_WIDTHS.curQty,     { background: '#dbeafe', color: '#1d4ed8', fontWeight: 700 })}>CANT.</th>
+              <th style={thStyle(COL_WIDTHS.curVal,     { background: '#dbeafe', color: '#1d4ed8', fontWeight: 700 })}>V/TOTAL</th>
+              <th style={thStyle(COL_WIDTHS.curPct,     { background: '#dbeafe', color: '#1d4ed8', fontWeight: 700 })}>%</th>
               <th style={thStyle(COL_WIDTHS.accQty,     { background: '#f8fafc' })}>CANT.</th>
               <th style={thStyle(COL_WIDTHS.accVal,     { background: '#f8fafc' })}>V/TOTAL</th>
 

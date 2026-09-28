@@ -49,7 +49,7 @@ export default function ProfessionalLayout({ children }: { children: React.React
       refreshLocalCache();
     }
   }, [isOnline, refreshLocalCache]);
-  
+
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNewsModalOpen, setIsNewsModalOpen] = useState(false);
@@ -57,7 +57,7 @@ export default function ProfessionalLayout({ children }: { children: React.React
   const [isNewBoardModalOpen, setIsNewBoardBoardModalOpen] = useState(false);
   const [selectedFolderForNewBoard, setSelectedFolderForNewBoard] = useState<string | null>(null);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({ 'main': true });
-  
+
   const handleLogout = async () => {
     await signOut();
     router.push('/login?signedout=true');
@@ -159,7 +159,7 @@ export default function ProfessionalLayout({ children }: { children: React.React
   };
   return (
     <div className="flex h-screen bg-[var(--bg-primary)] overflow-hidden font-sans text-[var(--text-primary)]">
-      
+
       {/* Primary Slim Navbar (Hidden on screen < 1024px) */}
       <aside className="hidden lg:flex w-[68px] bg-[var(--bg-primary)] flex-col items-center py-6 space-y-6 border-r border-[var(--border-color)] z-50 flex-shrink-0">
           <Link href="/dashboard" className="transition-transform hover:scale-105">
@@ -168,9 +168,9 @@ export default function ProfessionalLayout({ children }: { children: React.React
 
           <div className="w-8 h-px bg-[var(--border-color)]" />
 
-          <button 
-            onClick={() => setIsSearchModalOpen(true)} 
-            className="p-3 text-[var(--text-secondary)] hover:text-[var(--color-primary)] dark:hover:text-[var(--text-primary)] hover:bg-[var(--color-primary-subtle)] rounded-[var(--radius-control)] transition-all relative group" 
+          <button
+            onClick={() => setIsSearchModalOpen(true)}
+            className="p-3 text-[var(--text-secondary)] hover:text-[var(--color-primary)] dark:hover:text-[var(--text-primary)] hover:bg-[var(--color-primary-subtle)] rounded-[var(--radius-control)] transition-all relative group"
             title="Buscar (Ctrl+K)"
           >
             <Search className="w-5 h-5 group-hover:scale-110 transition-transform" />
@@ -179,11 +179,11 @@ export default function ProfessionalLayout({ children }: { children: React.React
           <NotificationBell />
           <OfflineIndicator />
 
-          <button 
-            onClick={() => setSidebarOpen(!sidebarOpen)} 
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
             className={`p-3 rounded-[var(--radius-control)] transition-all group ${
-              sidebarOpen 
-                ? 'text-[var(--color-primary)] dark:text-[var(--text-primary)] bg-[var(--color-primary-subtle)] font-bold' 
+              sidebarOpen
+                ? 'text-[var(--color-primary)] dark:text-[var(--text-primary)] bg-[var(--color-primary-subtle)] font-bold'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-surface-subtle)]'
             }`}
             title={sidebarOpen ? "Ocultar panel" : "Mostrar panel"}
@@ -193,18 +193,18 @@ export default function ProfessionalLayout({ children }: { children: React.React
 
           <div className="flex-1"></div>
 
-          <button 
-            onClick={() => setIsNewsModalOpen(true)} 
-            className="p-3 text-[var(--text-secondary)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent-subtle)] rounded-[var(--radius-control)] transition-all group" 
+          <button
+            onClick={() => setIsNewsModalOpen(true)}
+            className="p-3 text-[var(--text-secondary)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent-subtle)] rounded-[var(--radius-control)] transition-all group"
             title="Reportar Novedad"
           >
             <Megaphone className="w-5 h-5 group-hover:-rotate-12 transition-transform" />
           </button>
 
           {can(PERMISSIONS.MANAGE_USERS) && (
-            <button 
-              onClick={() => router.push('/projects')} 
-              className="p-3 text-[var(--text-secondary)] hover:text-[var(--color-primary)] dark:hover:text-[var(--text-primary)] hover:bg-[var(--color-primary-subtle)] rounded-[var(--radius-control)] transition-all group" 
+            <button
+              onClick={() => router.push('/projects')}
+              className="p-3 text-[var(--text-secondary)] hover:text-[var(--color-primary)] dark:hover:text-[var(--text-primary)] hover:bg-[var(--color-primary-subtle)] rounded-[var(--radius-control)] transition-all group"
               title="Personal y Recursos"
             >
               <Users className="w-5 h-5 group-hover:scale-110" />
@@ -212,9 +212,9 @@ export default function ProfessionalLayout({ children }: { children: React.React
           )}
 
           <div className="relative group/user px-2">
-            <button 
-              onClick={() => setIsUserMenuOpen(!isUserMenuOpen)} 
-              className="w-10 h-10 bg-[var(--color-primary)] text-[var(--color-primary-foreground)] rounded-[var(--radius-control)] flex items-center justify-center text-xs font-black shadow-md hover:opacity-90 transition-all border border-[var(--border-color)]"
+            <button
+              onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+              className="w-10 h-10 bg-[var(--color-primary)] text-[var(--color-primary-foreground)] rounded-[var(--radius-control)] flex items-center justify-center text-xs font-bold shadow-md hover:opacity-90 transition-all border border-[var(--border-color)]"
               title="Perfil de Operador"
             >
               M
@@ -226,14 +226,14 @@ export default function ProfessionalLayout({ children }: { children: React.React
                     <p className="text-sm font-bold text-[var(--text-primary)]">Mantenix Operator</p>
                     <p className="text-[11px] text-[var(--text-secondary)] font-medium truncate">{user?.email}</p>
                  </div>
-                 <button 
-                   onClick={() => router.push('/settings')} 
+                 <button
+                   onClick={() => router.push('/settings')}
                    className="w-full text-left px-5 py-2.5 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--color-surface-subtle)] hover:text-[var(--text-primary)] transition-all flex items-center gap-3"
                  >
                     <Settings size={14} /> Ajustes Perfil
                  </button>
-                 <button 
-                   onClick={handleLogout} 
+                 <button
+                   onClick={handleLogout}
                    className="w-full text-left px-5 py-2.5 text-xs font-semibold text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 transition-all flex items-center gap-3 mt-1"
                  >
                    <LogOut size={14} /> Cerrar Sesión
@@ -255,15 +255,15 @@ export default function ProfessionalLayout({ children }: { children: React.React
                <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.18em]">Workspace</span>
                <span className="brand-title text-[var(--text-primary)] text-sm tracking-tight truncate">Corporativo Mantenix</span>
             </div>
-            <button 
-              onClick={() => setSidebarOpen(false)} 
+            <button
+              onClick={() => setSidebarOpen(false)}
               className="hidden lg:flex p-2 hover:bg-[var(--color-surface-subtle)] rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
               title="Colapsar panel"
             >
                <ChevronLeft className="w-5 h-5" />
             </button>
-            <button 
-              onClick={() => setIsMobileSidebarOpen(false)} 
+            <button
+              onClick={() => setIsMobileSidebarOpen(false)}
               className="lg:hidden p-2 hover:bg-[var(--color-surface-subtle)] rounded-[var(--radius-control)] text-[var(--text-secondary)]"
             >
                <CloseIcon className="w-6 h-6" />
@@ -277,13 +277,13 @@ export default function ProfessionalLayout({ children }: { children: React.React
                   return (
                     <Link key={item.label} href={item.path} onClick={() => setIsMobileSidebarOpen(false)}>
                       <div className={`group/item flex items-center px-4 py-2.5 rounded-[var(--radius-control)] transition-all relative ${
-                        isActive 
-                          ? 'bg-[var(--color-primary-subtle)] text-[var(--color-primary)] dark:text-[var(--text-primary)] font-bold shadow-xs' 
+                        isActive
+                          ? 'bg-[var(--color-primary-subtle)] text-[var(--color-primary)] dark:text-[var(--text-primary)] font-bold shadow-xs'
                           : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-surface-subtle)]'
                       }`}>
                          <item.icon className={`w-5 h-5 mr-3.5 transition-colors ${
-                           isActive 
-                             ? 'text-[var(--color-primary)] dark:text-[var(--color-accent)]' 
+                           isActive
+                             ? 'text-[var(--color-primary)] dark:text-[var(--color-accent)]'
                              : 'text-[var(--text-muted)] group-hover/item:text-[var(--text-secondary)]'
                          }`} />
                          <span className="text-[13px] font-semibold tracking-normal">{item.label}</span>
@@ -300,8 +300,8 @@ export default function ProfessionalLayout({ children }: { children: React.React
                <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em] px-4 mb-3 font-mono">Tableros_Explorer</p>
                {workspace.folders.map(folder => (
                   <div key={folder.id} className="mb-3">
-                     <button 
-                       onClick={() => toggleFolder(folder.id)} 
+                     <button
+                       onClick={() => toggleFolder(folder.id)}
                        className="w-full flex items-center px-4 py-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-surface-subtle)] rounded-[var(--radius-control)] transition-all"
                      >
                         {expandedFolders[folder.id] ? <ChevronDown className="w-4 h-4 mr-2.5 text-[var(--text-muted)]" /> : <ChevronRight className="w-4 h-4 mr-2.5 text-[var(--text-muted)]" />}
@@ -313,8 +313,8 @@ export default function ProfessionalLayout({ children }: { children: React.React
                            {folder.boards.map(board => (
                              <Link key={board.id} href={board.path} onClick={() => setIsMobileSidebarOpen(false)}>
                                <div className={`px-3 py-1.5 rounded-[var(--radius-control)] text-xs font-medium transition-all ${
-                                 (pathname || '').includes(board.id) 
-                                   ? 'text-[var(--color-primary)] dark:text-[var(--text-primary)] bg-[var(--color-primary-subtle)] font-bold' 
+                                 (pathname || '').includes(board.id)
+                                   ? 'text-[var(--color-primary)] dark:text-[var(--text-primary)] bg-[var(--color-primary-subtle)] font-bold'
                                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-surface-subtle)]'
                                }`}>
                                   # {board.name}
@@ -327,18 +327,18 @@ export default function ProfessionalLayout({ children }: { children: React.React
                ))}
             </div>
          </div>
-         
+
          {/* Sección de perfil y logout en móvil */}
          <div className="lg:hidden p-4 border-t border-[var(--border-color)] bg-[var(--bg-secondary)] flex flex-col gap-3">
             <div className="flex items-center gap-3 px-2 py-1">
-              <div className="w-9 h-9 bg-[var(--color-primary)] text-[var(--color-primary-foreground)] rounded-[var(--radius-control)] flex items-center justify-center text-xs font-black shadow-sm border border-[var(--border-color)]">M</div>
+              <div className="w-9 h-9 bg-[var(--color-primary)] text-[var(--color-primary-foreground)] rounded-[var(--radius-control)] flex items-center justify-center text-xs font-bold shadow-sm border border-[var(--border-color)]">M</div>
               <div className="flex flex-col min-w-0">
                 <span className="text-xs font-bold text-[var(--text-primary)] truncate">Mantenix Operator</span>
                 <span className="text-[10px] text-[var(--text-muted)] truncate">{user?.email}</span>
               </div>
             </div>
-            <button 
-              onClick={handleLogout} 
+            <button
+              onClick={handleLogout}
               className="w-full py-2.5 bg-[var(--color-danger)]/10 hover:bg-[var(--color-danger)] text-[var(--color-danger)] hover:text-white rounded-[var(--radius-control)] text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-[var(--color-danger)]/20"
             >
               <LogOut size={14} /> Cerrar Sesión
@@ -348,12 +348,12 @@ export default function ProfessionalLayout({ children }: { children: React.React
 
       {/* Main Content Wrapper (Corrected Layout Flow) */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
-          
+
           {/* Mobile Header (In flex flow to avoid overlap) */}
           <header className="lg:hidden h-[64px] bg-[var(--bg-secondary)] border-b border-[var(--border-color)] flex items-center justify-between px-6 backdrop-blur-md flex-shrink-0 z-50">
             <div className="flex items-center gap-3">
-              <button 
-                onClick={() => setIsMobileSidebarOpen(true)} 
+              <button
+                onClick={() => setIsMobileSidebarOpen(true)}
                 className="p-2 text-[var(--text-secondary)] hover:bg-[var(--color-surface-subtle)] rounded-[var(--radius-control)]"
                 title="Abrir menú"
               >

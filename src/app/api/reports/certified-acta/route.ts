@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import puppeteer from 'puppeteer';
 import { generateCertifiedActaReportHtml } from '@/components/reports/CertifiedActaReportTemplate';
+import { wrapReportHtml } from '@/lib/reportFontHelper';
 import { CertifiedActa, CertifiedActaTotals } from '@/types/monday';
 
 // Renderiza el PDF de un acta certificada YA emitida. No recalcula nada —
@@ -20,28 +21,17 @@ export async function POST(req: NextRequest) {
 
     const componentHtml = generateCertifiedActaReportHtml(acta, totals);
 
-    const fullHtml = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <script src="https://cdn.tailwindcss.com"></script>
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-            body {
-              font-family: 'Inter', sans-serif;
-              color: #0f172a;
-              margin: 0;
-              padding: 0;
-              -webkit-print-color-adjust: exact;
-            }
-          </style>
-        </head>
-        <body>
-          ${componentHtml}
-        </body>
-      </html>
-    `;
+    const fullHtml = wrapReportHtml({
+      title: `Acta Certificada - ${acta.numero}`,
+      bodyContent: componentHtml,
+      customStyles: `
+        body {
+          color: #0f172a;
+          margin: 0;
+          padding: 0;
+        }
+      `,
+    });
 
     const browser = await puppeteer.launch({
       headless: true,
@@ -50,9 +40,10 @@ export async function POST(req: NextRequest) {
     const page = await browser.newPage();
 
     await page.setContent(fullHtml, {
-      waitUntil: 'networkidle0',
-      timeout: 60000,
+      waitUntil: 'domcontentloaded',
+      timeout: 30000,
     });
+    await page.evaluateHandle('document.fonts.ready');
 
     const pdfBuffer = await page.pdf({
       format: 'Letter',
@@ -69,8 +60,8 @@ export async function POST(req: NextRequest) {
         'Content-Disposition': `attachment; filename="Acta_${acta.numero}.pdf"`,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error generating certified acta PDF:', error);
-    return NextResponse.json({ error: 'Failed to generate PDF' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to generate PDF', details: error.message }, { status: 500 });
   }
 }

@@ -53,12 +53,12 @@ export const FinancialReconciliationView: React.FC<FinancialReconciliationViewPr
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
-        <RefreshCw className="w-8 h-8 text-blue-600 dark:text-blue-400 animate-spin mb-3" />
-        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+      <div className="flex flex-col items-center justify-center p-12 bg-[var(--card-bg)] rounded-[var(--radius-surface)] border border-[var(--border-color)] shadow-[var(--shadow-card)]">
+        <RefreshCw className="w-8 h-8 text-[var(--color-primary)] dark:text-[var(--text-primary)] animate-spin mb-3" />
+        <p className="text-sm font-semibold text-[var(--text-primary)]">
           Cargando Reconciliación Financiera y Control de Actas...
         </p>
-        <p className="text-xs text-gray-400 mt-1">
+        <p className="text-xs text-[var(--text-muted)] mt-1">
           Evaluando certidumbre de ejecuciones físicas y fuentes de Actas (ADR-0012)
         </p>
       </div>
@@ -67,7 +67,7 @@ export const FinancialReconciliationView: React.FC<FinancialReconciliationViewPr
 
   if (error) {
     return (
-      <div className="p-6 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl text-rose-800 dark:text-rose-200">
+      <div className="p-6 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-[var(--radius-surface)] text-rose-800 dark:text-rose-200">
         <h4 className="font-bold text-sm">Error en Reconciliación Financiera</h4>
         <p className="text-xs mt-1">{error.message}</p>
       </div>
@@ -77,21 +77,21 @@ export const FinancialReconciliationView: React.FC<FinancialReconciliationViewPr
   return (
     <div className="w-full space-y-6">
       {/* Header de la Superficie Consultiva */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-800 gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[var(--border-color)] gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <DollarSign className="w-6 h-6 text-purple-600 dark:text-purple-400" />
-            <h2 className="text-xl font-extrabold text-gray-900 dark:text-gray-100 tracking-tight">
+            <DollarSign className="w-6 h-6 text-[var(--color-accent)]" />
+            <h2 className="text-xl font-brand font-bold text-[var(--text-primary)] tracking-tight">
               Reconciliación Financiera y Control de Actas
             </h2>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          <p className="text-xs text-[var(--text-secondary)] mt-1">
             Superficie consultiva pura · Cruzamiento de Avance Verificado vs. Valorización POA y Actas de Obra (ADR-0012)
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-[var(--radius-control)] text-xs font-semibold bg-[var(--color-primary-subtle)] text-[var(--color-primary)] border border-[var(--border-color)]">
             <ShieldCheck className="w-4 h-4" />
             Solo Lectura (0 Mutaciones)
           </span>
@@ -103,7 +103,7 @@ export const FinancialReconciliationView: React.FC<FinancialReconciliationViewPr
 
       {/* 2. Desglose Financiero y Físico por Sitio */}
       <div className="space-y-4">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
           Resumen Gerencial por Sitio de Trabajo
         </h3>
         {Array.from(occurrencesBySite.entries()).map(([siteTitle, occurrences]) => (
