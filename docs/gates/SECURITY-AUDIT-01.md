@@ -1,7 +1,7 @@
 # Auditoría de Seguridad: SECURITY-AUDIT-01
 
 **Fecha:** 2026-09-30  
-**Alcance:** Remediación de escalamiento de privilegios vía `user_metadata` y aseguramiento de `search_path` en funciones `SECURITY DEFINER`.
+**Alcance:** Remediación de escalamiento de privilegios vía `user_metadata`, aseguramiento de `search_path` en funciones `SECURITY DEFINER` y rotación de claves de acceso en producción.
 
 ---
 
@@ -48,9 +48,30 @@ Se aplicó en producción la migración `supabase/migrations/2026093002_security
 
 ---
 
-## 3. Pendiente S2: la interfaz todavía lee user_metadata.role
+## 3. Remediación S2 — Rotación de claves (2026-09-30)
 
-En el código fuente de la aplicación cliente (`src/`), existen componentes y hooks que continúan leyendo `user_metadata` para determinar roles o permisos en la interfaz de usuario. Estos puntos deberán ser migrados en la fase S2 para leer desde `app_metadata` o desde las consultas de autorización del servidor:
+- **Motivo:** La clave `service_role` legacy estuvo presente en `.env.local` y fue utilizada por agentes y scripts (E2E) para crear cuentas en producción. Se verificó que ningún archivo `.env` estuvo nunca versionado en git (`git ls-files` y `git log` limpios).
+- **Pasos ejecutados por Tomás:**
+  1. **Supabase:** Creada secret key `"vercel-server"` (uso exclusivo: Vercel, `/api/personnel/bootstrap`).
+  2. **Vercel:** `SUPABASE_SERVICE_ROLE_KEY` reemplazada por `vercel-server`; redeploy realizado.
+  3. **Vercel:** `NEXT_PUBLIC_SUPABASE_ANON_KEY` recreada como tipo Config con la publishable key (`sb_publishable_…`); redeploy realizado. Verificado en el navegador (DevTools → Network → header `apikey = sb_publishable_…`).
+  4. **Entorno local:** En `.env.local`, anon key reemplazada por la publishable key y línea `SUPABASE_SERVICE_ROLE_KEY` eliminada por completo. En `.env.production`, anon key reemplazada.
+  5. **Supabase:** Claves legacy (`anon`, `service_role`) desactivadas (*"JWT-based API keys" disabled*). Aplicación verificada funcionando correctamente después del cambio.
+  6. **Supabase:** Secret key `"default"` revocada.
+- **Estado final:** Única clave privilegiada activa = `vercel-server` (confinada exclusivamente en Vercel).
+- **Riesgo residual:** La desactivación de claves legacy es reversible desde el dashboard; la invalidación permanente requiere rotar el JWT secret (*Settings → JWT Keys*), lo cual cerraría todas las sesiones activas de usuarios. Queda como pendiente opcional.
+- **Nota operativa:** La carga de Excel de personal (`/api/personnel/bootstrap`) no se probó funcionalmente con la nueva clave; se validará en la próxima carga real de datos.
+
+---
+
+## 4. Estado de Mitigaciones y Tareas Pendientes
+
+### A. Tareas Ejecutadas / Mitigadas
+- **CI cortado (Mitigado):** Secreto `SUPABASE_ACCESS_TOKEN` eliminado de GitHub Actions; el job `pgtap` pasó de 1m34s a 13s finalizando sin conectar a infraestructura remota.
+- **Aislamiento de service_role (Mitigado en S2):** Clave `service_role` eliminada de entornos locales y confinada a Vercel bajo nombre `vercel-server`.
+
+### B. Pendiente S3: Interfaz de Usuario
+En el código fuente de la aplicación cliente (`src/`), existen componentes y hooks que continúan leyendo `user_metadata` para determinar roles o permisos en la interfaz de usuario:
 
 | Archivo | Línea | Código / Contexto |
 |---|---|---|
@@ -61,4 +82,8 @@ En el código fuente de la aplicación cliente (`src/`), existen componentes y h
 | `src/contexts/AuthContext.tsx` | 138-139 | `isAdmin` se concede también por email (`admin@mantenix.com`, `admin@example.com`). |
 | `src/components/views/BoardViewContainer.tsx` | 46 | `const role = (user?.user_metadata as any)?.role?.toLowerCase();` |
 
-> **Nota:** Ninguno de estos usos en el cliente fue modificado en esta fase S1 para preservar la estabilidad de la UI mientras se planifica la migración integral de la sesión en S2.
+> **Nota:** Ninguno de estos usos en el cliente fue modificado en S1/S2 para preservar la estabilidad de la UI mientras se planifica la migración integral de la sesión en S3.
+
+### C. Pendientes de Infraestructura y Testing
+- **Proyecto Supabase separado para tests:** Crear y aislar un proyecto dedicado exclusivamente a testing automatizado y suites de integración.
+- **Skill E2E:** Reconfigurar la suite y skills de E2E para interactuar exclusivamente con el entorno de pruebas aislado sin acceso a producción.
