@@ -112,7 +112,11 @@ export function useWeeklyPlan(
 
   // Gatillo Determinístico de Materialización e Inserción Idempotente SQL (weekly_plan_items)
   const weekStartStr = weekStart.toISOString().slice(0, 10);
-  useQuery({
+  const {
+    isLoading: matLoading,
+    isError: matError,
+    error: matErr,
+  } = useQuery({
     queryKey: ['materialize_weekly_plan', boardId, group?.id, weekStartStr],
     queryFn: async () => {
       if (!boardId || !group?.id) return null;
@@ -120,6 +124,7 @@ export function useWeeklyPlan(
     },
     enabled: !!boardId && !!group?.id && !!standards && !!poaCatalog,
     staleTime: 5 * 60_000,
+    retry: false,
     refetchOnWindowFocus: false,
   });
 
@@ -146,10 +151,10 @@ export function useWeeklyPlan(
     return buildWeeklyPlanningContext(mergedStandards, scopeMappings, scopeQuantities, zone, week);
   }, [standards, poaCatalog, scopeMappings, analysisRow, group, weekStart, missingStandards, assignmentsCount]);
 
-  const isLoading = stdLoading || poaLoading || mapLoading || qtyLoading || missingLoading;
+  const isLoading = stdLoading || poaLoading || mapLoading || qtyLoading || missingLoading || matLoading;
 
-  const error = (stdErr ?? poaErr ?? mapErr ?? qtyErr ?? missingErr) as Error | null;
-  const isError = stdError || poaError || mapError || qtyError || missingError;
+  const error = (stdErr ?? poaErr ?? mapErr ?? qtyErr ?? missingErr ?? matErr) as Error | null;
+  const isError = stdError || poaError || mapError || qtyError || missingError || matError;
 
   return { plan, missingStandards: missingStandards ?? [], isLoading, isError, error };
 }

@@ -160,30 +160,72 @@ describe('Test Suite 46 — Gatillo Independiente de Superficie para /my-work (F
           return {
             select: jest.fn().mockReturnThis(),
             eq: jest.fn().mockImplementation((col: string, val: any) => ({
-              eq: jest.fn().mockImplementation(async () => ({
-                data: standardsCatalog.filter((s) => s.board_id === val && s.requiere_rendimiento),
+              eq: jest.fn().mockImplementation(async (col2: string, val2: any) => ({
+                data: standardsCatalog.filter((s) => s.board_id === val && (!col2 || s.requiere_rendimiento === val2)),
                 error: null,
               })),
+              data: standardsCatalog.filter((s) => s.board_id === val),
+              error: null,
+              then: (resolve: any) =>
+                Promise.resolve({
+                  data: standardsCatalog.filter((s) => s.board_id === val),
+                  error: null,
+                }).then(resolve),
             })),
+          };
+        }
+
+        if (table === 'poa' || table === 'poas') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockImplementation(() => ({
+              data: [{ id: 'poa_1', board_id: boardId }],
+              error: null,
+              then: (resolve: any) => Promise.resolve({ data: [{ id: 'poa_1', board_id: boardId }], error: null }).then(resolve),
+            })),
+            then: (resolve: any) => Promise.resolve({ data: [{ id: 'poa_1', board_id: boardId }], error: null }).then(resolve),
           };
         }
 
         if (table === 'poa_versions') {
           return {
             select: jest.fn().mockReturnThis(),
-            eq: jest.fn().mockReturnThis(),
+            in: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockImplementation(() => ({
+              data: [{ id: 'poa_ver_active', poa_id: 'poa_1', status: 'active' }],
+              error: null,
+              then: (resolve: any) => Promise.resolve({ data: [{ id: 'poa_ver_active', poa_id: 'poa_1', status: 'active' }], error: null }).then(resolve),
+            })),
             order: jest.fn().mockReturnThis(),
             limit: jest.fn().mockReturnThis(),
             maybeSingle: jest.fn().mockResolvedValue({ data: { id: 'poa_ver_active' }, error: null }),
+            then: (resolve: any) => Promise.resolve({ data: [{ id: 'poa_ver_active', poa_id: 'poa_1', status: 'active' }], error: null }).then(resolve),
           };
         }
 
         if (table === 'poa_activities') {
+          const acts = [
+            { id: 'poa_act_1', activity_key: 'corte_grama', frecuencia: 25 },
+            { id: 'poa_act_2', activity_key: 'poda_arboles', frecuencia: 12 },
+          ];
           return {
-            select: jest.fn().mockResolvedValue({
+            select: jest.fn().mockImplementation(() => ({
+              data: acts,
+              error: null,
+              eq: jest.fn().mockResolvedValue({ data: acts, error: null }),
+              then: (resolve: any) => Promise.resolve({ data: acts, error: null }).then(resolve),
+            })),
+          };
+        }
+
+        if (table === 'poa_activity_zones') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockReturnThis(),
+            in: jest.fn().mockResolvedValue({
               data: [
-                { id: 'poa_act_1', activity_key: 'corte_grama', frecuencia: 25 },
-                { id: 'poa_act_2', activity_key: 'poda_arboles', frecuencia: 12 },
+                { poa_activity_id: 'poa_act_1', zone_id: siteId, cantidad_contratada: 20000 },
+                { poa_activity_id: 'poa_act_2', zone_id: siteId, cantidad_contratada: 100 },
               ],
               error: null,
             }),
@@ -221,7 +263,9 @@ describe('Test Suite 46 — Gatillo Independiente de Superficie para /my-work (F
       }),
 
       rpc: jest.fn().mockImplementation(async (fnName: string, params: any) => {
-        rpcCalls.push({ fn: fnName, params });
+        if (fnName === 'ensure_weekly_plan_header' || fnName === 'sync_weekly_plan_items_rpc') {
+          rpcCalls.push({ fn: fnName, params });
+        }
 
         if (fnName === 'ensure_weekly_plan_header') {
           const existing = storedWeeklyPlans.find(
@@ -280,6 +324,10 @@ describe('Test Suite 46 — Gatillo Independiente de Superficie para /my-work (F
 
           storedWeeklyPlanItems = [...preserved, ...newItems];
           return { data: storedWeeklyPlanItems, error: null };
+        }
+
+        if (fnName === 'log_materialization_event_rpc') {
+          return { data: 'evt_logged', error: null };
         }
 
         return { data: null, error: new Error(`Unknown RPC: ${fnName}`) };

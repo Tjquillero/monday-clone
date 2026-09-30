@@ -1,57 +1,56 @@
 /**
- * Service: Gatillo Independiente de Superficie para /my-work (Fase 5.1)
- * Baseline: 102 suites / 768 tests / TS 0 errores (M5 FROZEN)
- * 
- * Invariantes Contractuales F5.1:
- * - F5.1-INV-01: Separación estricta entre lectura pura inicial y mutación determinista.
- * - F5.1-INV-02: Matriz exhaustiva de estados de cabecera (Protección de draft, in_progress, confirmed, closed, cancelled).
- * - F5.1-INV-03: Definición contractual de conteo: COUNT(*) de filas asociadas al plan_id en weekly_plan_items.
- * - F5.1-INV-04: Preservación absoluta de ítems en in_progress, completed, cancelled y con is_manual_override = true.
- * - F5.1-INV-05: Exclusividad del Gateway V6 RPC (ensure_weekly_plan_header + sync_weekly_plan_items_rpc) - CERO mutaciones PostgREST directas.
- * - F5.1-INV-06: Aislamiento total del Solver H8 (🔴 STRICTLY NO-GO).
+ * Service: Gatillo Determinístico de Materialización para Superficies Operativas (/my-work)
+ * Baseline: Hito 6.4 (Gatillo Reactivo de Materialización para Tableros Vivos)
+ * Gobernanza R1-b0 + R1-c: docs/gates/R1-b0_R1-c_SPEC.md v4.2 + Decisiones D1-D11
+ *
+ * Propósito:
+ * 1. Evalúa si un plan publicado para un sitio/semana requiere materialización de ocurrencias.
+ * 2. Si el plan existe pero no tiene ítems y el catálogo está configurado -> MATERIALIZA delegando en ensureWeeklyPlanMaterialized.
+ * 3. Si el plan ya cuenta con ítems -> LECTURA PURA (NO TOCA, NO MUTAR).
+ * 4. Idempotente y determinístico: 0 duplicados en ejecuciones repetidas.
  */
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import {
-  generateRoutineScheduleForWeek,
-  RoutineBaseTemplate,
-} from './routineScheduler';
-import { calculateContractWeek } from './weeklyPlanner';
-import { WeeklyPlan, WeeklyPlanItem } from '../types/weeklyPlan';
+  WeeklyPlan,
+  WeeklyPlanItem,
+} from '../types/weeklyPlan';
+import {
+  ensureWeeklyPlanMaterialized,
+  MaterializeWeeklyPlanOptions,
+} from './scheduleMaterializationService';
 
-export type MyWorkTriggerAction = 'MATERIALIZE' | 'NO_OP';
+export type MaterializationTriggerAction = 'NO_OP' | 'MATERIALIZE';
 
-export type MyWorkTriggerReason =
-  | 'PLAN_NOT_FOUND'
-  | 'EMPTY_PUBLISHED_PLAN'
-  | 'ALREADY_MATERIALIZED'
-  | 'DRAFT_PROTECTED'
-  | 'IN_PROGRESS_PROTECTED'
-  | 'CONFIRMED_IMMUTABLE'
-  | 'CLOSED_IMMUTABLE'
-  | 'CANCELLED_TERMINAL'
-  | 'NO_ACTIVE_CATALOG';
-
-export interface MyWorkEvaluationResult {
-  action: MyWorkTriggerAction;
-  reason: MyWorkTriggerReason;
+export interface MyWorkMaterializationEvaluation {
+  action: MaterializationTriggerAction;
+  reason: 
+    | 'ALREADY_MATERIALIZED'
+    | 'EMPTY_PUBLISHED_PLAN'
+    | 'NO_ACTIVE_CATALOG'
+    | 'PLAN_NOT_FOUND'
+    | 'DRAFT_PROTECTED'
+    | 'IN_PROGRESS_PROTECTED'
+    | 'CONFIRMED_IMMUTABLE'
+    | 'CLOSED_IMMUTABLE'
+    | 'CANCELLED_TERMINAL';
   existingPlan: WeeklyPlan | null;
   itemsCount: number;
   hasActiveCatalog: boolean;
 }
 
-export interface MyWorkTriggerOptions {
-  customNonWorkingDays?: string[];
-  forceUpdate?: boolean;
-}
+export type MyWorkEvaluationResult = MyWorkMaterializationEvaluation;
 
-export interface MyWorkMaterializationResult {
-  evaluation: MyWorkEvaluationResult;
+export interface MyWorkTriggerResult {
+  evaluation: MyWorkMaterializationEvaluation;
   weeklyPlan: WeeklyPlan | null;
   items: WeeklyPlanItem[];
   insertedCount: number;
   isMutated: boolean;
 }
+
+export type MyWorkMaterializationResult = MyWorkTriggerResult;
+export type MyWorkTriggerOptions = MaterializeWeeklyPlanOptions;
 
 function toISOStringDate(d: Date | string): string {
   if (typeof d === 'string') return d.slice(0, 10);
@@ -69,20 +68,19 @@ function getMondayDate(d: Date | string): Date {
 }
 
 /**
- * Evalúa de forma pura (SELECT exclusivo) si la semana/sitio objetivo requiere materialización
- * según la matriz formal de estados de F5.1.
+ * 1. Evalúa de forma pura si una superficie /my-work necesita disparar la materialización.
  */
 export async function evaluateMyWorkMaterializationNeed(
   supabase: SupabaseClient,
   boardId: string,
   groupId: string | null | undefined,
   weekInput: Date | string
-): Promise<MyWorkEvaluationResult> {
+): Promise<MyWorkMaterializationEvaluation> {
   const gId = groupId || null;
   const mondayDate = getMondayDate(weekInput);
   const weekStartStr = toISOStringDate(mondayDate);
 
-  // 1. Consulta pura de cabecera weekly_plans
+  // 1. Buscar cabecera de plan semanal existente
   let planQuery = supabase
     .from('weekly_plans')
     .select('*')
@@ -94,10 +92,23 @@ export async function evaluateMyWorkMaterializationNeed(
     planQuery = planQuery.is('group_id', null);
   }
 
-  // Compatibilidad con columnas week_start / week_start_date
-  planQuery = planQuery.or(`week_start.eq.${weekStartStr},week_start_date.eq.${weekStartStr}`);
-
-  const { data: planData } = await planQuery.maybeSingle();
+  let planData: any = null;
+  try {
+    if (typeof (planQuery as any)?.or === 'function') {
+      const res = await (planQuery as any)
+        .or(`week_start_date.eq.${weekStartStr},start_date.eq.${weekStartStr}`)
+        .maybeSingle();
+      planData = res?.data ?? null;
+    } else if (typeof (planQuery as any)?.maybeSingle === 'function') {
+      const res = await (planQuery as any).maybeSingle();
+      planData = res?.data ?? null;
+    } else if (typeof (planQuery as any)?.then === 'function') {
+      const res = await (planQuery as any);
+      planData = Array.isArray(res?.data) ? res.data[0] : (res?.data ?? null);
+    }
+  } catch (_e) {
+    planData = null;
+  }
 
   if (!planData) {
     // Estado Inexistente (NULL) -> Autorizado para materializar
@@ -179,12 +190,12 @@ export async function evaluateMyWorkMaterializationNeed(
 
 /**
  * Gatillo Operativo Independiente para /my-work.
- * 
- * Si la evaluación pura determina MATERIALIZE, orquesta la persistencia
- * EXCLUSIVAMENTE a través del Gateway V6 (RPCs certificados).
+ *
+ * Si la evaluación pura determina MATERIALIZE, delega en ensureWeeklyPlanMaterialized
+ * (una sola tubería: clasificación, D4, D5, D10, P3 y verificación post-RPC) y luego lee los ítems del plan.
  * Si la evaluación determina NO_OP, retorna el plan existente sin mutaciones.
  */
-export async function triggerMyWorkMaterialization(
+export async function materializeWeeklyPlanForTrigger(
   supabase: SupabaseClient,
   boardId: string,
   groupId: string | null | undefined,
@@ -192,9 +203,10 @@ export async function triggerMyWorkMaterialization(
   options: MyWorkTriggerOptions = {}
 ): Promise<MyWorkMaterializationResult> {
   const gId = groupId || null;
-  const mondayDate = getMondayDate(weekInput);
-  const weekStartStr = toISOStringDate(mondayDate);
-  const periodNumber = calculateContractWeek(mondayDate);
+  if (!gId) {
+    // Delegar en ensureWeeklyPlanMaterialized para registrar evento MISSING_GROUP_ID (D10)
+    await ensureWeeklyPlanMaterialized(supabase, boardId, null, weekInput, options);
+  }
 
   // Paso 1: Evaluación determinista de lectura pura
   const evaluation = await evaluateMyWorkMaterializationNeed(supabase, boardId, gId, weekInput);
@@ -217,144 +229,29 @@ export async function triggerMyWorkMaterialization(
     };
   }
 
-  // Paso 2: Obtener versión activa de POA y Catálogo Técnico
-  let activePoaVersionId: string | null = null;
-  const { data: activePoaVer } = await supabase
-    .from('poa_versions')
-    .select('id')
-    .eq('status', 'active')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  activePoaVersionId = activePoaVer?.id || null;
-
-  const poaActivitiesMap = new Map<string, { id: string; frecuencia: number }>();
-  const { data: poaActs } = await supabase
-    .from('poa_activities')
-    .select('id, activity_key, frecuencia');
-
-  for (const pa of poaActs || []) {
-    if (pa.frecuencia !== null && pa.frecuencia > 0) {
-      poaActivitiesMap.set(pa.activity_key, {
-        id: pa.id,
-        frecuencia: Number(pa.frecuencia),
-      });
-    }
-  }
-
-  const { data: standards } = await supabase
-    .from('board_activity_standards')
-    .select('*')
-    .eq('board_id', boardId)
-    .eq('requiere_rendimiento', true);
-
-  const { data: scopeMappings } = await supabase
-    .from('activity_scope_mappings')
-    .select('*');
-
-  const scopeByKey = new Map<string, string>();
-  for (const sm of scopeMappings || []) {
-    scopeByKey.set(sm.activity_key, sm.scope_key);
-  }
-
-  let scopeData: Record<string, number> = {};
-  if (gId) {
-    const { data: raRow } = await supabase
-      .from('resource_analysis')
-      .select('scope_data')
-      .eq('board_id', boardId)
-      .eq('site_id', gId)
-      .maybeSingle();
-    scopeData = (raRow?.scope_data as Record<string, number>) ?? {};
-  }
-
-  // Paso 3: Proyección pura F3.1 (routineScheduler)
-  const templates: RoutineBaseTemplate[] = [];
-  for (const std of standards || []) {
-    const poaInfo = poaActivitiesMap.get(std.activity_key);
-    const frecuencia = poaInfo?.frecuencia ?? Number(std.frecuencia) ?? 1;
-    const scopeKey = scopeByKey.get(std.activity_key) || std.activity_key;
-    const cantidad = typeof scopeData[scopeKey] === 'number'
-      ? scopeData[scopeKey]
-      : (typeof scopeData[std.activity_key] === 'number' ? scopeData[std.activity_key] : 0);
-    const rendimiento = Number(std.rendimiento);
-
-    if (cantidad > 0 && rendimiento > 0) {
-      templates.push({
-        id: std.id,
-        activity_key: std.activity_key,
-        name: std.name,
-        zone: std.category || 'Zona Verde',
-        unit: std.unit,
-        rendimiento,
-        frecuencia,
-        cantidad,
-      });
-    }
-  }
-
-  const projection = generateRoutineScheduleForWeek(
-    templates,
-    mondayDate,
-    [],
-    { customNonWorkingDays: options.customNonWorkingDays }
+  // Paso 2: Delegar en ensureWeeklyPlanMaterialized (única tubería canónica)
+  const syncResult = await ensureWeeklyPlanMaterialized(
+    supabase,
+    boardId,
+    gId,
+    weekInput,
+    options
   );
 
-  // Paso 4: Persistencia EXCLUSIVA a través del Gateway V6 RPC (Sin PostgREST directo)
-  // 4.1 Gateway de Cabecera
-  const { data: headerPlanId, error: headerErr } = await supabase.rpc('ensure_weekly_plan_header', {
-    p_board_id: boardId,
-    p_group_id: gId,
-    p_week_start: weekStartStr,
-    p_period_number: periodNumber,
-  });
+  const { data: itemsData } = await supabase
+    .from('weekly_plan_items')
+    .select('*')
+    .eq('plan_id', syncResult.weeklyPlan.id);
 
-  if (headerErr || !headerPlanId) {
-    throw new Error(`F5.1 V6 Gateway Error (ensure_weekly_plan_header): ${headerErr?.message || 'No plan ID returned'}`);
-  }
-
-  // 4.2 Gateway de Sincronización de Ítems
-  const dtoItems = projection.assignments.map((assign, idx) => {
-    const matchedStd = (standards || []).find((s) => s.activity_key === assign.activity_key);
-    return {
-      planned_sequence: idx + 1,
-      activity_key: assign.activity_key,
-      activity_standard_id: matchedStd?.id ?? null,
-      planned_rendimiento: matchedStd?.rendimiento ?? 500,
-      planned_frecuencia: assign.frequency_interval,
-      priority: matchedStd?.priority ?? 'must_execute',
-      planned_qty: assign.cantidad,
-      unit: assign.unit,
-      planned_jr: assign.theoretical_jr,
-      planned_date: assign.dateStr,
-    };
-  });
-
-  const { data: syncedRows, error: syncErr } = await supabase.rpc('sync_weekly_plan_items_rpc', {
-    p_plan_id: headerPlanId,
-    p_items: dtoItems,
-  });
-
-  if (syncErr) {
-    throw new Error(`F5.1 V6 Gateway Error (sync_weekly_plan_items_rpc): ${syncErr.message}`);
-  }
-
-  const weeklyPlan: WeeklyPlan = {
-    id: headerPlanId,
-    board_id: boardId,
-    group_id: gId,
-    week_start_date: weekStartStr,
-    week_end_date: weekStartStr,
-    status: 'published',
-  };
-
-  const items = (syncedRows || []) as WeeklyPlanItem[];
+  const items = (itemsData || []) as WeeklyPlanItem[];
 
   return {
     evaluation,
-    weeklyPlan,
+    weeklyPlan: syncResult.weeklyPlan,
     items,
-    insertedCount: items.length,
+    insertedCount: syncResult.insertedCount,
     isMutated: true,
   };
 }
+
+export const triggerMyWorkMaterialization = materializeWeeklyPlanForTrigger;

@@ -27,23 +27,57 @@ describe('Test Suite 40 — Integración y Persistencia del Motor de Materializa
 
     mockSupabase = {
       from: jest.fn((table: string) => {
+        if (table === 'poa' || table === 'poas') {
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockImplementation(() => ({
+              data: [{ id: 'poa_1', board_id: boardId }],
+              error: null,
+              then: (resolve: any) => Promise.resolve({ data: [{ id: 'poa_1', board_id: boardId }], error: null }).then(resolve),
+            })),
+            then: (resolve: any) => Promise.resolve({ data: [{ id: 'poa_1', board_id: boardId }], error: null }).then(resolve),
+          };
+        }
+
         if (table === 'poa_versions') {
           return {
             select: jest.fn().mockReturnThis(),
-            eq: jest.fn().mockReturnThis(),
+            in: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockImplementation(() => ({
+              data: [{ id: 'poa_v1', poa_id: 'poa_1', status: 'active' }],
+              error: null,
+              then: (resolve: any) => Promise.resolve({ data: [{ id: 'poa_v1', poa_id: 'poa_1', status: 'active' }], error: null }).then(resolve),
+            })),
             order: jest.fn().mockReturnThis(),
             limit: jest.fn().mockReturnThis(),
             maybeSingle: jest.fn().mockResolvedValue({ data: { id: 'poa_v1' }, error: null }),
+            then: (resolve: any) => Promise.resolve({ data: [{ id: 'poa_v1', poa_id: 'poa_1', status: 'active' }], error: null }).then(resolve),
           };
         }
 
         if (table === 'poa_activities') {
+          const acts = [
+            { id: 'pa_1', activity_key: 'corte_grama', frecuencia: 25 },
+            { id: 'pa_2', activity_key: 'limpieza_zona_dura', frecuencia: 25 },
+          ];
+          return {
+            select: jest.fn().mockImplementation(() => ({
+              data: acts,
+              error: null,
+              eq: jest.fn().mockResolvedValue({ data: acts, error: null }),
+              then: (resolve: any) => Promise.resolve({ data: acts, error: null }).then(resolve),
+            })),
+          };
+        }
+
+        if (table === 'poa_activity_zones') {
           return {
             select: jest.fn().mockReturnThis(),
-            eq: jest.fn().mockResolvedValue({
+            eq: jest.fn().mockReturnThis(),
+            in: jest.fn().mockResolvedValue({
               data: [
-                { activity_key: 'corte_grama', frecuencia: 25 },
-                { activity_key: 'limpieza_zona_dura', frecuencia: 25 },
+                { poa_activity_id: 'pa_1', zone_id: siteId, cantidad_contratada: 25000 },
+                { poa_activity_id: 'pa_2', zone_id: siteId, cantidad_contratada: 50000 },
               ],
               error: null,
             }),
@@ -51,19 +85,18 @@ describe('Test Suite 40 — Integración y Persistencia del Motor de Materializa
         }
 
         if (table === 'board_activity_standards') {
+          const stds = [
+            { id: 'std_1', activity_key: 'corte_grama', name: 'Corte de Grama', category: 'ZONA VERDE', unit: 'M2', rendimiento: 500, requiere_rendimiento: true },
+            { id: 'std_2', activity_key: 'limpieza_zona_dura', name: 'Limpieza de Zona Dura', category: 'ZONA DURA', unit: 'M2', rendimiento: 1000, requiere_rendimiento: true },
+          ];
           return {
             select: jest.fn().mockReturnThis(),
-            eq: jest.fn().mockImplementation((col, val) => {
-              return {
-                eq: jest.fn().mockResolvedValue({
-                  data: [
-                    { id: 'std_1', activity_key: 'corte_grama', name: 'Corte de Grama', category: 'ZONA VERDE', unit: 'M2', rendimiento: 500, requiere_rendimiento: true },
-                    { id: 'std_2', activity_key: 'limpieza_zona_dura', name: 'Limpieza de Zona Dura', category: 'ZONA DURA', unit: 'M2', rendimiento: 1000, requiere_rendimiento: true },
-                  ],
-                  error: null,
-                }),
-              };
-            }),
+            eq: jest.fn().mockImplementation((col, val) => ({
+              data: stds,
+              error: null,
+              eq: jest.fn().mockResolvedValue({ data: stds, error: null }),
+              then: (resolve: any) => Promise.resolve({ data: stds, error: null }).then(resolve),
+            })),
           };
         }
 
@@ -96,7 +129,7 @@ describe('Test Suite 40 — Integración y Persistencia del Motor de Materializa
             eq: jest.fn().mockReturnThis(),
             is: jest.fn().mockReturnThis(),
             maybeSingle: jest.fn().mockImplementation(async () => {
-              const found = storedWeeklyPlans.find((p) => p.board_id === boardId && p.week_start_date === weekStartStr);
+              const found = storedWeeklyPlans.find((p) => p.board_id === boardId && (p.week_start_date === weekStartStr || p.start_date === weekStartStr));
               return { data: found || null, error: null };
             }),
             insert: jest.fn().mockImplementation((input: any) => {
@@ -114,7 +147,7 @@ describe('Test Suite 40 — Integración y Persistencia del Motor de Materializa
           return {
             select: jest.fn().mockReturnThis(),
             eq: jest.fn().mockImplementation(async (col: string, val: string) => {
-              const items = storedWeeklyPlanItems.filter((i) => i.weekly_plan_id === val);
+              const items = storedWeeklyPlanItems.filter((i) => i.weekly_plan_id === val || i.plan_id === val);
               return { data: items, error: null };
             }),
             insert: jest.fn().mockImplementation((inputArray: any[]) => {
@@ -147,6 +180,45 @@ describe('Test Suite 40 — Integración y Persistencia del Motor de Materializa
         }
 
         return { select: jest.fn().mockReturnThis() };
+      }),
+      rpc: jest.fn().mockImplementation((fn: string, params: any) => {
+        if (fn === 'ensure_weekly_plan_header') {
+          const existing = storedWeeklyPlans.find((p) => p.board_id === params.p_board_id && p.week_start_date === params.p_week_start);
+          if (!existing) {
+            storedWeeklyPlans.push({
+              id: 'wp_test_40',
+              board_id: params.p_board_id,
+              group_id: params.p_group_id,
+              week_start_date: params.p_week_start,
+              status: 'published',
+            });
+          }
+          return Promise.resolve({ data: 'wp_test_40', error: null });
+        }
+        if (fn === 'sync_weekly_plan_items_rpc') {
+          const newInserted: any[] = [];
+          for (const item of (params.p_items || [])) {
+            const exists = storedWeeklyPlanItems.some(
+              (x) => (x.plan_id === params.p_plan_id || x.weekly_plan_id === params.p_plan_id) && x.planned_sequence === item.planned_sequence
+            );
+            if (!exists) {
+              const row = {
+                id: `wpi_${item.planned_sequence}`,
+                plan_id: params.p_plan_id,
+                weekly_plan_id: params.p_plan_id,
+                status: 'planned',
+                ...item,
+              };
+              storedWeeklyPlanItems.push(row);
+              newInserted.push(row);
+            }
+          }
+          return Promise.resolve({ data: newInserted, error: null });
+        }
+        if (fn === 'log_materialization_event_rpc') {
+          return Promise.resolve({ data: 'evt_1', error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
       }),
     };
   });

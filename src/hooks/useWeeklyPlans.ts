@@ -267,6 +267,35 @@ function resolvePlannedDate(item: PublishedWeekPlanItem, actOccurrenceIndex: num
   return addDaysISO(weekStartISO, 0);
 }
 
+export async function materializeAllSites(
+  client: any,
+  boards: Array<{ id: string }>,
+  groups: Array<{ id: string; title?: string; board_id: string }>,
+  weekStartISO: string
+): Promise<{ successfulCount: number; failedCount: number }> {
+  let successfulCount = 0;
+  let failedCount = 0;
+
+  for (const b of boards || []) {
+    const bGroups = (groups || []).filter(
+      (g: any) => g.board_id === b.id && !(g.title || '').toUpperCase().includes('PRESUPUESTO GENERAL')
+    );
+    if (bGroups.length > 0) {
+      for (const g of bGroups) {
+        try {
+          await ensureWeeklyPlanMaterialized(client, b.id, (g as any).id, weekStartISO);
+          successfulCount++;
+        } catch (siteErr: any) {
+          failedCount++;
+          console.error(`[useWeeklyPlans] Error materializing site ${(g as any).id} on board ${b.id}:`, siteErr?.message || siteErr);
+        }
+      }
+    }
+  }
+
+  return { successfulCount, failedCount };
+}
+
 export function usePublishedWeekPlans(weekStartISO: string | undefined) {
   return useQuery<PublishedWeekPlan[]>({
     queryKey: weeklyPlanKeys.publishedWeek(weekStartISO!),
@@ -300,16 +329,7 @@ export function usePublishedWeekPlans(weekStartISO: string | undefined) {
           const { data: groups } = await supabase.from('groups').select('id, title, board_id');
 
           if (boards && boards.length > 0) {
-            for (const b of boards) {
-              const bGroups = (groups || []).filter(
-                (g: any) => g.board_id === b.id && !(g.title || '').toUpperCase().includes('PRESUPUESTO GENERAL')
-              );
-              if (bGroups.length > 0) {
-                for (const g of bGroups) {
-                  await ensureWeeklyPlanMaterialized(supabase, b.id, (g as any).id, weekStartISO!);
-                }
-              }
-            }
+            await materializeAllSites(supabase, boards, groups || [], weekStartISO!);
           }
 
           const refetched = await supabase

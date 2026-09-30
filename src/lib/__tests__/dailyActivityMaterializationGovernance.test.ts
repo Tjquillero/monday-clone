@@ -42,12 +42,12 @@ describe('Materialización Gobernada de Actividades Rutinarias v1.0', () => {
 
     mockSupabase = {
       from: jest.fn((table: string) => {
-        if (table === 'poas') {
+        if (table === 'poa' || table === 'poas') {
           return createChainQuery([{ id: 'poa_v1', board_id: boardId }]);
         }
 
         if (table === 'poa_versions') {
-          return createChainQuery({ id: 'poa_ver_active' });
+          return createChainQuery([{ id: 'poa_ver_active', poa_id: 'poa_v1', status: 'active' }]);
         }
 
         if (table === 'poa_activities') {
@@ -135,7 +135,31 @@ describe('Materialización Gobernada de Actividades Rutinarias v1.0', () => {
 
         return createChainQuery([]);
       }),
-      rpc: jest.fn().mockResolvedValue({ data: null, error: new Error('RPC disabled in test mock') }),
+      rpc: jest.fn().mockImplementation((fn: string, params: any) => {
+        if (fn === 'ensure_weekly_plan_header') {
+          return Promise.resolve({ data: 'wp_test_1', error: null });
+        }
+        if (fn === 'sync_weekly_plan_items_rpc') {
+          const newInserted: any[] = [];
+          for (const item of (params.p_items || [])) {
+            const exists = storedWeeklyPlanItems.some(
+              (x) => (x.plan_id === params.p_plan_id || x.weekly_plan_id === params.p_plan_id) && x.planned_sequence === item.planned_sequence
+            );
+            if (!exists) {
+              const row = {
+                id: `wpi_${item.planned_sequence}`,
+                plan_id: params.p_plan_id,
+                weekly_plan_id: params.p_plan_id,
+                ...item,
+              };
+              storedWeeklyPlanItems.push(row);
+              newInserted.push(row);
+            }
+          }
+          return Promise.resolve({ data: newInserted, error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      }),
     };
   });
 

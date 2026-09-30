@@ -65,11 +65,11 @@ describe('DIAGNÓSTICO COMPLETO: Trazabilidad de Actividades Diarias (Frecuencia
 
     const mockSupabase: any = {
       from: (table: string) => {
-        if (table === 'poas') {
+        if (table === 'poa' || table === 'poas') {
           return createChainableQuery([{ id: 'poa-1', board_id: 'board-1' }]);
         }
         if (table === 'poa_versions') {
-          return createChainableQuery({ id: 'ver-1' });
+          return createChainableQuery([{ id: 'ver-1', poa_id: 'poa-1', status: 'active' }]);
         }
         if (table === 'poa_activities') {
           return createChainableQuery([
@@ -137,7 +137,21 @@ describe('DIAGNÓSTICO COMPLETO: Trazabilidad de Actividades Diarias (Frecuencia
         }
         return createChainableQuery([]);
       },
-      rpc: () => Promise.resolve({ data: null, error: new Error('RPC disabled') }),
+      rpc: (fn: string, params: any) => {
+        if (fn === 'ensure_weekly_plan_header') {
+          return Promise.resolve({ data: 'plan-123', error: null });
+        }
+        if (fn === 'sync_weekly_plan_items_rpc') {
+          const items = (params.p_items || []).map((i: any, idx: number) => ({
+            id: `item-${Date.now()}-${idx}`,
+            plan_id: params.p_plan_id,
+            ...i,
+          }));
+          mockItemsStore.push(...items);
+          return Promise.resolve({ data: items, error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      },
     };
 
     const res = await ensureWeeklyPlanMaterialized(mockSupabase, 'board-1', 'group-plaza', '2026-09-21');

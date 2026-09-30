@@ -1,6 +1,9 @@
 'use client';
 
+import React, { useState, useEffect } from 'react';
 import { CheckCircle2, AlertTriangle, XCircle, RefreshCw, ArrowRight, Wrench } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/contexts/AuthContext';
 import { PlanStatus, MissingEvidenceError, MissingTechnicalConfigError, MissingActivityStandard } from '@/types/scheduler';
 import { useWeeklyPlanConfirmationSummary } from '@/hooks/useWeeklyPlans';
 
@@ -17,7 +20,10 @@ import { useWeeklyPlanConfirmationSummary } from '@/hooks/useWeeklyPlans';
 // Postgres salvo que el propio RPC ya lo redacte en español.
 
 interface Props {
-  planId: string;
+  planId?: string;
+  boardId?: string;
+  groupId?: string;
+  weekStart?: string;
   status: PlanStatus;
   periodNumber: number;
   /** Actividades contratadas sin catálogo técnico — ya obtenidas por useWeeklyPlan, se reutilizan aquí (nunca se vuelve a consultar). */
@@ -32,7 +38,7 @@ interface Props {
 }
 
 export default function PlanLifecyclePanel({
-  planId, status, periodNumber, missingStandards,
+  planId, boardId, groupId, weekStart, status, periodNumber, missingStandards,
   onConfirm, isConfirming, confirmError,
   onClose, isClosing, closeError,
   onGoToCosts,
@@ -41,6 +47,9 @@ export default function PlanLifecyclePanel({
     return (
       <ConfirmationPanel
         planId={planId}
+        boardId={boardId}
+        groupId={groupId}
+        weekStart={weekStart}
         periodNumber={periodNumber}
         missingStandards={missingStandards}
         onConfirm={onConfirm}
@@ -64,16 +73,19 @@ export default function PlanLifecyclePanel({
 // ── Confirmación ────────────────────────────────────────────────────────────
 
 function ConfirmationPanel({
-  planId, periodNumber, missingStandards, onConfirm, isConfirming, confirmError,
+  planId, boardId, groupId, weekStart, periodNumber, missingStandards, onConfirm, isConfirming, confirmError,
 }: {
-  planId: string;
+  planId?: string;
+  boardId?: string;
+  groupId?: string;
+  weekStart?: string;
   periodNumber: number;
   missingStandards: MissingActivityStandard[];
   onConfirm: () => void;
   isConfirming: boolean;
   confirmError: Error | null;
 }) {
-  const { data: summary, isLoading, refetch, isFetching } = useWeeklyPlanConfirmationSummary(planId);
+  const { data: summary, isLoading, refetch, isFetching } = useWeeklyPlanConfirmationSummary(planId || '');
 
   const missingTechConfig = confirmError instanceof MissingTechnicalConfigError ? confirmError : null;
   const missingEvidence = confirmError instanceof MissingEvidenceError ? confirmError : null;
@@ -165,6 +177,14 @@ function ConfirmationPanel({
         <p className="text-xs text-red-400">{otherError.message}</p>
       )}
 
+      {/* Aviso para administradores (D8 / FASE 2c): Telemetría y estado de materialización */}
+      <AdminMaterializationNotice
+        boardId={boardId}
+        groupId={groupId}
+        weekStart={weekStart}
+        planId={planId}
+      />
+
       <button
         onClick={onConfirm}
         disabled={!canConfirm || isConfirming}
@@ -172,6 +192,117 @@ function ConfirmationPanel({
       >
         {isConfirming ? 'Confirmando…' : 'Confirmar plan'}
       </button>
+    </div>
+  );
+}
+
+function AdminMaterializationNotice({
+  boardId,
+  groupId,
+  weekStart,
+  planId,
+}: {
+  boardId?: string;
+  groupId?: string;
+  weekStart?: string;
+  planId?: string;
+}) {
+  const { isAdmin } = useAuth();
+  const [event, setEvent] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    if (!isAdmin) {
+      setEvent(null);
+      return;
+    }
+
+    let query = supabase
+      .from('materialization_events')
+      .select('*')
+      .eq('event_type', 'SITE_MATERIALIZATION_SUMMARY')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (boardId && groupId && weekStart) {
+      query = query
+        .eq('board_id', boardId)
+        .eq('group_id', groupId)
+        .eq('week_start', weekStart);
+    } else if (planId) {
+      query = query.eq('plan_id', planId);
+    } else {
+      setEvent(null);
+      return;
+    }
+
+    query
+      .maybeSingle()
+      .then(({ data, error }: { data: any; error: any }) => {
+        if (isMounted) {
+          if (error || !data) {
+            setEvent(null);
+          } else {
+            setEvent(data);
+          }
+        }
+      })
+      .catch(() => {
+        if (isMounted) setEvent(null);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAdmin, boardId, groupId, weekStart, planId]);
+
+  if (!isAdmin || !event) return null;
+
+  const payload = event.payload || {};
+  const status = event.status || payload.status;
+  const partialReasons: string[] = payload.partial_reasons || [];
+  const details: any[] = payload.activities_detail || [];
+  const notScheduled = details.filter((d: any) => (d.action || '').startsWith('NOT_SCHEDULED_'));
+
+  const statusBg =
+    status === 'SUCCESS' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' :
+    status === 'PARTIAL' ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' :
+    'bg-red-500/10 border-red-500/30 text-red-400';
+
+  return (
+    <div className="p-3 rounded-lg border border-[var(--border-color)] bg-[var(--color-surface-subtle)] space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)]">
+          Gobernanza de Materialización (Admin)
+        </p>
+        <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border ${statusBg}`}>
+          {status}
+        </span>
+      </div>
+
+      {partialReasons.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[10px] font-semibold text-amber-300">Motivos de plan parcial:</p>
+          <ul className="space-y-0.5">
+            {partialReasons.map((r, i) => (
+              <li key={i} className="text-[11px] text-amber-200/90">• {r}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {notScheduled.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[10px] font-semibold text-slate-400">Actividades no planificadas (informativo):</p>
+          <ul className="space-y-0.5">
+            {notScheduled.map((a: any, i: number) => (
+              <li key={i} className="text-[11px] text-slate-300">
+                • <span className="font-mono font-bold text-white">{a.activity_key}</span>: {a.reason || a.action}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

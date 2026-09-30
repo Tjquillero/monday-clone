@@ -178,6 +178,9 @@ export default function WeeklyPlannerView({
       ) && (
         <PlanLifecyclePanel
           planId={savedPlan.id}
+          boardId={savedPlan.board_id || boardId}
+          groupId={savedPlan.group_id || group?.id}
+          weekStart={savedPlan.week_start || (weekStart instanceof Date ? weekStart.toISOString().split('T')[0] : weekStart)}
           status={savedPlan.status}
           periodNumber={plan?.week.number ?? selectorProps.periodNumber}
           missingStandards={missingStandards}

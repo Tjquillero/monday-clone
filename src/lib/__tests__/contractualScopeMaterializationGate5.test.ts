@@ -254,11 +254,11 @@ describe('Hito 6.3 Gate 5 — Suite Integrativa de Materialización Contractual'
 
     const mockSupabase: any = {
       from: jest.fn((table: string) => {
-        if (table === 'poas') {
+        if (table === 'poa' || table === 'poas') {
           return createChainQuery([{ id: 'poa_pa', board_id: boardId }]);
         }
         if (table === 'poa_versions') {
-          return createChainQuery({ id: 'poa_ver_pa' });
+          return createChainQuery([{ id: 'poa_ver_pa', poa_id: 'poa_pa', status: 'active' }]);
         }
         if (table === 'poa_activities') {
           return createChainQuery(paActsData);
@@ -318,7 +318,21 @@ describe('Hito 6.3 Gate 5 — Suite Integrativa de Materialización Contractual'
         }
         return createChainQuery([]);
       }),
-      rpc: jest.fn().mockResolvedValue({ data: null, error: new Error('RPC disabled in test mock') }),
+      rpc: jest.fn().mockImplementation((fn: string, params: any) => {
+        if (fn === 'ensure_weekly_plan_header') {
+          return Promise.resolve({ data: 'wp_pa_1', error: null });
+        }
+        if (fn === 'sync_weekly_plan_items_rpc') {
+          const rows = (params.p_items || []).map((i: any) => ({
+            id: `row_${i.planned_sequence}`,
+            plan_id: params.p_plan_id,
+            ...i,
+          }));
+          storedWeeklyPlanItems.push(...rows);
+          return Promise.resolve({ data: rows, error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      }),
     };
 
     const result = await ensureWeeklyPlanMaterialized(mockSupabase, boardId, puntaAstillerosSiteId, weekStartStr);
@@ -354,8 +368,8 @@ describe('Hito 6.3 Gate 5 — Suite Integrativa de Materialización Contractual'
 
     const mockSupabase: any = {
       from: jest.fn((table: string) => {
-        if (table === 'poas') return createChainQuery([{ id: 'poa_e10', board_id: boardId }]);
-        if (table === 'poa_versions') return createChainQuery({ id: 'poa_ver_e10' });
+        if (table === 'poa' || table === 'poas') return createChainQuery([{ id: 'poa_e10', board_id: boardId }]);
+        if (table === 'poa_versions') return createChainQuery([{ id: 'poa_ver_e10', poa_id: 'poa_e10', status: 'active' }]);
         if (table === 'poa_activities') return createChainQuery(poaActsData);
         if (table === 'poa_activity_zones') return createChainQuery(poaZonesData);
         if (table === 'board_activity_standards') return createChainQuery(standardsData);
@@ -382,13 +396,24 @@ describe('Hito 6.3 Gate 5 — Suite Integrativa de Materialización Contractual'
         }
         return createChainQuery([]);
       }),
-      rpc: jest.fn().mockResolvedValue({ data: null, error: new Error('RPC disabled') }),
+      rpc: jest.fn().mockImplementation((fn: string, params: any) => {
+        if (fn === 'ensure_weekly_plan_header') {
+          return Promise.resolve({ data: 'wp_e10', error: null });
+        }
+        if (fn === 'sync_weekly_plan_items_rpc') {
+          return Promise.resolve({ data: [], error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      }),
     };
 
-    const result = await ensureWeeklyPlanMaterialized(mockSupabase, boardId, uncontractedSiteId, weekStartStr);
+    // Con POA activo y zona sin cobertura en poa_activity_zones, D5/B1/B2 garantiza NO_TEMPLATES sin llamar a ensure_weekly_plan_header
+    await expect(
+      ensureWeeklyPlanMaterialized(mockSupabase, boardId, uncontractedSiteId, weekStartStr)
+    ).rejects.toThrow('NO_TEMPLATES');
 
-    // Con POA activo y zona sin cobertura, RA NO puede inventar alcance -> planned_qty = 0 y 0 items insertados
-    expect(result.insertedCount).toBe(0);
+    const headerCalls = mockSupabase.rpc.mock.calls.filter((c: any) => c[0] === 'ensure_weekly_plan_header');
+    expect(headerCalls.length).toBe(0);
     expect(storedWeeklyPlanItems.length).toBe(0);
   });
 
@@ -433,17 +458,15 @@ describe('Hito 6.3 Gate 5 — Suite Integrativa de Materialización Contractual'
         }
         return createChainQuery([]);
       }),
-      rpc: jest.fn().mockResolvedValue({ data: null, error: new Error('RPC disabled') }),
+      rpc: jest.fn().mockResolvedValue({ data: null, error: null }),
     };
 
-    const result = await ensureWeeklyPlanMaterialized(mockSupabase, boardId, legacySiteId, weekStartStr);
+    // D11: Tablero legacy sin POA activo -> FALLAR CERRADO (NO_ACTIVE_POA)
+    await expect(
+      ensureWeeklyPlanMaterialized(mockSupabase, boardId, legacySiteId, weekStartStr)
+    ).rejects.toThrow('NO_ACTIVE_POA');
 
-    // Tablero legacy sin POA: fallback a resource_analysis conservado intacto
-    expect(result.insertedCount).toBeGreaterThan(0);
-    expect(storedWeeklyPlanItems.length).toBeGreaterThan(0);
-    storedWeeklyPlanItems.forEach((item) => {
-      expect(item.planned_qty).toBe(80);
-    });
+    expect(storedWeeklyPlanItems.length).toBe(0);
   });
 
   describe('Verificación de Reglas R1-R6', () => {
