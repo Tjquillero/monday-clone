@@ -1,10 +1,10 @@
-# Especificación Técnica de Implementación — Gate R1-b0 + R1-c (Versión 4.4)
+# Especificación Técnica de Implementación — Gate R1-b0 + R1-c (Versión 4.5)
 
 > **Documento:** `docs/gates/R1-b0_R1-c_SPEC.md`  
-> **Versión:** 4.4 (Decisión D13 Alcance Estricto Tablero -> POA -> Versión Activa -> Actividades y Trazabilidad Contractual)  
-> **Estado:** FASE 1 — ESPECIFICACIÓN TÉCNICA (SOLO DOCUMENTO — CERO MODIFICACIÓN DE CÓDIGO/MIGRACIONES)  
+> **Versión:** 4.5 (Decisiones D14 Bloqueo Total ante Conflicto + Zona Obligatoria + D15 Superficies de Solo Lectura)  
+> **Estado:** FASE 2 — IMPLEMENTACIÓN Y GOBERNANZA  
 > **Ámbito:** `R1-b0` (Observabilidad Estructurada y Persistencia P3) + `R1-c` (Integridad y Validación Pre/Post-RPC)  
-> **Línea Base Registrada (Pre-Gate):** 166 suites / 1.444 tests — 0 errores TypeScript (`tsc --noEmit`)  
+> **Línea Base Registrada (Pre-Gate):** 167 suites / 1.470 tests — 0 errores TypeScript (`tsc --noEmit`)  
 > **Reglas Rectoras:** Invariantes de Dominio Mantenix, Política de Evidencia, Cero DDL ejecutado en Fase 1, Cero Datos Contractuales Inventados.
 
 ---
@@ -19,12 +19,14 @@
 - **D4:** Errores del RPC (header/sync/excepción): **SIN fallback** a `syncWeeklyPlanForBoard`. Error visible y registrado.
 - **D5:** Validar las actividades **ANTES** de `ensure_weekly_plan_header`.
 - **D6:** Aislamiento por sitio: el fallo de un sitio **no detiene** a los demás.
-- **D7:** Persistencia **P3**: tabla append-only de eventos, escrita solo vía RPC `SECURITY DEFINER` con `search_path` fijo, `REVOKE EXECUTE FROM PUBLIC`, `GRANT` solo a `authenticated`, validando `auth.uid()` y el rol en el board. `SELECT` solo para administradores. Sin `UPDATE` ni `DELETE`. Si la escritura del evento falla: `console.error` + aviso en la UI. P1 y P2 descartados.
+- **D7:** Persistencia **P3:** tabla append-only de eventos, escrita solo vía RPC `SECURITY DEFINER` con `search_path` fijo, `REVOKE EXECUTE FROM PUBLIC`, `GRANT` solo a `authenticated`, validando `auth.uid()` y el rol en el board. `SELECT` solo para administradores. Sin `UPDATE` ni `DELETE`. Si la escritura del evento falla: `console.error` + aviso en la UI. P1 y P2 descartados.
 - **D8:** Aviso de plan parcial o error: visible **solo para administradores**, con el mecanismo de rol que ya existe ([`src/contexts/AuthContext.tsx:137-139`](file:///c:/desarrollo/monday-clone/src/contexts/AuthContext.tsx#L137-L139)). El aviso para administradores muestra también las actividades `NOT_SCHEDULED_*` (informativas), con clave y motivo, aunque el plan no sea PARCIAL.
 - **D9:** Fuera de alcance: filtro de tableros de prueba (su parte mínima de filtro board/versión en `poa_activities` pasó a R1-c por D13), reparación de zonas, reparación de `planned_date`, migración `2026092801`.
 - **D10:** Sin `gId` → **FALLAR CERRADO**. Error `MISSING_GROUP_ID`, visible y registrado; no se escribe ningún ítem y no se llama a `syncWeeklyPlanForBoard`. Evento `FAILED` con `group_id` NULL. El RPC de eventos acepta `p_group_id` NULL solo en este caso (omite la validación `group ∈ board`) y valida el resto.
 - **D12 (literal):** Las actividades 1.12, 1.13 y 1.15 SÍ tienen frecuencia contractual: está en el POA V.10, por zona, en visitas por mes. Mientras esa frecuencia por zona no esté cargada en la base (gate FREQ-SITE-01), su ausencia NO es informativa: el plan queda PARCIAL.
 - **D13 (literal, Tomás 2026-09-29):** La materialización lee SOLO el contrato del tablero: tablero → poa (board_id) → poa_versions (status = 'active') → poa_activities (poa_version_id) → poa_activity_zones (de esas actividades). Nunca todas las poa_activities.
+- **D14 (literal, Tomás 2026-09-30):** si existe conflicto de identidad, la materialización NO produce ningún efecto sobre el plan: no llamar a ensure_weekly_plan_header, no llamar a sync_weekly_plan_items_rpc, no insertar, no actualizar, no rellenar posiciones.
+- **D15 (literal, Tomás 2026-09-30):** solo el Cronograma (useWeeklyPlan → ensureWeeklyPlanMaterialized) puede crear planes. Toda pantalla de consulta, empezando por "Mis actividades", es de SOLO LECTURA.
 
 ---
 
@@ -386,4 +388,60 @@ docs\gates\R1-b0_R1-c_SPEC.md:277:2. `board_members`, la tabla desde la cual lee
 
 ---
 
-*Especificación Técnica v4.2 formalizada conforme a las Decisiones Aprobadas D1–D10 de Tomás y la evidencia de auditoría de seguridad E-Q18a / E-Q18c. Cero modificaciones de código en Fase 1.*
+## 14. Auditoría Integral de Llamadores (D15)
+
+Auditoría de todos los llamadores en `src/` (excluyendo tests) realizada el 2026-09-30:
+
+1. **`ensureWeeklyPlanMaterialized`:**
+   - [`src/hooks/useWeeklyPlan.ts:123`](file:///c:/desarrollo/monday-clone/src/hooks/useWeeklyPlan.ts#L123) — **Único llamador de producción permitido** (Pantalla Cronograma).
+   - [`src/lib/scheduleMaterializationService.ts:47`](file:///c:/desarrollo/monday-clone/src/lib/scheduleMaterializationService.ts#L47) — Definición exportada de la función canónica.
+   - [`src/lib/myWorkSurfaceTriggerService.ts:208, 233`](file:///c:/desarrollo/monday-clone/src/lib/myWorkSurfaceTriggerService.ts#L208) — Wrapper/evaluador interno (sin llamadores UI/hook activos).
+
+2. **`materializeAllSites`:**
+   - **0 llamadores en producción.** Eliminada de [`src/hooks/useWeeklyPlans.ts`](file:///c:/desarrollo/monday-clone/src/hooks/useWeeklyPlans.ts) en cumplimiento estricto de **D15**.
+
+3. **`materializeWeeklyPlanForTrigger` / `triggerMyWorkMaterialization`:**
+   - [`src/lib/myWorkSurfaceTriggerService.ts:198, 257`](file:///c:/desarrollo/monday-clone/src/lib/myWorkSurfaceTriggerService.ts#L198) — Definiciones en servicio interno, **0 llamadores en UI/hooks**.
+
+4. **`ensure_weekly_plan_header`:**
+   - [`src/lib/scheduleMaterializationService.ts:601`](file:///c:/desarrollo/monday-clone/src/lib/scheduleMaterializationService.ts#L601) — Único punto de invocación RPC en toda la aplicación (solo si el plan no existía o tenía 0 ítems).
+
+5. **`sync_weekly_plan_items_rpc`:**
+   - [`src/lib/scheduleMaterializationService.ts:665`](file:///c:/desarrollo/monday-clone/src/lib/scheduleMaterializationService.ts#L665) — Único punto de invocación RPC en toda la aplicación (solo si no hubo conflictos de identidad D14 ni faltantes de zona).
+
+---
+
+## 15. Justificación Línea por Línea de Modificaciones y Nuevos Tests (Fase 2f-b)
+
+En cumplimiento de la política de gobernanza y trazabilidad contra la línea base `2d4115a`:
+
+- **`T08 — Excepción no controlada en la tubería`:**
+  - *Expectativa:* Restaurada la verificación de que ante excepciones inesperadas (ej. timeout de red) se registra un evento `SITE_MATERIALIZATION_SUMMARY` con status `FAILED` y `error.stage = 'exception'`.
+- **`T10 — Descarte en Gateway y plan PARCIAL`:**
+  - *Expectativa:* Restaurada la verificación explícita de que `partial_reasons` incluye el motivo `WEEKLY_PLAN_ITEMS_GATEWAY_DROPPED`.
+- **`T11 — D14 Bloqueo total ante conflicto de secuencia / clave`:**
+  - *Expectativa previa (v4.2):* La materialización intentaba continuar e insertar ítems con warning/evento secundario.
+  - *Expectativa ajustada (v4.5, D14 literal):* Ante conflicto de identidad (`KEY_OR_DATE_MISMATCH`, `MISSING_IN_PLAN`, `EXTRA_IN_PLAN`), la materialización lanza error crítico `SEQUENCE_IDENTITY_CONFLICT`, ejecuta exactamente 1 llamada a `log_materialization_event_rpc` con status `FAILED` y `error.code = 'SEQUENCE_IDENTITY_CONFLICT'`, y ejecuta **0 escrituras** (0 llamadas a `ensure_weekly_plan_header`, 0 llamadas a `sync_weekly_plan_items_rpc`).
+- **`T12 — D15 fetchPublishedWeekPlans superficie de solo lectura`:**
+  - *Expectativa previa (v4.2):* `usePublishedWeekPlans` invocaba `materializeAllSites` si no encontraba planes publicados.
+  - *Expectativa ajustada (v4.5, D15 literal):* Ejecución real de `fetchPublishedWeekPlans` retornando `[]` con 0 llamadas a RPCs de escritura y 0 mutaciones en base de datos (`insert`, `update`, `delete`, `upsert`).
+- **`T36 — Zona Contractual Obligatoria en DTO Items`:**
+  - *Expectativa:* Verifica que todos los ítems enviados al RPC llevan `poa_activity_zone_id` no nulo correspondiente a su actividad en ese sitio. Nota arquitectónica: `MISSING_ZONE_LINK` actúa como guarda defensiva en profundidad; en flujo nominal, `classifySiteActivities` solo genera plantillas para actividades con presencia y cantidad en `poa_activity_zones`.
+- **`T37 — usePublishedWeekPlans D15 solo lectura con 0 planes`:**
+  - *Expectativa:* Invoca la función real de consulta con 0 planes y confirma que retorna `[]` con 0 llamadas a RPC y 0 mutaciones.
+- **`T38 — Recorte defensivo de payload > 60 KB (Restaurado)`:**
+  - *Expectativa:* Verifica que payloads superiores a 60 KB activan el truncamiento defensivo progresivo (`detail_truncated = true`), preservan todos los contadores numéricos intactos y mantienen el tamaño UTF-8 `<= 60.000` bytes.
+- **`T39 — Descarte de asignaciones con fecha inválida (Restaurado)`:**
+  - *Expectativa:* Verifica que `isValidISODateString` descarte fechas inválidas para evitar su llegada al RPC.
+- **`T40 — Zonas duplicadas para misma actividad (Nuevo)`:**
+  - *Expectativa:* Múltiples filas en `poa_activity_zones` para la misma actividad en el sitio emiten `DUPLICATE_ZONE_LINK`, lanzan excepción y realizan 0 escrituras.
+- **`T41 — Error de lectura en poa_activity_zones (Nuevo)`:**
+  - *Expectativa:* Fallos en la consulta a `poa_activity_zones` emiten `ZONE_READ_FAILED`, lanzan excepción y realizan 0 escrituras (eliminado el try/catch que ignoraba el error).
+- **`T42 — Ordenamiento determinista por código de carácter (Nuevo)`:**
+  - *Expectativa:* Comprobación de que el ordenamiento determinista por código de carácter UTF-16 (`a < b ? -1 : a > b ? 1 : 0`) produce secuencias estables e invariantes respecto a la configuración regional del navegador.
+- **`Mocks de poa_activity_zones (id obligatorio)`:**
+  - Se añadió la propiedad `id: 'paz-...'` en todos los mocks de `poa_activity_zones` para dar soporte a la extracción y envío obligatorio de `poa_activity_zone_id` en `sync_weekly_plan_items_rpc`.
+
+---
+
+*Especificación Técnica v4.5 formalizada conforme a las Decisiones Aprobadas D1–D15 de Tomás y la gobernanza estricta de materialización.*

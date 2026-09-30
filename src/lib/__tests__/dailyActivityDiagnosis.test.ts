@@ -80,9 +80,9 @@ describe('DIAGNÓSTICO COMPLETO: Trazabilidad de Actividades Diarias (Frecuencia
         }
         if (table === 'poa_activity_zones') {
           return createChainableQuery([
-            { poa_activity_id: 'pa-1', zone_id: 'group-plaza', cantidad_contratada: 5000 },
-            { poa_activity_id: 'pa-2', zone_id: 'group-plaza', cantidad_contratada: 300 },
-            { poa_activity_id: 'pa-3', zone_id: 'group-plaza', cantidad_contratada: 50 },
+            { id: 'paz-1', poa_activity_id: 'pa-1', zone_id: 'group-plaza', cantidad_contratada: 5000 },
+            { id: 'paz-2', poa_activity_id: 'pa-2', zone_id: 'group-plaza', cantidad_contratada: 300 },
+            { id: 'paz-3', poa_activity_id: 'pa-3', zone_id: 'group-plaza', cantidad_contratada: 50 },
           ]);
         }
         if (table === 'board_activity_standards') {

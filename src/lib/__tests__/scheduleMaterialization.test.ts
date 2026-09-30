@@ -64,7 +64,13 @@ describe('Test Suite 40 — Integración y Persistencia del Motor de Materializa
             select: jest.fn().mockImplementation(() => ({
               data: acts,
               error: null,
-              eq: jest.fn().mockResolvedValue({ data: acts, error: null }),
+              eq: jest.fn().mockImplementation(() => ({
+                data: acts,
+                error: null,
+                order: jest.fn().mockResolvedValue({ data: acts, error: null }),
+                then: (resolve: any) => Promise.resolve({ data: acts, error: null }).then(resolve),
+              })),
+              order: jest.fn().mockResolvedValue({ data: acts, error: null }),
               then: (resolve: any) => Promise.resolve({ data: acts, error: null }).then(resolve),
             })),
           };
@@ -74,13 +80,21 @@ describe('Test Suite 40 — Integración y Persistencia del Motor de Materializa
           return {
             select: jest.fn().mockReturnThis(),
             eq: jest.fn().mockReturnThis(),
-            in: jest.fn().mockResolvedValue({
+            in: jest.fn().mockReturnThis(),
+            order: jest.fn().mockResolvedValue({
               data: [
-                { poa_activity_id: 'pa_1', zone_id: siteId, cantidad_contratada: 25000 },
-                { poa_activity_id: 'pa_2', zone_id: siteId, cantidad_contratada: 50000 },
+                { id: 'paz_1', poa_activity_id: 'pa_1', zone_id: siteId, cantidad_contratada: 25000 },
+                { id: 'paz_2', poa_activity_id: 'pa_2', zone_id: siteId, cantidad_contratada: 50000 },
               ],
               error: null,
             }),
+            then: (resolve: any) => Promise.resolve({
+              data: [
+                { id: 'paz_1', poa_activity_id: 'pa_1', zone_id: siteId, cantidad_contratada: 25000 },
+                { id: 'paz_2', poa_activity_id: 'pa_2', zone_id: siteId, cantidad_contratada: 50000 },
+              ],
+              error: null,
+            }).then(resolve),
           };
         }
 

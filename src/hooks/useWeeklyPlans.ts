@@ -1,11 +1,11 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabaseClient';
 import { offlineDB } from '@/lib/offlineDB';
 import { isNetworkError } from './useBoardData';
 import { WeeklyPlan, WeeklyPlanItem, WeeklyPlanItemExecution, WeeklyPlanConfirmationSummary } from '@/types/scheduler';
-import { ensureWeeklyPlanMaterialized } from '@/lib/scheduleMaterializationService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Query keys
@@ -267,47 +267,13 @@ function resolvePlannedDate(item: PublishedWeekPlanItem, actOccurrenceIndex: num
   return addDaysISO(weekStartISO, 0);
 }
 
-export async function materializeAllSites(
-  client: any,
-  boards: Array<{ id: string }>,
-  groups: Array<{ id: string; title?: string; board_id: string }>,
-  weekStartISO: string
-): Promise<{ successfulCount: number; failedCount: number }> {
-  let successfulCount = 0;
-  let failedCount = 0;
-
-  for (const b of boards || []) {
-    const bGroups = (groups || []).filter(
-      (g: any) => g.board_id === b.id && !(g.title || '').toUpperCase().includes('PRESUPUESTO GENERAL')
-    );
-    if (bGroups.length > 0) {
-      for (const g of bGroups) {
-        try {
-          await ensureWeeklyPlanMaterialized(client, b.id, (g as any).id, weekStartISO);
-          successfulCount++;
-        } catch (siteErr: any) {
-          failedCount++;
-          console.error(`[useWeeklyPlans] Error materializing site ${(g as any).id} on board ${b.id}:`, siteErr?.message || siteErr);
-        }
-      }
-    }
-  }
-
-  return { successfulCount, failedCount };
-}
-
-export function usePublishedWeekPlans(weekStartISO: string | undefined) {
-  return useQuery<PublishedWeekPlan[]>({
-    queryKey: weeklyPlanKeys.publishedWeek(weekStartISO!),
-    queryFn: async () => {
-      // Nota (ADR-0002): weekly_plan_items ya no tiene FK a board_activity_standards
-      // (activity_standard_id → poa_activity_zone_id), así que PostgREST no puede
-      // embeber `standard:board_activity_standards(...)` como antes. name/category
-      // siguen viviendo en el Catálogo Técnico; se resuelven aparte por activity_key
-      // + board_id (dos boards pueden compartir el mismo activity_key) en vez de por
-      // una relación de FK.
-      try {
-        let { data, error } = await supabase
+export async function fetchPublishedWeekPlans(
+  client: SupabaseClient = supabase,
+  weekStartISO: string | undefined
+): Promise<PublishedWeekPlan[]> {
+  // D15: Superficie de SOLO LECTURA. No materializa, no crea planes, no ejecuta RPCs de escritura.
+  try {
+    let { data, error } = await client
           .from('weekly_plans')
           .select(`
             *,
@@ -321,31 +287,6 @@ export function usePublishedWeekPlans(weekStartISO: string | undefined) {
         if (error) throw error;
 
         let plans = (data ?? []) as PublishedWeekPlan[];
-
-        // Gatillo Independiente de Superficie: Si no existen planes para la semana,
-        // garantizar la materialización determinística e idempotente para todos los sitios/boards.
-        if (plans.length === 0) {
-          const { data: boards } = await supabase.from('boards').select('id');
-          const { data: groups } = await supabase.from('groups').select('id, title, board_id');
-
-          if (boards && boards.length > 0) {
-            await materializeAllSites(supabase, boards, groups || [], weekStartISO!);
-          }
-
-          const refetched = await supabase
-            .from('weekly_plans')
-            .select(`
-              *,
-              group:groups(*),
-              board:boards(*),
-              items:weekly_plan_items(*)
-            `)
-            .eq('week_start', weekStartISO!)
-            .in('status', ['published', 'in_progress']);
-
-          if (refetched.error) throw refetched.error;
-          plans = (refetched.data ?? []) as PublishedWeekPlan[];
-        }
 
         // Filtro Estricto de Dominio Operacional (H6.4):
         // Excluir exclusivamente grupos financieros (PRESUPUESTO GENERAL).
@@ -362,7 +303,7 @@ export function usePublishedWeekPlans(weekStartISO: string | undefined) {
         let standards: any[] = [];
         let standardsByKey = new Map<string, { name: string; category: string; unit: string }>();
         if (boardIds.length > 0 && activityKeys.length > 0) {
-          const { data: stdData, error: stdError } = await supabase
+          const { data: stdData, error: stdError } = await client
             .from('board_activity_standards')
             .select('*')
             .in('board_id', boardIds)
@@ -376,7 +317,7 @@ export function usePublishedWeekPlans(weekStartISO: string | undefined) {
         let crewsByKey = new Map<string, any>();
         if (boardIds.length > 0 && crewIds.length > 0) {
           try {
-            const { data: crewsData } = await supabase
+            const { data: crewsData } = await client
               .from('crews')
               .select(`
                 id,
@@ -577,7 +518,7 @@ export function usePublishedWeekPlans(weekStartISO: string | undefined) {
         // Incremento 1). Grupo/board se guardan con fila completa (select *) para no
         // pisar con datos parciales lo que ya cacheó useBoard/useBoardGroups en el
         // mismo object store.
-        if (offlineDB) {
+        if (typeof window !== 'undefined' && typeof indexedDB !== 'undefined' && offlineDB) {
           const plansOnly = plans.map(({ group, board, items, ...p }) => p);
           await offlineDB.upsertRecords('weekly_plans', plansOnly);
           const itemsOnly = plans.flatMap((p) => p.items.map(({ standard, ...i }) => i));
@@ -591,7 +532,7 @@ export function usePublishedWeekPlans(weekStartISO: string | undefined) {
 
         return plans;
       } catch (err: any) {
-        if (isNetworkError(err) && offlineDB) {
+        if (isNetworkError(err) && typeof window !== 'undefined' && typeof indexedDB !== 'undefined' && offlineDB) {
           console.log('[Offline] Published week plans query failed due to network. Falling back to IndexedDB.');
 
           const [localPlans, localItems, localGroups, localBoards, localStandards] = await Promise.all([
@@ -643,7 +584,12 @@ export function usePublishedWeekPlans(weekStartISO: string | undefined) {
         }
         throw err;
       }
-    },
+    }
+
+export function usePublishedWeekPlans(weekStartISO: string | undefined) {
+  return useQuery<PublishedWeekPlan[]>({
+    queryKey: weeklyPlanKeys.publishedWeek(weekStartISO!),
+    queryFn: () => fetchPublishedWeekPlans(supabase, weekStartISO),
     enabled: !!weekStartISO,
     staleTime: 30_000,
     refetchOnWindowFocus: false,

@@ -227,14 +227,14 @@ describe('Hito 6.3 Gate 5 — Suite Integrativa de Materialización Contractual'
     ];
 
     const paZonesData = [
-      { poa_activity_id: 'pa_101', zone_id: puntaAstillerosSiteId, cantidad_contratada: 21267 },
-      { poa_activity_id: 'pa_109', zone_id: puntaAstillerosSiteId, cantidad_contratada: 520 },
-      { poa_activity_id: 'pa_110', zone_id: puntaAstillerosSiteId, cantidad_contratada: 21267 },
-      { poa_activity_id: 'pa_111', zone_id: puntaAstillerosSiteId, cantidad_contratada: 10633.5 },
-      { poa_activity_id: 'pa_112', zone_id: puntaAstillerosSiteId, cantidad_contratada: 15 },
-      { poa_activity_id: 'pa_113', zone_id: puntaAstillerosSiteId, cantidad_contratada: 15 },
-      { poa_activity_id: 'pa_114', zone_id: puntaAstillerosSiteId, cantidad_contratada: 21267 },
-      { poa_activity_id: 'pa_115', zone_id: puntaAstillerosSiteId, cantidad_contratada: 21267 },
+      { id: 'paz_101', poa_activity_id: 'pa_101', zone_id: puntaAstillerosSiteId, cantidad_contratada: 21267 },
+      { id: 'paz_109', poa_activity_id: 'pa_109', zone_id: puntaAstillerosSiteId, cantidad_contratada: 520 },
+      { id: 'paz_110', poa_activity_id: 'pa_110', zone_id: puntaAstillerosSiteId, cantidad_contratada: 21267 },
+      { id: 'paz_111', poa_activity_id: 'pa_111', zone_id: puntaAstillerosSiteId, cantidad_contratada: 10633.5 },
+      { id: 'paz_112', poa_activity_id: 'pa_112', zone_id: puntaAstillerosSiteId, cantidad_contratada: 15 },
+      { id: 'paz_113', poa_activity_id: 'pa_113', zone_id: puntaAstillerosSiteId, cantidad_contratada: 15 },
+      { id: 'paz_114', poa_activity_id: 'pa_114', zone_id: puntaAstillerosSiteId, cantidad_contratada: 21267 },
+      { id: 'paz_115', poa_activity_id: 'pa_115', zone_id: puntaAstillerosSiteId, cantidad_contratada: 21267 },
     ];
 
     const paStandardsData = paActsData.map((a) => ({

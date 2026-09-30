@@ -61,8 +61,8 @@ describe('Materialización Gobernada de Actividades Rutinarias v1.0', () => {
           const qty1 = scopeDataMock['zona_dura'] ?? scopeDataMock['limpieza_zonas_duras'] ?? 5000;
           const qty2 = scopeDataMock['arboles'] ?? scopeDataMock['poda_arboles'] ?? 0;
           return createChainQuery([
-            { poa_activity_id: 'pa_1', zone_id: siteId, cantidad_contratada: qty1 },
-            { poa_activity_id: 'pa_2', zone_id: siteId, cantidad_contratada: qty2 },
+            { id: 'paz_1', poa_activity_id: 'pa_1', zone_id: siteId, cantidad_contratada: qty1 },
+            { id: 'paz_2', poa_activity_id: 'pa_2', zone_id: siteId, cantidad_contratada: qty2 },
           ]);
         }
 

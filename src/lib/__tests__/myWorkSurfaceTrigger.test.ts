@@ -71,31 +71,31 @@ describe('Test Suite 46 — Gatillo Independiente de Superficie para /my-work (F
     mockSupabase = {
       from: jest.fn((table: string) => {
         if (table === 'weekly_plans') {
-          return {
+          const filters: Record<string, any> = {};
+          const queryBuilder: any = {
             select: jest.fn().mockReturnThis(),
             eq: jest.fn().mockImplementation((col: string, val: any) => {
-              return {
-                eq: jest.fn().mockImplementation((col2: string, val2: any) => ({
-                  or: jest.fn().mockImplementation((orExpr: string) => ({
-                    maybeSingle: jest.fn().mockImplementation(async () => {
-                      const found = storedWeeklyPlans.find(
-                        (p) => p.board_id === val && (p.group_id === val2 || (!p.group_id && !val2))
-                      );
-                      return { data: found || null, error: null };
-                    }),
-                  })),
-                })),
-                is: jest.fn().mockImplementation((col2: string, val2: any) => ({
-                  or: jest.fn().mockImplementation((orExpr: string) => ({
-                    maybeSingle: jest.fn().mockImplementation(async () => {
-                      const found = storedWeeklyPlans.find(
-                        (p) => p.board_id === val && (!p.group_id || p.group_id === null)
-                      );
-                      return { data: found || null, error: null };
-                    }),
-                  })),
-                })),
-              };
+              filters[col] = val;
+              return queryBuilder;
+            }),
+            is: jest.fn().mockImplementation((col: string, val: any) => {
+              filters[col] = val;
+              return queryBuilder;
+            }),
+            or: jest.fn().mockImplementation(() => queryBuilder),
+            maybeSingle: jest.fn().mockImplementation(async () => {
+              const found = storedWeeklyPlans.find((p) => {
+                if (filters.board_id && p.board_id !== filters.board_id) return false;
+                if (filters.group_id !== undefined && filters.group_id !== null) {
+                  if (p.group_id !== filters.group_id) return false;
+                }
+                if (filters.week_start) {
+                  const pStart = p.week_start || p.week_start_date || p.start_date;
+                  if (pStart && pStart !== filters.week_start) return false;
+                }
+                return true;
+              });
+              return { data: found || null, error: null };
             }),
             insert: jest.fn().mockImplementation((payload: any) => {
               directPostgrestMutations.push({ table: 'weekly_plans', method: 'insert', payload });
@@ -117,6 +117,7 @@ describe('Test Suite 46 — Gatillo Independiente de Superficie para /my-work (F
               };
             }),
           };
+          return queryBuilder;
         }
 
         if (table === 'weekly_plan_items') {
@@ -212,7 +213,13 @@ describe('Test Suite 46 — Gatillo Independiente de Superficie para /my-work (F
             select: jest.fn().mockImplementation(() => ({
               data: acts,
               error: null,
-              eq: jest.fn().mockResolvedValue({ data: acts, error: null }),
+              eq: jest.fn().mockImplementation(() => ({
+                data: acts,
+                error: null,
+                order: jest.fn().mockResolvedValue({ data: acts, error: null }),
+                then: (resolve: any) => Promise.resolve({ data: acts, error: null }).then(resolve),
+              })),
+              order: jest.fn().mockResolvedValue({ data: acts, error: null }),
               then: (resolve: any) => Promise.resolve({ data: acts, error: null }).then(resolve),
             })),
           };
@@ -222,13 +229,21 @@ describe('Test Suite 46 — Gatillo Independiente de Superficie para /my-work (F
           return {
             select: jest.fn().mockReturnThis(),
             eq: jest.fn().mockReturnThis(),
-            in: jest.fn().mockResolvedValue({
+            in: jest.fn().mockReturnThis(),
+            order: jest.fn().mockResolvedValue({
               data: [
-                { poa_activity_id: 'poa_act_1', zone_id: siteId, cantidad_contratada: 20000 },
-                { poa_activity_id: 'poa_act_2', zone_id: siteId, cantidad_contratada: 100 },
+                { id: 'paz_1', poa_activity_id: 'poa_act_1', zone_id: siteId, cantidad_contratada: 20000 },
+                { id: 'paz_2', poa_activity_id: 'poa_act_2', zone_id: siteId, cantidad_contratada: 100 },
               ],
               error: null,
             }),
+            then: (resolve: any) => Promise.resolve({
+              data: [
+                { id: 'paz_1', poa_activity_id: 'poa_act_1', zone_id: siteId, cantidad_contratada: 20000 },
+                { id: 'paz_2', poa_activity_id: 'poa_act_2', zone_id: siteId, cantidad_contratada: 100 },
+              ],
+              error: null,
+            }).then(resolve),
           };
         }
 

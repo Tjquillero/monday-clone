@@ -40,6 +40,10 @@ function getMondayDate(d: Date | string): Date {
   return new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate() + diff));
 }
 
+function compareStringsCode(a: string = '', b: string = ''): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 /**
  * Garantiza que las ocurrencias reales del cronograma para una semana y sitio específicos
  * estén materializadas y persistidas en PostgreSQL (`weekly_plans` y `weekly_plan_items`).
@@ -175,11 +179,12 @@ export async function ensureWeeklyPlanMaterialized(
   const activeVersionId = activeVersion.id;
   const activePoaId = activeVersion.poa_id;
 
-  // c) Consulta `poa_activities` con poa_version_id = esa versión
+  // c) Consulta `poa_activities` con poa_version_id = esa versión ordenado determinísticamente por activity_key
   const { data: poaActs } = await supabase
     .from('poa_activities')
     .select('id, activity_key, frecuencia')
-    .eq('poa_version_id', activeVersionId);
+    .eq('poa_version_id', activeVersionId)
+    .order('activity_key');
 
   // d) Si dentro de esa versión hay activity_key duplicadas -> FAILED con code DUPLICATE_ACTIVITY_KEY y la lista de claves. Prohibido "gana la última".
   const poaActivitiesMap = new Map<string, { id: string; frecuencia: number | null }>();
@@ -261,30 +266,101 @@ export async function ensureWeeklyPlanMaterialized(
   }
 
   // 2. Obtener Alcance Físico Contractual desde poa_activity_zones (B1: ÚNICA autoridad)
+  const poaZoneInfoMap = new Map<string, { id: string; cantidad: number }>();
   const poaZoneQtyMap = new Map<string, number>();
   let hasZoneScopeData = false;
 
-  try {
-    const poaActIds = Array.from(poaActivitiesMap.values()).map((a) => a.id).filter(Boolean);
-    if (poaActIds.length > 0) {
-      const { data: zoneRows } = await supabase
-        .from('poa_activity_zones')
-        .select('poa_activity_id, zone_id, cantidad_contratada')
-        .eq('zone_id', gId)
-        .in('poa_activity_id', poaActIds);
+  const poaActIds = Array.from(poaActivitiesMap.values()).map((a) => a.id).filter(Boolean);
+  if (poaActIds.length > 0) {
+    const { data: zoneRows, error: zoneReadErr } = await supabase
+      .from('poa_activity_zones')
+      .select('id, poa_activity_id, zone_id, cantidad_contratada')
+      .eq('zone_id', gId)
+      .in('poa_activity_id', poaActIds)
+      .order('poa_activity_id');
 
-      if (Array.isArray(zoneRows) && zoneRows.length > 0) {
-        hasZoneScopeData = true;
-        for (const z of zoneRows) {
-          const actKey = poaActivityKeyById.get(z.poa_activity_id);
-          if (actKey) {
-            poaZoneQtyMap.set(actKey, Number(z.cantidad_contratada));
+    if (zoneReadErr) {
+      await persistMaterializationEvent(
+        supabase,
+        boardId,
+        gId,
+        weekStartStr,
+        null,
+        'SITE_MATERIALIZATION_SUMMARY',
+        'FAILED',
+        {
+          board_id: boardId,
+          group_id: gId,
+          week_start: weekStartStr,
+          poa_id: activePoaId,
+          poa_version_id: activeVersionId,
+          status: 'FAILED',
+          error: {
+            stage: 'pre_validation',
+            code: 'ZONE_READ_FAILED',
+            message: zoneReadErr.message || 'Error al consultar poa_activity_zones para el sitio',
+          },
+        }
+      );
+      throw new Error(`ZONE_READ_FAILED: ${zoneReadErr.message || 'Error al consultar poa_activity_zones'}`);
+    }
+
+    if (Array.isArray(zoneRows) && zoneRows.length > 0) {
+      hasZoneScopeData = true;
+      const seenZoneKeys = new Set<string>();
+      const duplicateZoneKeys: string[] = [];
+
+      for (const z of zoneRows) {
+        const actKey = poaActivityKeyById.get(z.poa_activity_id);
+        if (actKey) {
+          if (seenZoneKeys.has(actKey)) {
+            if (!duplicateZoneKeys.includes(actKey)) {
+              duplicateZoneKeys.push(actKey);
+            }
+          } else {
+            seenZoneKeys.add(actKey);
           }
         }
       }
+
+      if (duplicateZoneKeys.length > 0) {
+        await persistMaterializationEvent(
+          supabase,
+          boardId,
+          gId,
+          weekStartStr,
+          null,
+          'SITE_MATERIALIZATION_SUMMARY',
+          'FAILED',
+          {
+            board_id: boardId,
+            group_id: gId,
+            week_start: weekStartStr,
+            poa_id: activePoaId,
+            poa_version_id: activeVersionId,
+            status: 'FAILED',
+            error: {
+              stage: 'pre_validation',
+              code: 'DUPLICATE_ZONE_LINK',
+              message: `Múltiples filas en poa_activity_zones para el mismo sitio y clave de actividad: ${duplicateZoneKeys.join(', ')}`,
+              details: duplicateZoneKeys,
+            },
+          }
+        );
+        throw new Error(`DUPLICATE_ZONE_LINK: Múltiples filas en poa_activity_zones para el mismo sitio y clave de actividad: ${duplicateZoneKeys.join(', ')}`);
+      }
+
+      for (const z of zoneRows) {
+        const actKey = poaActivityKeyById.get(z.poa_activity_id);
+        if (actKey) {
+          poaZoneInfoMap.set(actKey, {
+            id: z.id,
+            cantidad: Number(z.cantidad_contratada),
+          });
+          poaZoneQtyMap.set(actKey, Number(z.cantidad_contratada));
+        }
+      }
     }
-  } catch (_errZone) {
-    // Manejo seguro
   }
 
   // 3. Obtener Catálogo Técnico para el board SIN el filtro requiere_rendimiento=true
@@ -312,7 +388,9 @@ export async function ensureWeeklyPlanMaterialized(
     allBoardStandards,
   });
 
-  const templates: RoutineBaseTemplate[] = classification.templates;
+  const templates: RoutineBaseTemplate[] = [...classification.templates].sort((a, b) =>
+    compareStringsCode(a.activity_key, b.activity_key)
+  );
 
   // D5: Validación previa de plantillas. Cero plantillas -> FAILED con NO_TEMPLATES sin invocar header
   if (templates.length === 0) {
@@ -347,29 +425,244 @@ export async function ensureWeeklyPlanMaterialized(
     { customNonWorkingDays: options.customNonWorkingDays }
   );
 
-  // 6. D5: Validar y Construir DTO Items antes del Gateway (B3: Sin defaults prohibidos)
-  const dtoItems = projection.assignments
+  // Ordenar assignments por (dateStr, activity_key) de forma determinista y estable ANTES de asignar planned_sequence
+  const sortedAssignments = [...projection.assignments]
     .filter((assign) => isValidISODateString(assign.dateStr))
-    .map((assign, idx) => {
-      const matchedStd = allBoardStandards.find((s) => s.activity_key === assign.activity_key);
-      if (!matchedStd) {
-        throw new Error(`ESTÁNDAR_FALTANTE: No existe estándar técnico para la actividad ${assign.activity_key}`);
-      }
-      return {
-        planned_sequence: idx + 1,
-        activity_key: assign.activity_key,
-        activity_standard_id: matchedStd.id,
-        planned_rendimiento: matchedStd.rendimiento,
-        planned_frecuencia: assign.frequency_interval,
-        priority: matchedStd.priority || 'must_execute',
-        planned_qty: assign.cantidad,
-        unit: assign.unit,
-        planned_jr: assign.theoretical_jr,
-        planned_date: assign.dateStr,
-      };
+    .sort((a, b) => {
+      const dateCmp = compareStringsCode(a.dateStr, b.dateStr);
+      if (dateCmp !== 0) return dateCmp;
+      return compareStringsCode(a.activity_key, b.activity_key);
     });
 
-  // 7. Gateway de Cabecera (ensure_weekly_plan_header)
+  // 6. Validar y Construir DTO Items completos antes de decidir escrituras
+  const dtoItems: any[] = [];
+  for (let idx = 0; idx < sortedAssignments.length; idx++) {
+    const assign = sortedAssignments[idx];
+    const matchedStd = allBoardStandards.find((s) => s.activity_key === assign.activity_key);
+    if (!matchedStd) {
+      throw new Error(`ESTÁNDAR_FALTANTE: No existe estándar técnico para la actividad ${assign.activity_key}`);
+    }
+
+    const zoneInfo = poaZoneInfoMap.get(assign.activity_key);
+    if (!zoneInfo || !zoneInfo.id) {
+      await persistMaterializationEvent(
+        supabase,
+        boardId,
+        gId,
+        weekStartStr,
+        null,
+        'SITE_MATERIALIZATION_SUMMARY',
+        'FAILED',
+        {
+          ...classification.summary,
+          poa_id: activePoaId,
+          poa_version_id: activeVersionId,
+          status: 'FAILED',
+          error: {
+            stage: 'pre_validation',
+            code: 'MISSING_ZONE_LINK',
+            message: `La actividad ${assign.activity_key} no cuenta con enlace obligatorio a poa_activity_zones para el sitio ${gId}`,
+          },
+        }
+      );
+      throw new Error(`MISSING_ZONE_LINK: La actividad ${assign.activity_key} no cuenta con enlace obligatorio a poa_activity_zones`);
+    }
+
+    dtoItems.push({
+      planned_sequence: idx + 1,
+      activity_key: assign.activity_key,
+      poa_activity_zone_id: zoneInfo.id,
+      activity_standard_id: matchedStd.id,
+      planned_rendimiento: matchedStd.rendimiento,
+      planned_frecuencia: assign.frequency_interval,
+      priority: matchedStd.priority || 'must_execute',
+      planned_qty: assign.cantidad,
+      unit: assign.unit,
+      planned_jr: assign.theoretical_jr,
+      planned_date: assign.dateStr,
+    });
+  }
+
+  // 7. SOLO LECTURAS ANTES DE DECIDIR (Paso b y c)
+  // b) LEER si existe el plan del (board_id, group_id, week_start)
+  const { data: existingPlan, error: planReadErr } = await supabase
+    .from('weekly_plans')
+    .select('id, status')
+    .eq('board_id', boardId)
+    .eq('group_id', gId)
+    .eq('week_start', weekStartStr)
+    .maybeSingle();
+
+  if (planReadErr) {
+    await persistMaterializationEvent(
+      supabase,
+      boardId,
+      gId,
+      weekStartStr,
+      null,
+      'SITE_MATERIALIZATION_SUMMARY',
+      'FAILED',
+      {
+        ...classification.summary,
+        poa_id: activePoaId,
+        poa_version_id: activeVersionId,
+        status: 'FAILED',
+        error: {
+          stage: 'plan_state_read',
+          code: 'PLAN_STATE_READ_FAILED',
+          message: planReadErr.message || 'Error al consultar el estado del plan existente',
+        },
+      }
+    );
+    throw new Error(`PLAN_STATE_READ_FAILED: ${planReadErr.message}`);
+  }
+
+  // c) Si existe el plan, LEER todos sus weekly_plan_items
+  let existingItems: any[] = [];
+  if (existingPlan?.id) {
+    const { data: itemsData, error: itemsReadErr } = await supabase
+      .from('weekly_plan_items')
+      .select('planned_sequence, activity_key, planned_date')
+      .eq('plan_id', existingPlan.id);
+
+    if (itemsReadErr) {
+      await persistMaterializationEvent(
+        supabase,
+        boardId,
+        gId,
+        weekStartStr,
+        existingPlan.id,
+        'SITE_MATERIALIZATION_SUMMARY',
+        'FAILED',
+        {
+          ...classification.summary,
+          poa_id: activePoaId,
+          poa_version_id: activeVersionId,
+          plan_id: existingPlan.id,
+          status: 'FAILED',
+          error: {
+            stage: 'plan_state_read',
+            code: 'PLAN_STATE_READ_FAILED',
+            message: itemsReadErr.message || 'Error al consultar los ítems del plan existente',
+          },
+        }
+      );
+      throw new Error(`PLAN_STATE_READ_FAILED: ${itemsReadErr.message}`);
+    }
+    existingItems = itemsData || [];
+  }
+
+  // 8. D14 — DEFINICIÓN Y EVALUACIÓN DE CONFLICTOS
+  if (existingPlan?.id && existingItems.length > 0) {
+    const existingSeqMap = new Map<number, { activity_key: string; planned_date: string }>();
+    for (const it of existingItems) {
+      existingSeqMap.set(it.planned_sequence, {
+        activity_key: it.activity_key,
+        planned_date: it.planned_date,
+      });
+    }
+
+    const sentSeqMap = new Map<number, { activity_key: string; planned_date: string }>();
+    for (const it of dtoItems) {
+      sentSeqMap.set(it.planned_sequence, {
+        activity_key: it.activity_key,
+        planned_date: it.planned_date,
+      });
+    }
+
+    let keyOrDateMismatchCount = 0;
+    let missingInPlanCount = 0;
+    let extraInPlanCount = 0;
+    const conflictsList: Array<{ type: string; sequence: number; sent?: any; existing?: any }> = [];
+
+    // Comprobar lo enviado contra lo existente
+    for (const item of dtoItems) {
+      const existing = existingSeqMap.get(item.planned_sequence);
+      if (!existing) {
+        missingInPlanCount++;
+        conflictsList.push({
+          type: 'MISSING_IN_PLAN',
+          sequence: item.planned_sequence,
+          sent: { activity_key: item.activity_key, planned_date: item.planned_date },
+        });
+      } else if (existing.activity_key !== item.activity_key || existing.planned_date !== item.planned_date) {
+        keyOrDateMismatchCount++;
+        conflictsList.push({
+          type: 'KEY_OR_DATE_MISMATCH',
+          sequence: item.planned_sequence,
+          sent: { activity_key: item.activity_key, planned_date: item.planned_date },
+          existing: { activity_key: existing.activity_key, planned_date: existing.planned_date },
+        });
+      }
+    }
+
+    // Comprobar lo existente que no está en lo enviado
+    for (const [seq, ex] of existingSeqMap.entries()) {
+      if (!sentSeqMap.has(seq)) {
+        extraInPlanCount++;
+        conflictsList.push({
+          type: 'EXTRA_IN_PLAN',
+          sequence: seq,
+          existing: { activity_key: ex.activity_key, planned_date: ex.planned_date },
+        });
+      }
+    }
+
+    const totalConflicts = keyOrDateMismatchCount + missingInPlanCount + extraInPlanCount;
+
+    if (totalConflicts > 0) {
+      // D14: Bloqueo total ante conflicto. Cero llamadas a header, cero a sync. Exactamente UN evento.
+      await persistMaterializationEvent(
+        supabase,
+        boardId,
+        gId,
+        weekStartStr,
+        existingPlan.id,
+        'SITE_MATERIALIZATION_SUMMARY',
+        'FAILED',
+        {
+          ...classification.summary,
+          poa_id: activePoaId,
+          poa_version_id: activeVersionId,
+          plan_id: existingPlan.id,
+          error: {
+            stage: 'identity_precheck',
+            code: 'SEQUENCE_IDENTITY_CONFLICT',
+            counts: {
+              key_or_date_mismatch: keyOrDateMismatchCount,
+              missing_in_plan: missingInPlanCount,
+              extra_in_plan: extraInPlanCount,
+            },
+            sample: conflictsList.slice(0, 50),
+            truncated: conflictsList.length > 50,
+          },
+          status: 'FAILED',
+        }
+      );
+      throw new Error(
+        `SEQUENCE_IDENTITY_CONFLICT: Conflicto de identidad detectado en plan existente (${totalConflicts} discrepancias: ${keyOrDateMismatchCount} mismatches, ${missingInPlanCount} faltantes en plan, ${extraInPlanCount} extras en plan)`
+      );
+    }
+
+    // Plan existente con ítems IDÉNTICOS -> CERO escrituras y retornar el estado existente
+    return {
+      weeklyPlan: {
+        id: existingPlan.id,
+        board_id: boardId,
+        group_id: gId,
+        week_start_date: weekStartStr,
+        week_end_date: weekStartStr,
+        status: existingPlan.status || 'published',
+      },
+      insertedCount: 0,
+      updatedCount: 0,
+      cancelledCount: 0,
+      protectedCount: existingItems.length,
+      totalItems: existingItems.length,
+    };
+  }
+
+  // 9. Gateway de Cabecera (ensure_weekly_plan_header) — solo si el plan no existía o tenía 0 ítems
   let headerPlanId: string | null = null;
   let headerFailedLogged = false;
 
@@ -435,50 +728,9 @@ export async function ensureWeeklyPlanMaterialized(
     throw errHeader;
   }
 
-  // 8. Verificación Previa de Identidad de Secuencias (Sección 7.B)
-  const existingRowsMap = new Map<number, { activity_key: string; planned_date: string }>();
-  let hasSequenceConflict = false;
-
-  try {
-    const { data: existingRows } = await supabase
-      .from('weekly_plan_items')
-      .select('planned_sequence, activity_key, planned_date')
-      .eq('plan_id', headerPlanId);
-
-    for (const r of existingRows || []) {
-      existingRowsMap.set(r.planned_sequence, {
-        activity_key: r.activity_key,
-        planned_date: r.planned_date,
-      });
-    }
-
-    for (const item of dtoItems) {
-      const existing = existingRowsMap.get(item.planned_sequence);
-      if (existing && existing.activity_key !== item.activity_key) {
-        hasSequenceConflict = true;
-        await persistMaterializationEvent(
-          supabase,
-          boardId,
-          gId,
-          weekStartStr,
-          headerPlanId,
-          'SEQUENCE_IDENTITY_CONFLICT',
-          'PARTIAL',
-          {
-            planned_sequence: item.planned_sequence,
-            sent_key: item.activity_key,
-            existing_key: existing.activity_key,
-            plan_id: headerPlanId,
-          }
-        );
-      }
-    }
-  } catch (_errSeq) {
-    // Continuar con la sincronización
-  }
-
-  // 9. Gateway de Sincronización de Ítems (sync_weekly_plan_items_rpc)
+  // 10. Gateway de Sincronización de Ítems (sync_weekly_plan_items_rpc)
   let syncedRows: any[] | null = null;
+  let syncFailedLogged = false;
   try {
     const { data: rows, error: syncErr } = await supabase.rpc('sync_weekly_plan_items_rpc', {
       p_plan_id: headerPlanId,
@@ -486,6 +738,7 @@ export async function ensureWeeklyPlanMaterialized(
     });
 
     if (syncErr) {
+      syncFailedLogged = true;
       await persistMaterializationEvent(
         supabase,
         boardId,
@@ -513,12 +766,33 @@ export async function ensureWeeklyPlanMaterialized(
 
     syncedRows = rows;
   } catch (errSync: any) {
+    if (!syncFailedLogged) {
+      await persistMaterializationEvent(
+        supabase,
+        boardId,
+        gId,
+        weekStartStr,
+        headerPlanId,
+        'SITE_MATERIALIZATION_SUMMARY',
+        'FAILED',
+        {
+          ...classification.summary,
+          poa_id: activePoaId,
+          poa_version_id: activeVersionId,
+          status: 'FAILED',
+          error: {
+            stage: 'exception',
+            message: errSync?.message || String(errSync),
+          },
+        }
+      );
+    }
     // D4: SIN fallback a syncWeeklyPlanForBoard
     throw errSync;
   }
 
-  // 10. Detección Post-RPC de Descartes en Gateway (Sección 7.B)
-  const existingSeqSet = new Set(existingRowsMap.keys());
+  // 11. Detección Post-RPC de Descartes en Gateway (Sección 7.B)
+  const existingSeqSet = new Set(existingItems.map((r) => r.planned_sequence));
   const expectedSequences = new Set(
     dtoItems.map((i) => i.planned_sequence).filter((seq) => !existingSeqSet.has(seq))
   );
@@ -543,7 +817,7 @@ export async function ensureWeeklyPlanMaterialized(
     );
   }
 
-  // Regla M2: Si hubo SEQUENCE_IDENTITY_CONFLICT o GATEWAY_DROPPED, el resumen pasa a PARTIAL
+  // Regla M2: Si hubo GATEWAY_DROPPED, el resumen pasa a PARTIAL
   const finalSummary = {
     ...classification.summary,
     plan_id: headerPlanId,
@@ -551,12 +825,6 @@ export async function ensureWeeklyPlanMaterialized(
     poa_version_id: activeVersionId,
   };
   let finalStatus = classification.status;
-
-  if (hasSequenceConflict) {
-    finalStatus = 'PARTIAL';
-    finalSummary.is_partial = true;
-    finalSummary.partial_reasons.push('SEQUENCE_IDENTITY_CONFLICT: Conflicto de identidad en secuencia previa');
-  }
 
   if (missingSequences.length > 0) {
     finalStatus = 'PARTIAL';
@@ -566,7 +834,7 @@ export async function ensureWeeklyPlanMaterialized(
 
   finalSummary.status = finalStatus;
 
-  // 11. Persistir Evento Resumen del Sitio P3
+  // 12. Persistir Evento Resumen del Sitio P3
   await persistMaterializationEvent(
     supabase,
     boardId,
@@ -590,7 +858,7 @@ export async function ensureWeeklyPlanMaterialized(
     insertedCount: syncedRows?.length ?? 0,
     updatedCount: 0,
     cancelledCount: 0,
-    protectedCount: existingRowsMap.size,
-    totalItems: (syncedRows?.length ?? 0) + existingRowsMap.size,
+    protectedCount: existingItems.length,
+    totalItems: (syncedRows?.length ?? 0) + existingItems.length,
   };
 }

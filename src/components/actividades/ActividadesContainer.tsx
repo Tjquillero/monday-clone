@@ -1,9 +1,9 @@
 'use client';
 
-// Superficie del LÍDER — Container de Mis Actividades (/my-work)
+// Superficie de SOLO LECTURA del LÍDER — Container de Mis Actividades (/my-work) (D15)
 // Implementa la Jerarquía Progresiva de 3 Niveles (SITIOS -> ACTIVIDADES -> REGISTRO DE EJECUCIÓN -> EVIDENCIA).
 // Soporta la Navegación Temporal Today-First y Progressive Disclosure de Resagadas (UX-01).
-// Consumo soberano de usePublishedWeekPlans, evaluateDailyOperationalBrief y projectMyWorkTemporalView sin mutaciones.
+// Consumo soberano de SOLO LECTURA de usePublishedWeekPlans, evaluateDailyOperationalBrief y projectMyWorkTemporalView (0 mutaciones/0 materializaciones).
 
 import { useMemo, useState } from 'react';
 import {
@@ -324,7 +324,7 @@ export default function ActividadesContainer() {
         ) : (
           <div className="flex flex-col items-center justify-center py-16 px-4 bg-[var(--color-surface-subtle)] rounded-[var(--radius-surface)] border-2 border-dashed border-[var(--border-color)] text-center">
             <CalendarX2 className="w-10 h-10 text-[var(--text-muted)] mb-3" />
-            <p className="text-[var(--text-primary)] font-bold text-base">No hay plan publicado para esta semana.</p>
+            <p className="text-[var(--text-primary)] font-bold text-base">Plan de la semana no publicado</p>
             <p className="text-xs text-[var(--text-muted)] mt-1 max-w-md">
               Utiliza las flechas superiores para navegar a semanas anteriores o futuras con planes publicados.
             </p>
