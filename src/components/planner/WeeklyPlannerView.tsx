@@ -34,6 +34,7 @@ interface Props {
   isLoading: boolean;
   isError: boolean;
   error: Error | null;
+  notOperational?: boolean;
   group: { id: string; title: string } | undefined;
   weekStart: Date;
   // Persistence
@@ -57,7 +58,7 @@ interface Props {
 }
 
 export default function WeeklyPlannerView({
-  boardId, plan, missingStandards, isLoading, isError, error,
+  boardId, plan, missingStandards, isLoading, isError, error, notOperational,
   group, weekStart,
   savedPlan, onSave, isSaving, onPublish, isPublishing, saveError,
   onConfirm, isConfirming, confirmError, onClose, isClosing, closeError, onGoToCosts,
@@ -71,19 +72,20 @@ export default function WeeklyPlannerView({
   // la tabla, se muestra junto a ella (ver useWeeklyPlan.ts). "Sin
   // estándares configurados" solo aplica cuando la ausencia de actividades
   // no se explica ya por ese aviso, para no duplicar el mensaje.
-  const isBlockingState = noGroupSelected || isError || (hasNoActivities && !hasMissingStandards);
+  const isBlockingState = noGroupSelected || notOperational || isError || (hasNoActivities && !hasMissingStandards);
   const showWarnings    = isBlockingState || hasMissingStandards;
 
   const canSave    = showTable && (!savedPlan || savedPlan.status === 'draft');
   const canPublish = !!savedPlan && savedPlan.status === 'draft';
   const showActionBar = showTable || !!savedPlan;
 
+  const safeWeekStart = weekStart instanceof Date && !isNaN(weekStart.getTime()) ? weekStart : new Date();
   const selectorProps = plan
     ? { weekStart: plan.week.start, weekEnd: plan.week.end, periodNumber: plan.week.number }
     : {
-        weekStart: weekStart.toISOString().split('T')[0],
+        weekStart: safeWeekStart.toISOString().split('T')[0],
         weekEnd: new Date(Date.UTC(
-          weekStart.getUTCFullYear(), weekStart.getUTCMonth(), weekStart.getUTCDate() + 4,
+          safeWeekStart.getUTCFullYear(), safeWeekStart.getUTCMonth(), safeWeekStart.getUTCDate() + 4,
         )).toISOString().split('T')[0],
         periodNumber: 1,
       };
@@ -211,6 +213,7 @@ export default function WeeklyPlannerView({
             <PlanningWarnings
               boardId={boardId}
               error={isError ? error : null}
+              notOperational={notOperational}
               noGroupSelected={noGroupSelected}
               hasNoActivities={hasNoActivities && !hasMissingStandards}
               missingStandards={missingStandards}

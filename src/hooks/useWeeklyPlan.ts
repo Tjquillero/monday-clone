@@ -27,6 +27,8 @@ export interface UseWeeklyPlanResult {
   isLoading: boolean;
   isError: boolean;
   error: Error | null;
+  /** Indicador explícito de sitio fuera de operación (D25). Si es true, el plan es null y se muestra banner informativo. */
+  notOperational?: boolean;
 }
 
 export function useWeeklyPlan(
@@ -113,6 +115,7 @@ export function useWeeklyPlan(
   // Gatillo Determinístico de Materialización e Inserción Idempotente SQL (weekly_plan_items)
   const weekStartStr = weekStart.toISOString().slice(0, 10);
   const {
+    data: matData,
     isLoading: matLoading,
     isError: matError,
     error: matErr,
@@ -128,8 +131,11 @@ export function useWeeklyPlan(
     refetchOnWindowFocus: false,
   });
 
-  // El plan se deriva de los datos ya cacheados
+  const isNotOperational = Boolean(matData?.notOperational);
+
+  // El plan se deriva de los datos ya cacheados — si el sitio está fuera de operación (D25), plan es null
   const plan = useMemo<WeeklyPlanningContext | null>(() => {
+    if (isNotOperational) return null;
     if (!standards || !poaCatalog || !scopeMappings || analysisRow === undefined || !group) return null;
     if (missingStandards === undefined) return null;
 
@@ -149,12 +155,12 @@ export function useWeeklyPlan(
     };
 
     return buildWeeklyPlanningContext(mergedStandards, scopeMappings, scopeQuantities, zone, week);
-  }, [standards, poaCatalog, scopeMappings, analysisRow, group, weekStart, missingStandards, assignmentsCount]);
+  }, [isNotOperational, standards, poaCatalog, scopeMappings, analysisRow, group, weekStart, missingStandards, assignmentsCount]);
 
   const isLoading = stdLoading || poaLoading || mapLoading || qtyLoading || missingLoading || matLoading;
 
   const error = (stdErr ?? poaErr ?? mapErr ?? qtyErr ?? missingErr ?? matErr) as Error | null;
   const isError = stdError || poaError || mapError || qtyError || missingError || matError;
 
-  return { plan, missingStandards: missingStandards ?? [], isLoading, isError, error };
+  return { plan, missingStandards: missingStandards ?? [], isLoading, isError, error, notOperational: isNotOperational };
 }

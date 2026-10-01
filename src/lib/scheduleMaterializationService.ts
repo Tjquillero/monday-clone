@@ -363,10 +363,10 @@ export async function ensureWeeklyPlanMaterialized(
     }
   }
 
-  // 3. Obtener Frecuencias Operativas para el sitio (D19 / FREQ-OP-01)
+  // 3. Obtener Frecuencias Operativas para el sitio (D19 / FREQ-OP-01 / FREQ-OP-02)
   const { data: opFreqData, error: opFreqErr } = await supabase
     .from('operational_frequencies')
-    .select('activity_key, visits_per_month, source')
+    .select('activity_key, visits_per_month, source, qty_mode, rendimiento')
     .eq('board_id', boardId)
     .eq('group_id', gId);
 
@@ -396,17 +396,96 @@ export async function ensureWeeklyPlanMaterialized(
     throw new Error(`OPERATIONAL_FREQ_READ_FAILED: ${opFreqErr.message || 'Error al consultar operational_frequencies'}`);
   }
 
-  const operationalFreqMap = new Map<string, { visits_per_month: number; source: 'CRONOGRAMA' | 'POA' }>();
+  const operationalFreqMap = new Map<string, import('./materialization/siteActivityClassifier').SiteOperationalFrequencyConfig>();
   for (const row of opFreqData || []) {
     if (row.activity_key && row.visits_per_month !== null && row.visits_per_month !== undefined) {
       operationalFreqMap.set(row.activity_key, {
         visits_per_month: Number(row.visits_per_month),
         source: row.source || 'CRONOGRAMA',
+        qty_mode: row.qty_mode || 'FULL',
+        rendimiento: row.rendimiento !== null && row.rendimiento !== undefined ? Number(row.rendimiento) : null,
       });
     }
   }
 
-  // 4. Obtener Catálogo Técnico para el board SIN el filtro requiere_rendimiento=true
+  // D25: Si el sitio no cuenta con filas en operational_frequencies -> fuera de operación.
+  // Cero llamadas a header y sync, evento SUCCESS con error.code = 'SITE_NOT_OPERATIONAL'.
+  if (operationalFreqMap.size === 0) {
+    await persistMaterializationEvent(
+      supabase,
+      boardId,
+      gId,
+      weekStartStr,
+      null,
+      'SITE_MATERIALIZATION_SUMMARY',
+      'SUCCESS',
+      {
+        board_id: boardId,
+        group_id: gId,
+        week_start: weekStartStr,
+        poa_id: activePoaId,
+        poa_version_id: activeVersionId,
+        status: 'SUCCESS',
+        error: {
+          stage: 'pre_validation',
+          code: 'SITE_NOT_OPERATIONAL',
+          message: 'Sitio sin operación: no cuenta con parámetros en operational_frequencies',
+        },
+        total_activities_evaluated: 0,
+        materialized_count: 0,
+        not_scheduled_no_freq_count: 0,
+        not_scheduled_no_rendimiento_count: 0,
+        skipped_zero_qty_count: 0,
+        excluded_missing_operational_freq_count: 0,
+        excluded_missing_rendimiento_count: 0,
+        excluded_missing_standard_count: 0,
+        excluded_invalid_contract_count: 0,
+        is_partial: false,
+        partial_reasons: [],
+        activities_detail: [],
+      }
+    );
+
+    return {
+      weeklyPlan: {
+        id: '',
+        board_id: boardId,
+        group_id: gId,
+        week_start_date: weekStartStr,
+        week_end_date: weekStartStr,
+        week_start: weekStartStr,
+        status: 'draft',
+      } as any,
+      insertedCount: 0,
+      updatedCount: 0,
+      cancelledCount: 0,
+      protectedCount: 0,
+      totalItems: 0,
+      notOperational: true,
+    };
+  }
+
+  // 4. Leer Capacidad Diaria del Sitio (D24: no bloqueante)
+  let siteDailyCapacity: number | null = null;
+  let capacityReadError: string | null = null;
+  try {
+    const { data: capData, error: capErr } = await supabase
+      .from('site_daily_capacity')
+      .select('jornales_dia')
+      .eq('board_id', boardId)
+      .eq('group_id', gId)
+      .maybeSingle();
+
+    if (capErr) {
+      capacityReadError = capErr.message;
+    } else if (capData && capData.jornales_dia !== null && capData.jornales_dia !== undefined) {
+      siteDailyCapacity = Number(capData.jornales_dia);
+    }
+  } catch (err) {
+    capacityReadError = err instanceof Error ? err.message : String(err);
+  }
+
+  // 5. Obtener Catálogo Técnico para el board SIN el filtro requiere_rendimiento=true
   const { data: standardsData } = await supabase
     .from('board_activity_standards')
     .select('*')
@@ -423,7 +502,7 @@ export async function ensureWeeklyPlanMaterialized(
     priority: s.priority || 'must_execute',
   }));
 
-  // 5. Clasificar actividades del universo contractual del sitio (D19)
+  // 6. Clasificar actividades del universo contractual del sitio (D19, D20, D21, D23)
   const classification = classifySiteActivities(boardId, gId, weekStartStr, {
     poaActivitiesMap,
     poaZoneQtyMap,
@@ -461,7 +540,7 @@ export async function ensureWeeklyPlanMaterialized(
     throw new Error('NO_TEMPLATES: Cero plantillas operacionales viables generadas para el sitio con POA activo');
   }
 
-  // 5. Generar Ocurrencias Diarias con Calendario Laboral Colombiano (F3.1)
+  // 7. Generar Ocurrencias Diarias con Calendario Laboral Colombiano (F3.1, D26)
   const projection = generateRoutineScheduleForWeek(
     templates,
     mondayDate,
@@ -478,7 +557,7 @@ export async function ensureWeeklyPlanMaterialized(
       return compareStringsCode(a.activity_key, b.activity_key);
     });
 
-  // 6. Validar y Construir DTO Items completos antes de decidir escrituras
+  // 8. Validar y Construir DTO Items completos antes de decidir escrituras
   const dtoItems: any[] = [];
   for (let idx = 0; idx < sortedAssignments.length; idx++) {
     const assign = sortedAssignments[idx];
@@ -512,13 +591,19 @@ export async function ensureWeeklyPlanMaterialized(
       throw new Error(`MISSING_ZONE_LINK: La actividad ${assign.activity_key} no cuenta con enlace obligatorio a poa_activity_zones`);
     }
 
+    const opFreqItem = operationalFreqMap.get(assign.activity_key);
+    const overrideRend = opFreqItem?.rendimiento !== undefined && opFreqItem?.rendimiento !== null ? Number(opFreqItem.rendimiento) : null;
+    const effectiveRend = (overrideRend !== null && Number.isFinite(overrideRend) && overrideRend > 0)
+      ? overrideRend
+      : Number(matchedStd.rendimiento);
+
     const isNoRendimiento = matchedStd.requiere_rendimiento === false;
     dtoItems.push({
       planned_sequence: idx + 1,
       activity_key: assign.activity_key,
       poa_activity_zone_id: zoneInfo.id,
       activity_standard_id: matchedStd.id,
-      planned_rendimiento: isNoRendimiento ? null : matchedStd.rendimiento,
+      planned_rendimiento: isNoRendimiento ? null : effectiveRend,
       planned_frecuencia: assign.frequency_interval,
       priority: matchedStd.priority || 'must_execute',
       planned_qty: assign.cantidad,
@@ -862,12 +947,40 @@ export async function ensureWeeklyPlanMaterialized(
     );
   }
 
+  // D24: Cálculo informativo de jornales por día y verificación de capacidad del sitio
+  const dailyJournalsMap: Record<string, number> = {};
+  for (const assign of sortedAssignments) {
+    if (assign.dateStr) {
+      dailyJournalsMap[assign.dateStr] = Number(((dailyJournalsMap[assign.dateStr] || 0) + assign.theoretical_jr).toFixed(4));
+    }
+  }
+
+  const exceededCapacityDays: Array<{ date: string; journals: number; capacity: number; deficit: number }> = [];
+  if (siteDailyCapacity !== null && siteDailyCapacity > 0) {
+    for (const [dateStr, jrTotal] of Object.entries(dailyJournalsMap)) {
+      if (jrTotal > siteDailyCapacity) {
+        exceededCapacityDays.push({
+          date: dateStr,
+          journals: jrTotal,
+          capacity: siteDailyCapacity,
+          deficit: Number((jrTotal - siteDailyCapacity).toFixed(4)),
+        });
+      }
+    }
+  }
+
   // Regla M2: Si hubo GATEWAY_DROPPED, el resumen pasa a PARTIAL
   const finalSummary = {
     ...classification.summary,
     plan_id: headerPlanId,
     poa_id: activePoaId,
     poa_version_id: activeVersionId,
+    site_daily_capacity: siteDailyCapacity,
+    capacity_read_error: capacityReadError,
+    capacity_error: capacityReadError,
+    daily_journals: dailyJournalsMap,
+    exceeded_capacity_days: exceededCapacityDays,
+    capacity_exceeded: exceededCapacityDays.length > 0,
   };
   let finalStatus = classification.status;
 

@@ -15,18 +15,31 @@ import { SchedulerMigrationMissingError, MissingActivityStandard } from '@/types
 interface Props {
   boardId: string | undefined;
   error: Error | null;
+  notOperational?: boolean;
   noGroupSelected: boolean;
   hasNoActivities: boolean;
   missingStandards: MissingActivityStandard[];
 }
 
-export default function PlanningWarnings({ boardId, error, noGroupSelected, hasNoActivities, missingStandards }: Props) {
+export default function PlanningWarnings({ boardId, error, notOperational, noGroupSelected, hasNoActivities, missingStandards }: Props) {
   if (noGroupSelected) {
     return (
       <Banner icon={<MapPin className="w-8 h-8 text-[var(--color-primary)] dark:text-[var(--color-accent)]" />} color="blue">
         <p className="font-bold text-sm text-[var(--text-primary)]">Selecciona un sitio</p>
         <p className="text-[var(--text-secondary)] text-xs mt-1">
           Usa el selector de ubicación en la barra superior para elegir el sitio a planificar.
+        </p>
+      </Banner>
+    );
+  }
+
+  // Sitio sin operación (D25): informativo, sin plan vacío
+  if (notOperational || error?.message?.includes('SITE_NOT_OPERATIONAL') || error?.message?.includes('Sitio sin operación')) {
+    return (
+      <Banner icon={<Info className="w-8 h-8 text-amber-400" />} color="amber">
+        <p className="font-bold text-sm text-[var(--text-primary)]">Sitio sin operación</p>
+        <p className="text-[var(--text-secondary)] text-xs mt-1">
+          Este sitio no cuenta con parámetros en frecuencias operativas y no requiere programación semanal.
         </p>
       </Banner>
     );

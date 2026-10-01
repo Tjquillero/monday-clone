@@ -156,4 +156,72 @@ Todos los usos de `planned_rendimiento` y `rendimiento` fueron auditados para as
 | `src/lib/materialization/siteActivityClassifier.ts` | L26, L246, L287 | Emite `planned_rendimiento: null` y `planned_jr: 0` para actividades sin rendimiento. |
 | `src/lib/scheduleMaterializationService.ts` | L521 | DTO inserta `planned_rendimiento: null` y `planned_jr: 0` cuando `requiere_rendimiento === false`. |
 
+---
+
+## 7. Decisiones D21–D26: Parámetros Operativos por Sitio (GATE FREQ-OP-02)
+
+> **Aprobadas por Tomás (2026-10-01):** Gobernanza de cantidades distribuidas (SPLIT), overrides de rendimiento por sitio, capacidades diarias de jornales, exclusión de sitios fuera de operación y despacho determinista en días festivos.
+
+### 7.1. Definición de Decisiones
+
+- **D21 (Modo de Cantidad SPLIT):** Para actividades `1.09` (recolección de troncos), `1.10` (trasiego de residuos) y `3.06` (mantenimiento de mármol), la cantidad contractual del POA representa el **TOTAL DEL MES** y se reparte equitativamente entre las visitas programadas:
+  $$\text{planned\_qty} = \text{round}\left(\frac{\text{cantidad}}{\text{visits\_per\_month}}, 2\right)$$
+  $$\text{planned\_jr} = \frac{\text{planned\_qty}}{\text{rendimiento\_efectivo}}$$
+  Para el resto de actividades (`qty_mode = 'FULL'`), la cantidad del POA es la cantidad física ejecutada en **cada visita**.
+
+- **D22 (Origen de Datos):** Las cantidades provienen soberanamente del POA; los rendimientos físicos y frecuencias de despacho provienen del Cronograma Operativo.
+
+- **D23 (Override de Rendimiento por Sitio):** Si existe un rendimiento específico por sitio en `operational_frequencies.rendimiento`, este tiene precedencia sobre el catálogo técnico estándar (`board_activity_standards`). Si es `NULL`, se usa el del catálogo. Se mantiene D20: si `requiere_rendimiento = false`, `planned_rendimiento = null` y `planned_jr = 0`.
+
+- **D24 (Límite Diario de Jornales por Sitio):** La tabla `public.site_daily_capacity` define el límite máximo diario de jornales por sitio. En este gate es **informativo**: se calcula la suma de jornales diarios en la semana y se reporta en el evento `SITE_MATERIALIZATION_SUMMARY` (`site_daily_capacity`, `exceeded_capacity_days`, `capacity_exceeded`) sin bloquear la materialización.
+
+- **D25 (Sitios Fuera de Operación — PLAYA PUNTA ASTILLEROS):** Sitios sin filas en `operational_frequencies` se consideran fuera de operación: 0 llamadas a RPCs de cabecera y sincronización, emisión de evento `SITE_MATERIALIZATION_SUMMARY` con status `SUCCESS` y `error.code = 'SITE_NOT_OPERATIONAL'`. La UI muestra `"Sitio sin operación"` en tono informativo (sin error `FAILED`).
+
+- **D26 (Gobernanza de Festivos):**
+  - Visitas **NO diarias** (`visits_per_month < 25`): Si caen en día festivo colombiano, se trasladan al **siguiente día hábil** de la misma semana (Lunes a Sábado); si no hay día hábil posterior, se trasladan al **anterior**.
+  - Visitas **diarias** (`visits_per_month >= 25`): Si caen en día festivo, la visita se **omite** (no se reprograma ni se corre).
+
+---
+
+### 7.2. Tabla Canónica de Overrides de Rendimiento (D23)
+
+| Actividad | Sitio / Zona Operativa | Rendimiento Override | Rendimiento Estándar Catálogo |
+| :--- | :--- | :---: | :---: |
+| **1.01** (Corte de Césped) | PLAZA PUERTO COLOMBIA | **3,000** | 1,000 |
+| **1.01** (Corte de Césped) | MANGLARES | **4,900** | 1,000 |
+| **1.01** (Corte de Césped) | PLAYA DEL COUNTRY | **6,950** | 1,000 |
+| **1.01** (Corte de Césped) | SALINAS DEL REY | **8,100** | 1,000 |
+| **1.01** (Corte de Césped) | PLAYA DE SABANILLA 2 | **8,200** | 1,000 |
+| **1.01** (Corte de Césped) | MIRAMAR SECTOR EL FARO | **8,850** | 1,000 |
+| **1.09** (Recolección de Troncos) | *Todos los sitios con la actividad* | **30** | Catálogo |
+| **2.03** (Pintura de Bordillos) | *Todos los sitios con la actividad* | **200** | Catálogo |
+| **2.16** (Lavado de Superficies) | *Todos los sitios con la actividad* | **3,500** | Catálogo |
+| **2.18** (Limpieza de Canecas) | *Todos los sitios con la actividad* | **7,500** | Catálogo |
+| **3.06** (Mármol) | PLAZA PUERTO COLOMBIA | **600** | Catálogo |
+| **3.06** (Mármol) | CENTRO GASTRONÓMICO | **300** | Catálogo |
+| **3.04** (Limpieza de Vidrios) | CENTRO GASTRONÓMICO | **3,000** | Catálogo |
+| **3.04** (Limpieza de Vidrios) | PLAYA DEL COUNTRY | **7,000** | Catálogo |
+| **3.04** (Limpieza de Vidrios) | MIRAMAR SECTOR EL FARO | **7,000** | Catálogo |
+| **3.04** (Limpieza de Vidrios) | SENDERO SANTA VERÓNICA | **7,000** | Catálogo |
+
+---
+
+### 7.3. Tabla Canónica de Capacidad Diaria por Sitio (D24)
+
+Fuente: `COSTOS GENERALES V3` (Tablero `3ea0326f-6ff7-409f-848a-1f296e6e3cc8`):
+
+| Sitio Operativo (`groups.title`) | Capacidad Diaria (Jornales / Día) | Fuente |
+| :--- | :---: | :---: |
+| **CENTRO GASTRONÓMICO** | **13.52** | COSTOS GENERALES V3 |
+| **MIRAMAR SECTOR EL FARO** | **9.34** | COSTOS GENERALES V3 |
+| **PLAZA PUERTO COLOMBIA** | **8.32** | COSTOS GENERALES V3 |
+| **PLAYA DE SABANILLA 2** | **5.66** | COSTOS GENERALES V3 |
+| **SALINAS DEL REY** | **5.45** | COSTOS GENERALES V3 |
+| **PLAYA DEL COUNTRY** | **5.39** | COSTOS GENERALES V3 |
+| **MANGLARES** | **4.49** | COSTOS GENERALES V3 |
+| **SENDERO SANTA VERÓNICA** | **3.60** | COSTOS GENERALES V3 |
+| **MERCADO LA SAZÓN** | **0.98** | COSTOS GENERALES V3 |
+| **PLAYA PUNTA ASTILLEROS** | *0.00 (Sin Operación, D25)* | N/A |
+
+
 

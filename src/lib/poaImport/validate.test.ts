@@ -345,3 +345,52 @@ describe('validateParsedPoa — actividades sin ninguna zona con cantidad contra
     expect(result.noContratadas).toHaveLength(57);
   });
 });
+
+describe('parsePoaExcel y validateParsedPoa — POA 2026 V.11 a cierre Acta 38 (Jun-2026).xlsx', () => {
+  const v11FilePath = require('path').join(process.cwd(), 'POA 2026 V.11 a cierre Acta 38 (Jun-2026).xlsx');
+
+  function v11ParseResult(): ParseResult {
+    const buffer = require('fs').readFileSync(v11FilePath);
+    return parsePoaExcel(buffer);
+  }
+
+  it('lee 51 actividades, 10 zonas (sin Castillo Salgar), Miramar 1.01 = 29827, Mercado 3.03 = 7648.86, Salinas 3.15 cant 1 frec null, 3.14 con dos zonas', () => {
+    const parseResult = v11ParseResult();
+
+    // 10 zonas (sin Castillo Salgar)
+    expect(parseResult.zonas).toHaveLength(10);
+    expect(parseResult.zonas.some((z) => z.excelZoneName.toUpperCase().includes('CASTILLO SALGAR'))).toBe(false);
+
+    // Actividades parseadas con datos de zona
+    const actsWithZones = parseResult.actividades.filter((a) => a.zonas.length > 0);
+    expect(actsWithZones).toHaveLength(51);
+
+    // Miramar 1.01 = 29827
+    const act101 = actsWithZones.find((a) => a.activityKey === '1.01');
+    expect(act101).toBeDefined();
+    const miramar101 = act101?.zonas.find((z) => z.excelZoneName.toUpperCase().includes('MIRAMAR'));
+    expect(miramar101?.cantidadContratada).toBe(29827);
+
+    // Mercado 3.03 = 7648.86
+    const act303 = actsWithZones.find((a) => a.activityKey === '3.03');
+    expect(act303).toBeDefined();
+    const mercado303 = act303?.zonas.find((z) => z.excelZoneName.toUpperCase().includes('MERCADO LA SAZÓN'));
+    expect(mercado303?.cantidadContratada).toBeCloseTo(7648.86, 2);
+
+    // Salinas 3.15 cantidad 1 y frecuencia null
+    const act315 = actsWithZones.find((a) => a.activityKey === '3.15');
+    expect(act315).toBeDefined();
+    const salinas315 = act315?.zonas.find((z) => z.excelZoneName.toUpperCase().includes('SALINAS'));
+    expect(salinas315?.cantidadContratada).toBe(1);
+    const salinas315Frec = act315?.frecuenciasPorZona.find((f) => f.excelZoneName.toUpperCase().includes('SALINAS'));
+    expect(salinas315Frec?.frecuencia).toBeNull();
+
+    // 3.14 con las dos zonas (CENTRO GASTRONÓMICO y MERCADO LA SAZÓN)
+    const act314 = actsWithZones.find((a) => a.activityKey === '3.14');
+    expect(act314).toBeDefined();
+    expect(act314?.zonas).toHaveLength(2);
+    expect(act314?.zonas.some((z) => z.excelZoneName.toUpperCase().includes('CENTRO GASTRONOMICO'))).toBe(true);
+    expect(act314?.zonas.some((z) => z.excelZoneName.toUpperCase().includes('MERCADO LA SAZÓN'))).toBe(true);
+  });
+});
+

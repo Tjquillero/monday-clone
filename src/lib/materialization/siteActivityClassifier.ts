@@ -24,6 +24,7 @@ export interface ActivityProcessingDetail {
   planned_qty?: number;
   planned_frecuencia?: number | null;
   planned_rendimiento?: number | null;
+  planned_jr?: number;
 }
 
 export interface SiteMaterializationSummaryPayload {
@@ -54,10 +55,17 @@ export interface SiteMaterializationSummaryPayload {
   };
 }
 
+export interface SiteOperationalFrequencyConfig {
+  visits_per_month: number;
+  source: 'CRONOGRAMA' | 'POA';
+  qty_mode?: 'FULL' | 'SPLIT';
+  rendimiento?: number | null;
+}
+
 export interface ActivityClassificationContext {
   poaActivitiesMap: Map<string, { id: string; frecuencia: number | null }>;
   poaZoneQtyMap: Map<string, number>;
-  operationalFreqMap: Map<string, { visits_per_month: number; source: 'CRONOGRAMA' | 'POA' }>;
+  operationalFreqMap: Map<string, SiteOperationalFrequencyConfig>;
   hasZoneScopeData: boolean;
   allBoardStandards: Array<{
     id: string;
@@ -263,7 +271,17 @@ export function classifySiteActivities(
       }
     }
 
-    // 6. Con frecuencia operativa: si requiere_rendimiento = false -> MATERIALIZED sin jornales (D20)
+    // 6. Con frecuencia operativa: calcular cantidad efectiva (D21: SPLIT) y rendimiento efectivo (D23: Override)
+    const isSplit = opFreq.qty_mode === 'SPLIT';
+    const effectiveQty = isSplit && opFreq.visits_per_month > 0
+      ? Number((cantidad / opFreq.visits_per_month).toFixed(2))
+      : cantidad;
+
+    const overrideRend = opFreq.rendimiento !== undefined && opFreq.rendimiento !== null ? Number(opFreq.rendimiento) : null;
+    const effectiveRend = (overrideRend !== null && Number.isFinite(overrideRend) && overrideRend > 0)
+      ? overrideRend
+      : Number(matchedStd.rendimiento);
+
     if (matchedStd.requiere_rendimiento === false) {
       materializedCount++;
       templates.push({
@@ -274,7 +292,7 @@ export function classifySiteActivities(
         unit: matchedStd.unit,
         rendimiento: null as any,
         frecuencia: opFreq.visits_per_month,
-        cantidad,
+        cantidad: effectiveQty,
         priority: matchedStd.priority || 'must_execute',
       });
 
@@ -282,27 +300,27 @@ export function classifySiteActivities(
         activity_key: activityKey,
         action: 'MATERIALIZED',
         frequency_source: opFreq.source,
-        planned_qty: cantidad,
+        planned_qty: effectiveQty,
         planned_frecuencia: opFreq.visits_per_month,
         planned_rendimiento: null,
+        planned_jr: 0,
       });
       continue;
     }
 
     // 7. requiere_rendimiento = true: validar rendimiento > 0
-    const rend = Number(matchedStd.rendimiento);
-    if (!Number.isFinite(rend) || rend <= 0) {
+    if (!Number.isFinite(effectiveRend) || effectiveRend <= 0) {
       excludedMissingRendimientoCount++;
-      const reason = `Actividad sin rendimiento válido (> 0) en catálogo técnico: ${matchedStd.rendimiento}`;
+      const reason = `Actividad sin rendimiento válido (> 0) en catálogo técnico o override: ${effectiveRend}`;
       partialReasons.push(`${activityKey}: ${reason}`);
       activitiesDetail.push({
         activity_key: activityKey,
         action: 'EXCLUDED_MISSING_RENDIMIENTO',
         reason,
         frequency_source: opFreq.source,
-        planned_qty: cantidad,
+        planned_qty: effectiveQty,
         planned_frecuencia: opFreq.visits_per_month,
-        planned_rendimiento: rend,
+        planned_rendimiento: effectiveRend,
       });
       continue;
     }
@@ -315,19 +333,22 @@ export function classifySiteActivities(
       name: matchedStd.name,
       zone: matchedStd.category || 'Zona Verde',
       unit: matchedStd.unit,
-      rendimiento: rend,
+      rendimiento: effectiveRend,
       frecuencia: opFreq.visits_per_month,
-      cantidad,
+      cantidad: effectiveQty,
       priority: matchedStd.priority || 'must_execute',
     });
+
+    const calculatedJr = effectiveRend > 0 ? Number((effectiveQty / effectiveRend).toFixed(4)) : 0;
 
     activitiesDetail.push({
       activity_key: activityKey,
       action: 'MATERIALIZED',
       frequency_source: opFreq.source,
-      planned_qty: cantidad,
+      planned_qty: effectiveQty,
       planned_frecuencia: opFreq.visits_per_month,
-      planned_rendimiento: rend,
+      planned_rendimiento: effectiveRend,
+      planned_jr: calculatedJr,
     });
   }
 

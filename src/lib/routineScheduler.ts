@@ -233,7 +233,9 @@ export function generateRoutineScheduleForWeek(
       targetDaysOfWeek = [getDeterministicDayOfWeek(template.activity_key, template.preferred_days)];
     }
 
-    // Programar en los días calculados; si cae en festivo no se programa (se omite, no se corre)
+    // Programar en los días calculados (D26: no diarias se reubican si caen en festivo; diarias se omiten)
+    const isDaily = freq >= 25;
+
     targetDaysOfWeek.forEach((dow) => {
       const wd = weekDays.find((d) => d.dayOfWeek === dow);
       if (wd && wd.isWorking) {
@@ -248,6 +250,28 @@ export function generateRoutineScheduleForWeek(
           theoretical_jr: theoreticalJr,
           frequency_interval: freq,
         });
+      } else if (wd && !wd.isWorking && !isDaily) {
+        // D26: Visita no diaria (< 25) que cae en festivo pasa al siguiente día hábil de la misma semana (lun–sáb); si no hay, al anterior
+        let targetWorkingDay = weekDays.find((d) => d.dayOfWeek > dow && d.dayOfWeek <= 6 && d.isWorking);
+        if (!targetWorkingDay) {
+          const prevWorkingDays = weekDays.filter((d) => d.dayOfWeek < dow && d.dayOfWeek >= 1 && d.isWorking);
+          if (prevWorkingDays.length > 0) {
+            targetWorkingDay = prevWorkingDays[prevWorkingDays.length - 1];
+          }
+        }
+        if (targetWorkingDay) {
+          assignments.push({
+            dateStr: targetWorkingDay.dateStr,
+            dayOfWeek: targetWorkingDay.dayOfWeek,
+            activity_key: template.activity_key,
+            name: template.name,
+            zone: template.zone,
+            unit: template.unit,
+            cantidad: template.cantidad,
+            theoretical_jr: theoreticalJr,
+            frequency_interval: freq,
+          });
+        }
       }
     });
   });

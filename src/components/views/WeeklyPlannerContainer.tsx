@@ -70,7 +70,7 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
   );
 
   // Motor de cálculo — produce WeeklyPlanningContext determinista
-  const { plan, missingStandards, isLoading, isError, error } = useWeeklyPlan(boardId, group, weekStart);
+  const { plan, missingStandards, isLoading, isError, error, notOperational } = useWeeklyPlan(boardId, group, weekStart);
 
   // Planes persistidos para este grupo — cache hit si el board ya cargó
   const { data: savedPlans } = useWeeklyPlans(boardId, validSelectedGroup?.id);
@@ -200,6 +200,7 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
       isLoading={isLoading}
       isError={isError}
       error={error}
+      notOperational={notOperational}
       group={group}
       weekStart={weekStart}
       savedPlan={savedPlan}

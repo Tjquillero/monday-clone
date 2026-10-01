@@ -24,7 +24,7 @@ import type {
   ZoneFrecuenciaRaw,
 } from './types';
 
-const SHEET_NAME = 'POA INICIAL 2026';
+const CANDIDATE_SHEET_NAMES = ['POA INICIAL 2026', 'POA 2026 - Acta 37 (Jun)'];
 const ZONE_HEADER_SUFFIXES = ['(cantidad presupuesto mes)', '(presupuesto mes)'];
 const EXCLUDED_ZONE_NAMES = ['CASTILLO SALGAR'];
 const ACTIVITY_CODE_PATTERN = /^\d+\.\d+$/;
@@ -113,20 +113,31 @@ function locateZoneColumns(zoneRow: unknown[], subHeaderRow: unknown[]): ZoneCol
 }
 
 /**
- * Parsea el Excel oficial del POA (hoja "POA INICIAL 2026") a un modelo
+ * Parsea el Excel oficial del POA (hojas candidatas aceptadas) a un modelo
  * intermedio. Lanza PoaExcelStructureError si el layout no es reconocible —
  * nunca produce datos parcialmente desalineados en silencio.
  */
 export function parsePoaExcel(fileData: ArrayBuffer | Uint8Array): ParseResult {
   const bytes = fileData instanceof Uint8Array ? fileData : new Uint8Array(fileData);
   const workbook = XLSX.read(bytes, { type: 'array' });
-  const sheetName = workbook.SheetNames.find((n) => n.trim() === SHEET_NAME);
-  if (!sheetName) {
+
+  const matchingSheets = workbook.SheetNames.filter((name) =>
+    CANDIDATE_SHEET_NAMES.includes(name.trim()),
+  );
+
+  if (matchingSheets.length === 0) {
     throw new PoaExcelStructureError(
-      `No se encontró la hoja "${SHEET_NAME}" en el archivo. Hojas disponibles: ${workbook.SheetNames.join(', ')}`,
+      `No se encontró la hoja candidata (${CANDIDATE_SHEET_NAMES.map((s) => `"${s}"`).join(', ')}) en el archivo. Hojas disponibles: ${workbook.SheetNames.join(', ')}`,
     );
   }
 
+  if (matchingSheets.length > 1) {
+    throw new PoaExcelStructureError(
+      `Se encontraron múltiples hojas candidatas (${matchingSheets.map((s) => `"${s}"`).join(', ')}). Hojas disponibles: ${workbook.SheetNames.join(', ')}`,
+    );
+  }
+
+  const sheetName = matchingSheets[0];
   const sheet = workbook.Sheets[sheetName];
   const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: null });
 
@@ -203,15 +214,45 @@ export function parsePoaExcel(fileData: ArrayBuffer | Uint8Array): ParseResult {
       frecuenciasPorZona.push({ excelZoneName: z.excelZoneName, frecuencia, excelFrecCell });
     }
 
-    actividades.push({
-      activityKey,
-      descripcion,
-      unidad,
-      precioUnitario,
-      zonas,
-      frecuenciasPorZona,
-      excelRow,
-    });
+    const existingActIdx = actividades.findIndex((a) => a.activityKey === activityKey);
+    if (existingActIdx >= 0) {
+      const existingAct = actividades[existingActIdx];
+      // Validar si alguna zona ya tiene cantidad en la fila previa
+      for (const newZone of zonas) {
+        const duplicateZone = existingAct.zonas.find((z) => z.excelZoneName === newZone.excelZoneName);
+        if (duplicateZone) {
+          throw new PoaExcelStructureError(
+            `Código repetido "${activityKey}" tiene cantidad duplicada para la zona "${newZone.excelZoneName}" (filas ${existingAct.excelRow} y ${excelRow}).`,
+          );
+        }
+      }
+
+      // Unir zonas
+      existingAct.zonas.push(...zonas);
+
+      // Unir frecuenciasPorZona
+      for (const newFrec of frecuenciasPorZona) {
+        const existingFrec = existingAct.frecuenciasPorZona.find((f) => f.excelZoneName === newFrec.excelZoneName);
+        if (!existingFrec) {
+          existingAct.frecuenciasPorZona.push(newFrec);
+        }
+      }
+
+      // Complementar campos descriptivos si faltaban
+      if (!existingAct.descripcion && descripcion) existingAct.descripcion = descripcion;
+      if (!existingAct.unidad && unidad) existingAct.unidad = unidad;
+      if (existingAct.precioUnitario === null && precioUnitario !== null) existingAct.precioUnitario = precioUnitario;
+    } else {
+      actividades.push({
+        activityKey,
+        descripcion,
+        unidad,
+        precioUnitario,
+        zonas,
+        frecuenciasPorZona,
+        excelRow,
+      });
+    }
   }
 
   return { sheetName: sheetName.trim(), zonas: zoneCols, actividades, warnings };

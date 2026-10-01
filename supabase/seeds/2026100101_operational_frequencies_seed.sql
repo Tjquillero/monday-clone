@@ -61,14 +61,13 @@ BEGIN
         WHEN pa.activity_key = '1.12' THEN
           CASE
             WHEN g.title ILIKE '%COUNTRY%' OR g.title ILIKE '%SABANILLA%' OR g.title ILIKE '%MIRAMAR%' THEN 6::NUMERIC
-            WHEN g.title ILIKE '%PLAZA%' OR g.title ILIKE '%PUERTO COLOMBIA%' OR g.title ILIKE '%MANGLARES%' OR g.title ILIKE '%SALINAS%' OR g.title ILIKE '%ASTILLEROS%' THEN 4::NUMERIC
+            WHEN g.title ILIKE '%PLAZA%' OR g.title ILIKE '%PUERTO COLOMBIA%' OR g.title ILIKE '%MANGLARES%' OR g.title ILIKE '%SALINAS%' THEN 4::NUMERIC
             ELSE NULL
           END
         WHEN pa.activity_key = '1.13' THEN
           CASE
             WHEN g.title ILIKE '%COUNTRY%' OR g.title ILIKE '%SABANILLA%' OR g.title ILIKE '%MIRAMAR%' OR g.title ILIKE '%SALINAS%' THEN 4::NUMERIC
             WHEN g.title ILIKE '%PLAZA%' OR g.title ILIKE '%PUERTO COLOMBIA%' OR g.title ILIKE '%MANGLARES%' THEN 2::NUMERIC
-            WHEN g.title ILIKE '%ASTILLEROS%' THEN 1::NUMERIC
             ELSE NULL
           END
         WHEN pa.activity_key IN ('2.02', '2.15', '2.17', '2.19', '2.2', '2.20', '3.01', '3.02', '3.05', '3.07', '3.08', '3.09', '3.11', '3.12', '3.13') THEN 1::NUMERIC
@@ -97,6 +96,7 @@ BEGIN
     JOIN public.poa p ON p.id = pv.poa_id AND p.board_id = v_board_id
     JOIN public.groups g ON g.id = paz.zone_id
     WHERE paz.cantidad_contratada > 0
+      AND g.title NOT ILIKE '%ASTILLERO%'
   )
   INSERT INTO public.operational_frequencies (board_id, group_id, activity_key, visits_per_month, source)
   SELECT 

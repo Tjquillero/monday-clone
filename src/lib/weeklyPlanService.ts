@@ -28,6 +28,7 @@ export interface SyncWeeklyPlanResult {
   cancelledCount: number;
   protectedCount: number;
   totalItems: number;
+  notOperational?: boolean;
 }
 
 /**

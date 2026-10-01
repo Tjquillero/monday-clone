@@ -600,5 +600,363 @@ describe('Gobernanza D19: Frecuencia Operativa y Despacho Semanal', () => {
       expect(item.planned_jr).toBe(0);
     });
   });
+
+  describe('6. Gobernanza D21–D26: Parámetros Operativos por Sitio (GATE FREQ-OP-02)', () => {
+    test('D21 (SPLIT): 6726 m² / 25 visitas / rend 300 → planned_qty = 269.04 m² y planned_jr = 0.8968 jr', () => {
+      const poaZoneQtyMap = new Map<string, number>([['3.06', 6726]]);
+      const poaActivitiesMap = new Map<string, any>([['3.06', { id: 'pa_306', frecuencia: 25 }]]);
+      const allBoardStandards = [
+        { id: 'std_306', activity_key: '3.06', name: 'Mármol', unit: 'M2', category: 'Zona', rendimiento: 100, requiere_rendimiento: true },
+      ];
+      const operationalFreqMap = new Map<string, any>([
+        ['3.06', { activity_key: '3.06', visits_per_month: 25, source: 'CRONOGRAMA', qty_mode: 'SPLIT', rendimiento: 300 }],
+      ]);
+
+      const result = classifySiteActivities(
+        boardId,
+        siteId,
+        '2026-09-28',
+        {
+          poaZoneQtyMap,
+          poaActivitiesMap,
+          allBoardStandards,
+          operationalFreqMap,
+          hasZoneScopeData: true,
+        }
+      );
+
+      expect(result.status).toBe('SUCCESS');
+      expect(result.summary.materialized_count).toBe(1);
+      const detail = result.summary.activities_detail.find((a) => a.activity_key === '3.06');
+      expect(detail).toBeDefined();
+      expect(detail?.action).toBe('MATERIALIZED');
+      expect(detail?.planned_qty).toBe(269.04);
+      expect(detail?.planned_rendimiento).toBe(300);
+      expect(detail?.planned_jr).toBe(0.8968);
+    });
+
+    test('D23: Override de rendimiento por sitio vs catálogo estándar', () => {
+      const poaZoneQtyMap = new Map<string, number>([
+        ['1.01', 30000],
+        ['2.01', 1000],
+      ]);
+      const poaActivitiesMap = new Map<string, any>([
+        ['1.01', { id: 'pa_101', frecuencia: 25 }],
+        ['2.01', { id: 'pa_201', frecuencia: 25 }],
+      ]);
+      const allBoardStandards = [
+        { id: 'std_101', activity_key: '1.01', name: 'Corte', unit: 'M2', category: 'Zona', rendimiento: 1000, requiere_rendimiento: true },
+        { id: 'std_201', activity_key: '2.01', name: 'Poda', unit: 'M2', category: 'Zona', rendimiento: 500, requiere_rendimiento: true },
+      ];
+      const operationalFreqMap = new Map<string, any>([
+        // 1.01 tiene override a 3000
+        ['1.01', { activity_key: '1.01', visits_per_month: 25, source: 'CRONOGRAMA', qty_mode: 'FULL', rendimiento: 3000 }],
+        // 2.01 no tiene override (rendimiento null)
+        ['2.01', { activity_key: '2.01', visits_per_month: 25, source: 'CRONOGRAMA', qty_mode: 'FULL', rendimiento: null }],
+      ]);
+
+      const result = classifySiteActivities(
+        boardId,
+        siteId,
+        '2026-09-28',
+        {
+          poaZoneQtyMap,
+          poaActivitiesMap,
+          allBoardStandards,
+          operationalFreqMap,
+          hasZoneScopeData: true,
+        }
+      );
+
+      const d101 = result.summary.activities_detail.find((a) => a.activity_key === '1.01');
+      expect(d101?.planned_rendimiento).toBe(3000); // Usa override
+      expect(d101?.planned_jr).toBe(10); // 30000 / 3000
+
+      const d201 = result.summary.activities_detail.find((a) => a.activity_key === '2.01');
+      expect(d201?.planned_rendimiento).toBe(500); // Usa catálogo
+      expect(d201?.planned_jr).toBe(2); // 1000 / 500
+    });
+
+    test('D25: Sitio sin filas en operational_frequencies produce SITE_NOT_OPERATIONAL sin escrituras', async () => {
+      let loggedEvents: any[] = [];
+      const mockSupabase: any = {
+        from: jest.fn((table: string) => {
+          if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
+          if (table === 'poa_versions') {
+            return createMockQuery([{ id: 'ver_1', poa_id: 'poa_1', status: 'active', poa: { id: 'poa_1', board_id: boardId } }]);
+          }
+          if (table === 'poa_activities') {
+            return createMockQuery([{ id: 'pa_1', poa_version_id: 'ver_1', activity_key: '1.01', frecuencia: 25 }]);
+          }
+          if (table === 'poa_activity_zones') {
+            return createMockQuery([{ id: 'paz_1', poa_activity_id: 'pa_1', zone_id: 'group_astilleros', cantidad_contratada: 5000 }]);
+          }
+          if (table === 'board_activity_standards') {
+            return createMockQuery([{ id: 'std_1', activity_key: '1.01', name: 'Corte', unit: 'M2', rendimiento: 1000, requiere_rendimiento: true }]);
+          }
+          if (table === 'operational_frequencies') {
+            return createMockQuery([]); // 0 filas para Astilleros
+          }
+          if (table === 'site_daily_capacity') {
+            return createMockQuery(null);
+          }
+          return createMockQuery([]);
+        }),
+        rpc: jest.fn((fn: string, params: any) => {
+          if (fn === 'log_materialization_event_rpc') {
+            loggedEvents.push(params);
+            return Promise.resolve({ data: 'evt_1', error: null });
+          }
+          return Promise.resolve({ data: null, error: null });
+        }),
+      };
+
+      const result = await ensureWeeklyPlanMaterialized(
+        mockSupabase,
+        boardId,
+        'group_astilleros',
+        '2026-09-28'
+      );
+
+      expect(result.totalItems).toBe(0);
+      expect(result.notOperational).toBe(true);
+      const summaryEvt = loggedEvents.find((e) => e.p_event_type === 'SITE_MATERIALIZATION_SUMMARY');
+      expect(summaryEvt).toBeDefined();
+      expect(summaryEvt.p_status).toBe('SUCCESS');
+      expect(summaryEvt.p_payload.error?.code).toBe('SITE_NOT_OPERATIONAL');
+    });
+
+    test('D26: Festivo no diario (< 25 visits) pasa al siguiente día hábil en la misma semana (o anterior); festivo diario se omite', () => {
+      // Semana del 2026-06-15 (Lunes 15 de Junio es festivo Sagrado Corazón en Colombia)
+      // Días hábiles lun-sáb: Mar 16, Mié 17, Jue 18, Vie 19, Sáb 20.
+      const weekStart = '2026-06-15';
+
+      // 1. Actividad NO diaria (12 visitas/mes → normalmente Lun, Mié, Vie)
+      // Lunes 15 es festivo → debe moverse al siguiente hábil (Martes 16)
+      const tmplNonDaily: RoutineBaseTemplate = {
+        id: 'tmpl_12',
+        activity_key: '2.16',
+        name: 'Lavado',
+        zone: 'Zona',
+        unit: 'M2',
+        rendimiento: 1000,
+        frecuencia: 12,
+        cantidad: 1000,
+      };
+
+      const scheduleNonDaily = generateRoutineScheduleForWeek([tmplNonDaily], weekStart, []);
+      const nonDailyDays = scheduleNonDaily.assignments.map((a) => a.dateStr);
+      expect(nonDailyDays).toEqual([
+        '2026-06-16', // Movido de Lun 15 a Mar 16
+        '2026-06-17', // Mié 17
+        '2026-06-19', // Vie 19
+      ]);
+      expect(nonDailyDays.length).toBe(3); // Mantiene las 3 visitas
+
+      // 2. Actividad diaria (25 visitas/mes → Lun-Sáb)
+      // Lunes 15 es festivo → se omite (no se corre), quedan 5 días
+      const tmplDaily: RoutineBaseTemplate = {
+        id: 'tmpl_25',
+        activity_key: '1.01',
+        name: 'Corte',
+        zone: 'Zona',
+        unit: 'M2',
+        rendimiento: 1000,
+        frecuencia: 25,
+        cantidad: 1000,
+      };
+
+      const scheduleDaily = generateRoutineScheduleForWeek([tmplDaily], weekStart, []);
+      const dailyDays = scheduleDaily.assignments.map((a) => a.dateStr);
+      expect(dailyDays).toEqual([
+        '2026-06-16', // Mar
+        '2026-06-17', // Mié
+        '2026-06-18', // Jue
+        '2026-06-19', // Vie
+        '2026-06-20', // Sáb
+      ]);
+      expect(dailyDays.length).toBe(5); // Omitido el festivo
+    });
+
+    test('D24: Capacidad diaria por sitio se evalúa sin bloquear y se reporta en evento de resumen', async () => {
+      let loggedEvents: any[] = [];
+      const mockSupabase: any = {
+        from: jest.fn((table: string) => {
+          if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
+          if (table === 'poa_versions') {
+            return createMockQuery([{ id: 'ver_1', poa_id: 'poa_1', status: 'active', poa: { id: 'poa_1', board_id: boardId } }]);
+          }
+          if (table === 'poa_activities') {
+            return createMockQuery([{ id: 'pa_101', poa_version_id: 'ver_1', activity_key: '1.01', frecuencia: 25 }]);
+          }
+          if (table === 'poa_activity_zones') {
+            return createMockQuery([
+              { id: 'paz_101', poa_activity_id: 'pa_101', zone_id: 'group_d24_test', cantidad_contratada: 5000 },
+            ]);
+          }
+          if (table === 'board_activity_standards') {
+            return createMockQuery([
+              { id: 'std_101', activity_key: '1.01', name: 'Corte', unit: 'M2', category: 'Zona', rendimiento: 1000, requiere_rendimiento: true },
+            ]);
+          }
+          if (table === 'operational_frequencies') {
+            return createMockQuery([
+              { activity_key: '1.01', visits_per_month: 25, source: 'CRONOGRAMA', qty_mode: 'FULL', rendimiento: 1000 },
+            ]);
+          }
+          if (table === 'site_daily_capacity') {
+            return createMockQuery({ jornales_dia: 2.0, source: 'COSTOS GENERALES V3' });
+          }
+          return createMockQuery([]);
+        }),
+        rpc: jest.fn((name: string, params: any) => {
+          if (name === 'ensure_weekly_plan_header') {
+            return Promise.resolve({ data: 'plan_d24_test', error: null });
+          }
+          if (name === 'sync_weekly_plan_items_rpc') {
+            return Promise.resolve({
+              data: [
+                { id: 'item_1', planned_sequence: 1 },
+                { id: 'item_2', planned_sequence: 2 },
+                { id: 'item_3', planned_sequence: 3 },
+                { id: 'item_4', planned_sequence: 4 },
+                { id: 'item_5', planned_sequence: 5 },
+                { id: 'item_6', planned_sequence: 6 },
+              ],
+              error: null,
+            });
+          }
+          if (name === 'log_materialization_event_rpc') {
+            loggedEvents.push(params);
+            return Promise.resolve({ data: 'evt_1', error: null });
+          }
+          return Promise.resolve({ data: null, error: null });
+        }),
+      };
+
+      const result = await ensureWeeklyPlanMaterialized(
+        mockSupabase,
+        boardId,
+        'group_d24_test',
+        '2026-09-28'
+      );
+
+      expect(result.totalItems).toBe(6);
+      // Cada día tiene 5000 / 1000 = 5.0 jornales > capacidad 2.0
+      const summaryEvt = loggedEvents.find((e) => e.p_event_type === 'SITE_MATERIALIZATION_SUMMARY');
+      expect(summaryEvt).toBeDefined();
+      expect(summaryEvt.p_payload.site_daily_capacity).toBe(2.0);
+      expect(summaryEvt.p_payload.capacity_exceeded).toBe(true);
+      expect(summaryEvt.p_payload.exceeded_capacity_days.length).toBeGreaterThan(0);
+    });
+
+    test('D24: Fallo de lectura de site_daily_capacity no bloquea la materialización', async () => {
+      let loggedEvents: any[] = [];
+      const mockSupabase: any = {
+        from: jest.fn((table: string) => {
+          if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
+          if (table === 'poa_versions') {
+            return createMockQuery([{ id: 'ver_1', poa_id: 'poa_1', status: 'active', poa: { id: 'poa_1', board_id: boardId } }]);
+          }
+          if (table === 'poa_activities') {
+            return createMockQuery([{ id: 'pa_101', poa_version_id: 'ver_1', activity_key: '1.01', frecuencia: 25 }]);
+          }
+          if (table === 'poa_activity_zones') {
+            return createMockQuery([
+              { id: 'paz_101', poa_activity_id: 'pa_101', zone_id: 'group_d24_test', cantidad_contratada: 5000 },
+            ]);
+          }
+          if (table === 'board_activity_standards') {
+            return createMockQuery([
+              { id: 'std_101', activity_key: '1.01', name: 'Corte', unit: 'M2', category: 'Zona', rendimiento: 1000, requiere_rendimiento: true },
+            ]);
+          }
+          if (table === 'operational_frequencies') {
+            return createMockQuery([
+              { activity_key: '1.01', visits_per_month: 25, source: 'CRONOGRAMA', qty_mode: 'FULL', rendimiento: 1000 },
+            ]);
+          }
+          if (table === 'site_daily_capacity') {
+            return createMockQuery(null, null, { message: 'Connection error' });
+          }
+          return createMockQuery([]);
+        }),
+        rpc: jest.fn((name: string, params: any) => {
+          if (name === 'ensure_weekly_plan_header') {
+            return Promise.resolve({ data: 'plan_d24_test', error: null });
+          }
+          if (name === 'sync_weekly_plan_items_rpc') {
+            return Promise.resolve({
+              data: [
+                { id: 'item_1', planned_sequence: 1 },
+                { id: 'item_2', planned_sequence: 2 },
+                { id: 'item_3', planned_sequence: 3 },
+                { id: 'item_4', planned_sequence: 4 },
+                { id: 'item_5', planned_sequence: 5 },
+                { id: 'item_6', planned_sequence: 6 },
+              ],
+              error: null,
+            });
+          }
+          if (name === 'log_materialization_event_rpc') {
+            loggedEvents.push(params);
+            return Promise.resolve({ data: 'evt_1', error: null });
+          }
+          return Promise.resolve({ data: null, error: null });
+        }),
+      };
+
+      const result = await ensureWeeklyPlanMaterialized(
+        mockSupabase,
+        boardId,
+        'group_d24_test',
+        '2026-09-28'
+      );
+
+      expect(result.totalItems).toBe(6);
+      const summaryEvt = loggedEvents.find((e) => e.p_event_type === 'SITE_MATERIALIZATION_SUMMARY');
+      expect(summaryEvt).toBeDefined();
+      expect(summaryEvt.p_payload.capacity_error).toBeDefined();
+    });
+
+    test('Migración 2026100103 y Semilla 2026100103 existen y cumplen especificación', () => {
+      const migPath = path.resolve(process.cwd(), 'supabase/migrations/2026100103_operational_params.sql');
+      const seedPath = path.resolve(process.cwd(), 'supabase/seeds/2026100103_operational_params_seed.sql');
+      const seed01Path = path.resolve(process.cwd(), 'supabase/seeds/2026100101_operational_frequencies_seed.sql');
+
+      expect(fs.existsSync(migPath)).toBe(true);
+      expect(fs.existsSync(seedPath)).toBe(true);
+      expect(fs.existsSync(seed01Path)).toBe(true);
+
+      const migSql = fs.readFileSync(migPath, 'utf8');
+      expect(migSql).toContain("qty_mode TEXT NOT NULL DEFAULT 'FULL'");
+      expect(migSql).toContain("rendimiento NUMERIC NULL CHECK (rendimiento IS NULL OR rendimiento > 0)");
+      expect(migSql).toContain("CREATE TABLE IF NOT EXISTS public.site_daily_capacity");
+      expect(migSql).toContain("UNIQUE (board_id, group_id)");
+      expect(migSql).toContain("GRANT SELECT ON public.site_daily_capacity TO mantenix_auditor");
+
+      const seedSql = fs.readFileSync(seedPath, 'utf8');
+      expect(seedSql).toContain("3ea0326f-6ff7-409f-848a-1f296e6e3cc8");
+      expect(seedSql).toContain("qty_mode = 'SPLIT'");
+      expect(seedSql).toContain("'1.09', '1.10', '3.06'");
+      expect(seedSql).toContain("COSTOS GENERALES V3");
+      expect(seedSql).toContain("DELETE FROM public.operational_frequencies");
+
+      // Verificaciones estrictas GATE FREQ-OP-02b
+      // 1. Sin FUNCTION dentro del DO
+      expect(seedSql).not.toMatch(/DO\s+\$\$[\s\S]*CREATE\s+(OR\s+REPLACE\s+)?FUNCTION/i);
+      expect(seedSql).not.toMatch(/DO\s+\$\$[\s\S]*\bFUNCTION\b/i);
+      // 2. Sin MIN(id) ni MIN( para UUIDs
+      expect(seedSql).not.toMatch(/MIN\s*\(\s*id\s*\)/i);
+      expect(seedSql).not.toMatch(/MIN\s*\(/i);
+      // 3. Uso de translate(...) para coincidencias insensibles a tildes (sin unaccent)
+      expect(seedSql).toContain("translate(upper(title), 'ÁÉÍÓÚ', 'AEIOU')");
+      expect(seedSql).not.toContain("unaccent");
+
+      const seed01Sql = fs.readFileSync(seed01Path, 'utf8');
+      expect(seed01Sql).toContain("NOT ILIKE '%ASTILLERO%'");
+    });
+  });
 });
+
 
