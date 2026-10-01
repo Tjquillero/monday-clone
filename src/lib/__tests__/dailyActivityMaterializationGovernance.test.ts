@@ -86,6 +86,13 @@ describe('Materialización Gobernada de Actividades Rutinarias v1.0', () => {
           );
         }
 
+        if (table === 'operational_frequencies') {
+          return createChainQuery([
+            { activity_key: 'limpieza_zonas_duras', visits_per_month: 25, source: 'CRONOGRAMA' },
+            { activity_key: 'poda_arboles', visits_per_month: 4, source: 'CRONOGRAMA' },
+          ]);
+        }
+
         if (table === 'weekly_plans') {
           const q: any = {
             select: () => q,

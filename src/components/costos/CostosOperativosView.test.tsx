@@ -193,5 +193,29 @@ describe('CostosOperativosView', () => {
       expect(screen.getByText('N/A')).toBeInTheDocument();
       expect(screen.getByText('18.1')).toBeInTheDocument(); // JR Contractuales sum
     });
+
+    it('D20: cuando una actividad tiene rendimiento = null, muestra — en la columna de rendimiento sin romper la vista', () => {
+      const planWithNullRend = basePlan({
+        activities: [
+          {
+            activity_key: '1.04',
+            name: 'Actividad sin rendimiento',
+            category: 'ZONA VERDE',
+            priority: 'preferred',
+            qty: 500,
+            unit: 'M2',
+            rendimiento: null as any,
+            frecuencia: 1,
+            theoretical_journals_month: 0,
+            theoretical_journals_week: 0,
+            rules: [],
+          },
+        ],
+      });
+      render(<CostosOperativosView {...baseProps({ plan: planWithNullRend })} />);
+      expect(screen.getByText('Actividad sin rendimiento')).toBeInTheDocument();
+      expect(screen.getByText('—')).toBeInTheDocument();
+    });
   });
 });
+

@@ -1,12 +1,11 @@
 /**
- * Routine Maintenance Scheduling Engine (ADR-0007)
+ * Routine Maintenance Scheduling Engine (ADR-0007 / D19)
  * 
- * Computes dynamic weekly and daily projections from routine schedule baselines (Cronograma Base),
- * completely decoupled from contractual POA catalog.
+ * Computes deterministic weekly and daily projections from operational frequencies (visitas/mes),
+ * according to contract and calendar rules (FREQ-OP-01).
  */
 
 import { isColombianHoliday } from './colombianHolidays';
-import { calculateTheoreticalJournals } from './schedulerMath';
 
 export interface RoutineBaseTemplate {
   id: string;
@@ -15,11 +14,12 @@ export interface RoutineBaseTemplate {
   zone: string; // 'Zona Verde' | 'Zona Dura' | 'Zona Playa'
   category?: string;
   unit: string;
-  rendimiento: number; // Physical output per worker-day
-  frecuencia: number; // Interval in working days (1, 2.083, 3.125, 6.25, 12.5, 25)
-  cantidad: number; // Total physical scope for the site
+  rendimiento: number | null; // Rendimiento técnico (> 0 o null si requiere_rendimiento = false)
+  frecuencia: number; // Frecuencia operativa en visitas/mes (25, 12, 8, 6, 4, 2, 1, 0.5, 0.33)
+  cantidad: number; // Cantidad física contratada de la zona
+  priority?: string;
   preferred_days?: number[]; // [1, 3, 5] for Mon, Wed, Fri (1 = Mon, 6 = Sat)
-  pattern_offset?: 'turn_a' | 'turn_b'; // 'turn_a' (Mon/Wed/Fri), 'turn_b' (Tue/Thu/Sat)
+  pattern_offset?: 'turn_a' | 'turn_b';
 }
 
 export interface ExecutionRecord {
@@ -39,7 +39,7 @@ export interface DailyRoutineAssignment {
   unit: string;
   cantidad: number;
   theoretical_jr: number;
-  frequency_interval: number;
+  frequency_interval: number; // visitas/mes
 }
 
 export interface RoutineWeeklyProjection {
@@ -113,13 +113,27 @@ export function addOperationalWorkingDays(
 }
 
 /**
- * Core Routine Scheduler Engine for ADR-0007.
- * Generates deterministic daily and weekly schedule projections from routine baseline templates.
+ * Retorna de forma determinista el día de la semana (1..5: Lunes..Viernes) para actividades de 1 día semanal.
+ */
+export function getDeterministicDayOfWeek(activityKey: string, preferredDays?: number[]): number {
+  if (preferredDays && preferredDays.length > 0 && preferredDays[0] >= 1 && preferredDays[0] <= 6) {
+    return preferredDays[0];
+  }
+  let hash = 0;
+  for (let i = 0; i < activityKey.length; i++) {
+    hash = (hash * 31 + activityKey.charCodeAt(i)) >>> 0;
+  }
+  return (hash % 5) + 1; // 1 = Lunes, 2 = Martes, 3 = Miércoles, 4 = Jueves, 5 = Viernes
+}
+
+/**
+ * Core Routine Scheduler Engine (FREQ-OP-01 / D19).
+ * Generates deterministic daily schedule projections from operational frequency templates (visitas/mes).
  */
 export function generateRoutineScheduleForWeek(
   templates: RoutineBaseTemplate[],
   targetWeekStartInput: Date | string,
-  executionHistory: ExecutionRecord[] = [],
+  _executionHistory: ExecutionRecord[] = [],
   options: SchedulerOptions = {}
 ): RoutineWeeklyProjection {
   const weekStart = parseUTCDate(targetWeekStartInput);
@@ -133,7 +147,7 @@ export function generateRoutineScheduleForWeek(
   const customNonWorkingDays = options.customNonWorkingDays || [];
   const assignments: DailyRoutineAssignment[] = [];
 
-  // Build map of working days for the week
+  // Build map of working days for the week (Monday = index 0 .. Sunday = index 6)
   const weekDays: Array<{ date: Date; dateStr: string; dayOfWeek: number; isWorking: boolean }> = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(weekStart);
@@ -144,116 +158,85 @@ export function generateRoutineScheduleForWeek(
     weekDays.push({ date: d, dateStr, dayOfWeek, isWorking });
   }
 
-  // Helper to check last execution date of an activity
-  const getLastExecutionDate = (activityKey: string): string | null => {
-    const matching = executionHistory
-      .filter((h) => h.activity_key === activityKey && h.status === 'completed')
-      .sort((a, b) => b.execution_date.localeCompare(a.execution_date));
-    return matching.length > 0 ? matching[0].execution_date : null;
-  };
+  // Reglas de calendario mensual D19
+  const mondayDayOfMonth = weekStart.getUTCDate();
+  const mondayMonth = weekStart.getUTCMonth() + 1; // 1 = Enero .. 12 = Diciembre
+  const weekOfMonth = Math.ceil(mondayDayOfMonth / 7);
 
   templates.forEach((template) => {
-    const theoreticalJr = calculateTheoreticalJournals(
-      template.cantidad,
-      template.rendimiento,
-      template.frecuencia,
-      options.workingDaysPerMonth || 25
-    );
+    // planned_jr = cantidad / rendimiento (D19 / D20: 0 si rendimiento es null o <= 0)
+    const theoreticalJr =
+      template.rendimiento !== null &&
+      template.rendimiento !== undefined &&
+      template.rendimiento > 0
+        ? template.cantidad / template.rendimiento
+        : 0;
+    const freq = template.frecuencia; // visitas/mes
 
-    const freq = template.frecuencia;
+    let targetDaysOfWeek: number[] = [];
 
-    // Pattern 1: FRECUENCIA = 1 (Diaria -> Todos los días hábiles de la semana)
-    if (freq === 1) {
-      weekDays.forEach((wd) => {
-        if (wd.isWorking) {
-          assignments.push({
-            dateStr: wd.dateStr,
-            dayOfWeek: wd.dayOfWeek,
-            activity_key: template.activity_key,
-            name: template.name,
-            zone: template.zone,
-            unit: template.unit,
-            cantidad: template.cantidad,
-            theoretical_jr: theoreticalJr,
-            frequency_interval: freq,
-          });
-        }
-      });
+    // Semana 5 (días 29..31): solo se programan actividades con frecuencia >= 4 visitas/mes
+    if (weekOfMonth >= 5 && freq < 4) {
       return;
     }
 
-    // Pattern 2: FRECUENCIA = 2.083 (~3x por semana)
-    if (Math.abs(freq - 2.083) < 0.1) {
-      // Turn A: Lunes (1), Miércoles (3), Viernes (5)
-      // Turn B: Martes (2), Jueves (4), Sábado (6)
-      const targetDays = template.pattern_offset === 'turn_b' ? [2, 4, 6] : [1, 3, 5];
-
-      targetDays.forEach((targetDow) => {
-        const wd = weekDays.find((d) => d.dayOfWeek === targetDow);
-        if (wd && wd.isWorking) {
-          assignments.push({
-            dateStr: wd.dateStr,
-            dayOfWeek: wd.dayOfWeek,
-            activity_key: template.activity_key,
-            name: template.name,
-            zone: template.zone,
-            unit: template.unit,
-            cantidad: template.cantidad,
-            theoretical_jr: theoreticalJr,
-            frequency_interval: freq,
-          });
-        } else if (wd && !wd.isWorking) {
-          // Shift to next available working day in week
-          const fallbackWd = weekDays.find((d) => d.dayOfWeek > targetDow && d.isWorking);
-          if (fallbackWd) {
-            assignments.push({
-              dateStr: fallbackWd.dateStr,
-              dayOfWeek: fallbackWd.dayOfWeek,
-              activity_key: template.activity_key,
-              name: template.name,
-              zone: template.zone,
-              unit: template.unit,
-              cantidad: template.cantidad,
-              theoretical_jr: theoreticalJr,
-              frequency_interval: freq,
-            });
-          }
-        }
-      });
-      return;
+    // 1. Frecuencia 25 visitas/mes -> Lunes a Sábado (1, 2, 3, 4, 5, 6)
+    if (Math.abs(freq - 25) < 0.1) {
+      targetDaysOfWeek = [1, 2, 3, 4, 5, 6];
     }
-
-    // Pattern 3: FRECUENCIA = 3.125 (~2x por semana)
-    if (Math.abs(freq - 3.125) < 0.1) {
-      const targetDays = [2, 5]; // Martes & Viernes
-      targetDays.forEach((targetDow) => {
-        const wd = weekDays.find((d) => d.dayOfWeek === targetDow && d.isWorking);
-        if (wd) {
-          assignments.push({
-            dateStr: wd.dateStr,
-            dayOfWeek: wd.dayOfWeek,
-            activity_key: template.activity_key,
-            name: template.name,
-            zone: template.zone,
-            unit: template.unit,
-            cantidad: template.cantidad,
-            theoretical_jr: theoreticalJr,
-            frequency_interval: freq,
-          });
-        }
-      });
-      return;
+    // 2. Frecuencia 12 visitas/mes -> Lunes, Miércoles, Viernes (1, 3, 5) o Martes, Jueves, Sábado (turn_b)
+    else if (Math.abs(freq - 12) < 0.1) {
+      targetDaysOfWeek = template.pattern_offset === 'turn_b' ? [2, 4, 6] : [1, 3, 5];
     }
-
-    // Pattern 4: FRECUENCIA = 6.25 (~Semanal, 1 vez a la semana, ej. Viernes)
-    if (Math.abs(freq - 6.25) < 0.1) {
-      const preferredDay = template.preferred_days && template.preferred_days.length > 0 ? template.preferred_days[0] : 5; // Default Friday
-      let wd = weekDays.find((d) => d.dayOfWeek === preferredDay && d.isWorking);
-      if (!wd) {
-        // Fallback to first available working day in week
-        wd = weekDays.find((d) => d.isWorking);
+    // 3. Frecuencia 8 visitas/mes -> Martes, Jueves (2, 4)
+    else if (Math.abs(freq - 8) < 0.1) {
+      targetDaysOfWeek = [2, 4];
+    }
+    // 4. Frecuencia 6 visitas/mes -> Martes y Jueves (semanas 1, 3, 5) / Miércoles (semanas 2, 4)
+    else if (Math.abs(freq - 6) < 0.1) {
+      if (weekOfMonth % 2 === 1) {
+        targetDaysOfWeek = [2, 4]; // Martes y Jueves en semanas 1, 3, 5
+      } else {
+        targetDaysOfWeek = [3]; // Miércoles en semanas 2 y 4
       }
-      if (wd) {
+    }
+    // 5. Frecuencia 4 visitas/mes -> 1 día por semana (todas las semanas)
+    else if (Math.abs(freq - 4) < 0.1) {
+      targetDaysOfWeek = [getDeterministicDayOfWeek(template.activity_key, template.preferred_days)];
+    }
+    // 6. Frecuencia 2 visitas/mes -> Semanas 1 y 3
+    else if (Math.abs(freq - 2) < 0.1) {
+      if (weekOfMonth === 1 || weekOfMonth === 3) {
+        targetDaysOfWeek = [getDeterministicDayOfWeek(template.activity_key, template.preferred_days)];
+      }
+    }
+    // 7. Frecuencia 1 visita/mes -> Semana 2
+    else if (Math.abs(freq - 1) < 0.1) {
+      if (weekOfMonth === 2) {
+        targetDaysOfWeek = [getDeterministicDayOfWeek(template.activity_key, template.preferred_days)];
+      }
+    }
+    // 8. Frecuencia 0.5 visitas/mes -> Semana 3 en meses pares
+    else if (Math.abs(freq - 0.5) < 0.05) {
+      if (weekOfMonth === 3 && mondayMonth % 2 === 0) {
+        targetDaysOfWeek = [getDeterministicDayOfWeek(template.activity_key, template.preferred_days)];
+      }
+    }
+    // 9. Frecuencia 0.33 visitas/mes -> Semana 4 en meses con (mes % 3 = 1) (Ene, Abr, Jul, Oct)
+    else if (Math.abs(freq - 0.33) < 0.05 || Math.abs(freq - 1 / 3) < 0.05) {
+      if (weekOfMonth === 4 && mondayMonth % 3 === 1) {
+        targetDaysOfWeek = [getDeterministicDayOfWeek(template.activity_key, template.preferred_days)];
+      }
+    }
+    // Fallback para otras frecuencias >= 4 -> 1 día por semana
+    else if (freq >= 4) {
+      targetDaysOfWeek = [getDeterministicDayOfWeek(template.activity_key, template.preferred_days)];
+    }
+
+    // Programar en los días calculados; si cae en festivo no se programa (se omite, no se corre)
+    targetDaysOfWeek.forEach((dow) => {
+      const wd = weekDays.find((d) => d.dayOfWeek === dow);
+      if (wd && wd.isWorking) {
         assignments.push({
           dateStr: wd.dateStr,
           dayOfWeek: wd.dayOfWeek,
@@ -266,122 +249,10 @@ export function generateRoutineScheduleForWeek(
           frequency_interval: freq,
         });
       }
-      return;
-    }
-
-    // Pattern 5: FRECUENCIA = 12.5 (~Quincenal, 1 vez cada 2 semanas)
-    if (Math.abs(freq - 12.5) < 0.5) {
-      const lastExec = getLastExecutionDate(template.activity_key);
-      let isDueThisWeek = false;
-
-      if (!lastExec) {
-        // If no execution history, check template preferred week or default to week assignment
-        isDueThisWeek = true;
-      } else {
-        const nextEligible = addOperationalWorkingDays(lastExec, freq, customNonWorkingDays);
-        const nextEligibleStr = formatDateISO(nextEligible);
-        isDueThisWeek = nextEligibleStr <= weekEndStr;
-      }
-
-      if (isDueThisWeek) {
-        const preferredDay = template.preferred_days && template.preferred_days.length > 0 ? template.preferred_days[0] : 4; // Default Thursday/Saturday
-        let wd = weekDays.find((d) => d.dayOfWeek === preferredDay && d.isWorking);
-        if (!wd) {
-          wd = weekDays.find((d) => d.isWorking);
-        }
-        if (wd) {
-          assignments.push({
-            dateStr: wd.dateStr,
-            dayOfWeek: wd.dayOfWeek,
-            activity_key: template.activity_key,
-            name: template.name,
-            zone: template.zone,
-            unit: template.unit,
-            cantidad: template.cantidad,
-            theoretical_jr: theoreticalJr,
-            frequency_interval: freq,
-          });
-        }
-      }
-      return;
-    }
-
-    // Pattern 6: FRECUENCIA = 25 (~Mensual, 1 vez al mes)
-    if (Math.abs(freq - 25) < 1) {
-      const lastExec = getLastExecutionDate(template.activity_key);
-      let isDueThisWeek = false;
-
-      if (!lastExec) {
-        isDueThisWeek = true;
-      } else {
-        const nextEligible = addOperationalWorkingDays(lastExec, freq, customNonWorkingDays);
-        const nextEligibleStr = formatDateISO(nextEligible);
-        isDueThisWeek = nextEligibleStr <= weekEndStr;
-      }
-
-      if (isDueThisWeek) {
-        const preferredDay = template.preferred_days && template.preferred_days.length > 0 ? template.preferred_days[0] : 1; // Default Monday
-        let wd = weekDays.find((d) => d.dayOfWeek === preferredDay && d.isWorking);
-        if (!wd) {
-          wd = weekDays.find((d) => d.isWorking);
-        }
-        if (wd) {
-          assignments.push({
-            dateStr: wd.dateStr,
-            dayOfWeek: wd.dayOfWeek,
-            activity_key: template.activity_key,
-            name: template.name,
-            zone: template.zone,
-            unit: template.unit,
-            cantidad: template.cantidad,
-            theoretical_jr: theoreticalJr,
-            frequency_interval: freq,
-          });
-        }
-      }
-      return;
-    }
-
-    // Fallback for custom frequencies: calculate next eligible working day
-    const lastExec = getLastExecutionDate(template.activity_key);
-    if (!lastExec) {
-      const wd = weekDays.find((d) => d.isWorking);
-      if (wd) {
-        assignments.push({
-          dateStr: wd.dateStr,
-          dayOfWeek: wd.dayOfWeek,
-          activity_key: template.activity_key,
-          name: template.name,
-          zone: template.zone,
-          unit: template.unit,
-          cantidad: template.cantidad,
-          theoretical_jr: theoreticalJr,
-          frequency_interval: freq,
-        });
-      }
-    } else {
-      const nextEligible = addOperationalWorkingDays(lastExec, freq, customNonWorkingDays);
-      const nextEligibleStr = formatDateISO(nextEligible);
-      if (nextEligibleStr >= weekStartStr && nextEligibleStr <= weekEndStr) {
-        const wd = weekDays.find((d) => d.dateStr === nextEligibleStr && d.isWorking) || weekDays.find((d) => d.isWorking);
-        if (wd) {
-          assignments.push({
-            dateStr: wd.dateStr,
-            dayOfWeek: wd.dayOfWeek,
-            activity_key: template.activity_key,
-            name: template.name,
-            zone: template.zone,
-            unit: template.unit,
-            cantidad: template.cantidad,
-            theoretical_jr: theoreticalJr,
-            frequency_interval: freq,
-          });
-        }
-      }
-    }
+    });
   });
 
-  const totalJournals = assignments.reduce((acc, curr) => acc + curr.theoretical_jr, 0);
+  const totalJournals = assignments.reduce((acc, a) => acc + a.theoretical_jr, 0);
 
   return {
     weekStartStr,

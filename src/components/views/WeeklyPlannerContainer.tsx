@@ -128,7 +128,7 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
           planned_sequence:      i + 1,
           activity_key:          a.activity_key,
           poa_activity_zone_id:  zoneCoverage.poaActivityZoneId,
-          planned_rendimiento:   a.rendimiento,
+          planned_rendimiento:   a.rendimiento ?? null,
           planned_frecuencia:    a.frecuencia,
           priority:              a.priority,
           planned_qty:           a.qty,

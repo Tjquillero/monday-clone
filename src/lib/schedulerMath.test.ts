@@ -115,6 +115,7 @@ describe('calculateTheoreticalJournals', () => {
     it('qty < 0 → 0', () => expect(calculateTheoreticalJournals(-100, 160, 12.5)).toBe(0));
     it('rendimiento = 0 → 0', () => expect(calculateTheoreticalJournals(2295, 0, 12.5)).toBe(0));
     it('rendimiento < 0 → 0', () => expect(calculateTheoreticalJournals(2295, -160, 12.5)).toBe(0));
+    it('rendimiento = null (D20, actividad sin rendimiento) → 0', () => expect(calculateTheoreticalJournals(2295, null, 12.5)).toBe(0));
     it('frecuencia = 0 → 0', () => expect(calculateTheoreticalJournals(2295, 160, 0)).toBe(0));
     it('frecuencia < 0 → 0', () => expect(calculateTheoreticalJournals(2295, 160, -1)).toBe(0));
     it('frecuencia = null (ADR-0005, sin programación periódica) → 0', () => expect(calculateTheoreticalJournals(2295, 160, null)).toBe(0));

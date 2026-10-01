@@ -18,7 +18,7 @@ interface ActivityDefinition {
   id: string;
   name: string;
   unit: string;
-  rendimiento: number;
+  rendimiento: number | null;
   frecuencia: number;
   factor: number;
   assignedWorkers: number;
@@ -469,7 +469,7 @@ export default function ResourceEfficiencyWidget({ boardId, groups, activityTemp
                                                 <td className="p-3 border-r border-slate-50 text-center text-slate-500 font-medium italic">{row.unit}</td>
                                                 <td className="p-3 border-r border-slate-50 text-right font-mono text-slate-600 font-bold">{row.qty.toLocaleString()}</td>
                                                 <td className="p-3 border-r border-slate-50 text-center text-slate-500 font-bold">{row.frecuencia}</td>
-                                                <td className="p-3 border-r border-slate-50 text-center text-slate-500">{row.rendimiento.toLocaleString()}</td>
+                                                <td className="p-3 border-r border-slate-50 text-center text-slate-500">{row.rendimiento !== null && row.rendimiento !== undefined ? row.rendimiento.toLocaleString() : 'N/A'}</td>
                                                 <td className="p-3 border-r border-slate-50 text-right font-black bg-amber-50/20 text-slate-900">
                                                     {row.theoretical.toFixed(1)}
                                                 </td>

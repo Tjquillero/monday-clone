@@ -1,6 +1,6 @@
 /**
- * Módulo Canónico de Clasificación, Validación y Telemetría de Materialización (R1-b0 + R1-c)
- * Especificación: docs/gates/R1-b0_R1-c_SPEC.md v4.2 + Decisiones D1-D11
+ * Módulo Canónico de Clasificación, Validación y Telemetría de Materialización (FREQ-OP-01 / D19)
+ * Especificación: docs/gates/FREQ-OP-01_SPEC.md + Decisiones D1-D19
  */
 
 import { SupabaseClient } from '@supabase/supabase-js';
@@ -11,23 +11,19 @@ export type SiteActivityAction =
   | 'NOT_SCHEDULED_NO_PERIODIC_FREQ'
   | 'NOT_SCHEDULED_NO_RENDIMIENTO'
   | 'SKIPPED_ZERO_QTY'
+  | 'EXCLUDED_MISSING_OPERATIONAL_FREQ'
+  | 'EXCLUDED_MISSING_RENDIMIENTO'
   | 'EXCLUDED_MISSING_STANDARD'
-  | 'EXCLUDED_INVALID_CONTRACT'
-  | 'EXCLUDED_ZONE_FREQUENCY_PENDING';
-
-/**
- * Transitoria (D12, 2026-09-29). Se elimina cuando FREQ-SITE-01 cargue la frecuencia por zona de POA V.10.
- */
-export const ZONE_FREQUENCY_PENDING_KEYS = ['1.12', '1.13', '1.15'];
+  | 'EXCLUDED_INVALID_CONTRACT';
 
 export interface ActivityProcessingDetail {
   activity_key: string;
   action: SiteActivityAction;
   reason?: string;
-  frequency_source: 'POA' | 'NONE';
+  frequency_source: 'CRONOGRAMA' | 'POA' | 'NONE';
   planned_qty?: number;
   planned_frecuencia?: number | null;
-  planned_rendimiento?: number;
+  planned_rendimiento?: number | null;
 }
 
 export interface SiteMaterializationSummaryPayload {
@@ -41,16 +37,17 @@ export interface SiteMaterializationSummaryPayload {
   not_scheduled_no_freq_count: number;
   not_scheduled_no_rendimiento_count: number;
   skipped_zero_qty_count: number;
+  excluded_missing_operational_freq_count: number;
+  excluded_missing_rendimiento_count: number;
   excluded_missing_standard_count: number;
   excluded_invalid_contract_count: number;
-  excluded_zone_frequency_pending_count: number;
   is_partial: boolean;
   partial_reasons: string[];
   activities_detail: ActivityProcessingDetail[];
   detail_truncated?: boolean;
   template_source?: string;
   error?: {
-    stage: 'pre_validation' | 'header' | 'sync' | 'post_verify' | 'exception';
+    stage: 'pre_validation' | 'header' | 'sync' | 'post_verify' | 'exception' | 'plan_state_read' | 'identity_precheck';
     code?: string;
     message: string;
     details?: unknown;
@@ -60,6 +57,7 @@ export interface SiteMaterializationSummaryPayload {
 export interface ActivityClassificationContext {
   poaActivitiesMap: Map<string, { id: string; frecuencia: number | null }>;
   poaZoneQtyMap: Map<string, number>;
+  operationalFreqMap: Map<string, { visits_per_month: number; source: 'CRONOGRAMA' | 'POA' }>;
   hasZoneScopeData: boolean;
   allBoardStandards: Array<{
     id: string;
@@ -95,13 +93,7 @@ export function isValidISODateString(d: unknown): boolean {
 }
 
 /**
- * Clasifica determinísticamente cada actividad del universo contractual del sitio
- *
- * Invariantes:
- * - D11: Si no hay POA activo -> FAILED con código NO_ACTIVE_POA.
- * - B1: Con POA activo, la cantidad sale SOLO de poa_activity_zones del sitio. Prohibido usar resource_analysis.
- * - B2: El universo = filas de poa_activity_zones con zone_id = sitio. SKIPPED_ZERO_QTY solo si cantidad_contratada = 0.
- *       Una actividad sin fila para el sitio no es parte del universo y no aparece en el detalle.
+ * Clasifica determinísticamente cada actividad del universo contractual del sitio (D19)
  */
 export function classifySiteActivities(
   boardId: string,
@@ -112,6 +104,7 @@ export function classifySiteActivities(
   const {
     poaActivitiesMap,
     poaZoneQtyMap,
+    operationalFreqMap = new Map(),
     allBoardStandards,
   } = context;
 
@@ -128,9 +121,10 @@ export function classifySiteActivities(
   let notScheduledNoFreqCount = 0;
   let notScheduledNoRendimientoCount = 0;
   let skippedZeroQtyCount = 0;
+  let excludedMissingOperationalFreqCount = 0;
+  let excludedMissingRendimientoCount = 0;
   let excludedMissingStandardCount = 0;
   let excludedInvalidContractCount = 0;
-  let excludedZoneFrequencyPendingCount = 0;
 
   const hasPoa = poaActivitiesMap.size > 0;
 
@@ -146,9 +140,10 @@ export function classifySiteActivities(
       not_scheduled_no_freq_count: 0,
       not_scheduled_no_rendimiento_count: 0,
       skipped_zero_qty_count: 0,
+      excluded_missing_operational_freq_count: 0,
+      excluded_missing_rendimiento_count: 0,
       excluded_missing_standard_count: 0,
       excluded_invalid_contract_count: 0,
-      excluded_zone_frequency_pending_count: 0,
       is_partial: false,
       partial_reasons: [],
       activities_detail: [],
@@ -167,50 +162,34 @@ export function classifySiteActivities(
     };
   }
 
-  // Universo del sitio (B2): Exclusivamente las actividades con presencia en poa_activity_zones para este sitio
+  // Universo del sitio: Exclusivamente las actividades con presencia en poa_activity_zones para este sitio
   for (const [activityKey, rawZoneQty] of poaZoneQtyMap.entries()) {
-    const poaInfo = poaActivitiesMap.get(activityKey);
     const matchedStd = standardsByKey.get(activityKey);
     const cantidad = typeof rawZoneQty === 'number' ? Math.max(0, rawZoneQty) : 0;
-    const rawFreq = poaInfo ? poaInfo.frecuencia : null;
+    const opFreq = operationalFreqMap.get(activityKey);
+    const poaAct = poaActivitiesMap.get(activityKey);
 
-    // Regla D3 / B2: Cantidad 0 en la zona
+    // 1. Cantidad 0 en la zona -> SKIPPED_ZERO_QTY
     if (cantidad <= 0) {
       skippedZeroQtyCount++;
       activitiesDetail.push({
         activity_key: activityKey,
         action: 'SKIPPED_ZERO_QTY',
         reason: 'Cantidad contratada es 0 en esta zona',
-        frequency_source: typeof rawFreq === 'number' && Number.isFinite(rawFreq) && rawFreq > 0 ? 'POA' : 'NONE',
+        frequency_source: opFreq ? opFreq.source : 'NONE',
         planned_qty: 0,
-        planned_frecuencia: rawFreq,
+        planned_frecuencia: opFreq ? opFreq.visits_per_month : null,
       });
       continue;
     }
 
-    // Regla D12: Actividades con frecuencia contractual en POA V.10 por zona pero pendiente de carga (FREQ-SITE-01) -> PARCIAL
-    if ((rawFreq === null || rawFreq === undefined) && ZONE_FREQUENCY_PENDING_KEYS.includes(activityKey)) {
-      excludedZoneFrequencyPendingCount++;
-      const reason = 'Frecuencia por zona pendiente de carga (POA V.10, FREQ-SITE-01)';
-      partialReasons.push(`${activityKey}: ${reason}`);
-      activitiesDetail.push({
-        activity_key: activityKey,
-        action: 'EXCLUDED_ZONE_FREQUENCY_PENDING',
-        reason,
-        frequency_source: 'NONE',
-        planned_qty: cantidad,
-        planned_frecuencia: null,
-      });
-      continue;
-    }
-
-    // Regla D2: Frecuencia NULL -> NOT_SCHEDULED_NO_PERIODIC_FREQ (Informativa, NO parcial)
-    if (rawFreq === null || rawFreq === undefined) {
+    // 2. Frecuencia NULL en POA y sin frecuencia operativa -> NOT_SCHEDULED_NO_PERIODIC_FREQ (Informativa, NO parcial)
+    if (poaAct && (poaAct.frecuencia === null || poaAct.frecuencia === undefined) && !opFreq) {
       notScheduledNoFreqCount++;
       activitiesDetail.push({
         activity_key: activityKey,
         action: 'NOT_SCHEDULED_NO_PERIODIC_FREQ',
-        reason: 'Frecuencia es NULL en el POA (actividad contratada sin programación periódica)',
+        reason: 'Actividad sin frecuencia periódica en POA ni frecuencia operativa configurada',
         frequency_source: 'NONE',
         planned_qty: cantidad,
         planned_frecuencia: null,
@@ -218,23 +197,23 @@ export function classifySiteActivities(
       continue;
     }
 
-    // Regla D2: Frecuencia no finita o <= 0 -> EXCLUDED_INVALID_CONTRACT (A2, PARCIAL)
-    if (!Number.isFinite(rawFreq) || rawFreq <= 0) {
+    // 3. Frecuencia inválida (<= 0 o no numérica finita) en el POA -> EXCLUDED_INVALID_CONTRACT (PARCIAL)
+    if (poaAct && poaAct.frecuencia !== null && poaAct.frecuencia !== undefined && (typeof poaAct.frecuencia !== 'number' || !Number.isFinite(poaAct.frecuencia) || poaAct.frecuencia <= 0)) {
       excludedInvalidContractCount++;
-      const reason = `Frecuencia inválida en POA: ${rawFreq}`;
+      const reason = `Frecuencia inválida en POA (${poaAct.frecuencia})`;
       partialReasons.push(`${activityKey}: ${reason}`);
       activitiesDetail.push({
         activity_key: activityKey,
         action: 'EXCLUDED_INVALID_CONTRACT',
         reason,
-        frequency_source: 'NONE',
+        frequency_source: 'POA',
         planned_qty: cantidad,
-        planned_frecuencia: rawFreq,
+        planned_frecuencia: poaAct.frecuencia,
       });
       continue;
     }
 
-    // Estándar técnico inexistente -> EXCLUDED_MISSING_STANDARD (A2, PARCIAL)
+    // 4. Estándar técnico faltante -> EXCLUDED_MISSING_STANDARD (PARCIAL)
     if (!matchedStd) {
       excludedMissingStandardCount++;
       const reason = 'No existe estándar en board_activity_standards';
@@ -243,47 +222,92 @@ export function classifySiteActivities(
         activity_key: activityKey,
         action: 'EXCLUDED_MISSING_STANDARD',
         reason,
-        frequency_source: 'POA',
+        frequency_source: opFreq ? opFreq.source : 'NONE',
         planned_qty: cantidad,
-        planned_frecuencia: rawFreq,
+        planned_frecuencia: opFreq ? opFreq.visits_per_month : null,
       });
       continue;
     }
 
-    // Estándar con requiere_rendimiento = false -> NOT_SCHEDULED_NO_RENDIMIENTO (Informativa, NO parcial)
+    // 5. Evaluación de frecuencia operativa (D19 / D20)
+    const hasOpFreq = Boolean(opFreq && typeof opFreq.visits_per_month === 'number' && opFreq.visits_per_month > 0);
+
+    if (!hasOpFreq) {
+      if (matchedStd.requiere_rendimiento === false) {
+        // requiere_rendimiento = false Y sin frecuencia operativa -> NOT_SCHEDULED_NO_RENDIMIENTO (Informativa, NO parcial)
+        notScheduledNoRendimientoCount++;
+        activitiesDetail.push({
+          activity_key: activityKey,
+          action: 'NOT_SCHEDULED_NO_RENDIMIENTO',
+          reason: 'Estándar técnico marcado con requiere_rendimiento = false sin frecuencia operativa',
+          frequency_source: 'NONE',
+          planned_qty: cantidad,
+          planned_frecuencia: null,
+          planned_rendimiento: null,
+        });
+        continue;
+      } else {
+        // requiere_rendimiento != false Y sin frecuencia operativa -> EXCLUDED_MISSING_OPERATIONAL_FREQ (PARCIAL)
+        excludedMissingOperationalFreqCount++;
+        const reason = `Actividad ${activityKey} tiene cantidad y rendimiento pero no tiene frecuencia operativa configurada`;
+        partialReasons.push(`${activityKey}: ${reason}`);
+        activitiesDetail.push({
+          activity_key: activityKey,
+          action: 'EXCLUDED_MISSING_OPERATIONAL_FREQ',
+          reason,
+          frequency_source: 'NONE',
+          planned_qty: cantidad,
+          planned_frecuencia: null,
+        });
+        continue;
+      }
+    }
+
+    // 6. Con frecuencia operativa: si requiere_rendimiento = false -> MATERIALIZED sin jornales (D20)
     if (matchedStd.requiere_rendimiento === false) {
-      notScheduledNoRendimientoCount++;
+      materializedCount++;
+      templates.push({
+        id: matchedStd.id,
+        activity_key: matchedStd.activity_key,
+        name: matchedStd.name,
+        zone: matchedStd.category || 'Zona Verde',
+        unit: matchedStd.unit,
+        rendimiento: null as any,
+        frecuencia: opFreq.visits_per_month,
+        cantidad,
+        priority: matchedStd.priority || 'must_execute',
+      });
+
       activitiesDetail.push({
         activity_key: activityKey,
-        action: 'NOT_SCHEDULED_NO_RENDIMIENTO',
-        reason: 'Estándar técnico marcado con requiere_rendimiento = false',
-        frequency_source: 'POA',
+        action: 'MATERIALIZED',
+        frequency_source: opFreq.source,
         planned_qty: cantidad,
-        planned_frecuencia: rawFreq,
-        planned_rendimiento: matchedStd.rendimiento,
+        planned_frecuencia: opFreq.visits_per_month,
+        planned_rendimiento: null,
       });
       continue;
     }
 
-    // Rendimiento inválido <= 0 -> EXCLUDED_INVALID_CONTRACT (A2, PARCIAL)
+    // 7. requiere_rendimiento = true: validar rendimiento > 0
     const rend = Number(matchedStd.rendimiento);
     if (!Number.isFinite(rend) || rend <= 0) {
-      excludedInvalidContractCount++;
-      const reason = `Rendimiento inválido en catálogo técnico: ${matchedStd.rendimiento}`;
+      excludedMissingRendimientoCount++;
+      const reason = `Actividad sin rendimiento válido (> 0) en catálogo técnico: ${matchedStd.rendimiento}`;
       partialReasons.push(`${activityKey}: ${reason}`);
       activitiesDetail.push({
         activity_key: activityKey,
-        action: 'EXCLUDED_INVALID_CONTRACT',
+        action: 'EXCLUDED_MISSING_RENDIMIENTO',
         reason,
-        frequency_source: 'POA',
+        frequency_source: opFreq.source,
         planned_qty: cantidad,
-        planned_frecuencia: rawFreq,
+        planned_frecuencia: opFreq.visits_per_month,
         planned_rendimiento: rend,
       });
       continue;
     }
 
-    // Todo válido -> MATERIALIZED
+    // 8. Todo válido con rendimiento > 0 -> MATERIALIZED con jornales
     materializedCount++;
     templates.push({
       id: matchedStd.id,
@@ -292,21 +316,27 @@ export function classifySiteActivities(
       zone: matchedStd.category || 'Zona Verde',
       unit: matchedStd.unit,
       rendimiento: rend,
-      frecuencia: rawFreq,
+      frecuencia: opFreq.visits_per_month,
       cantidad,
+      priority: matchedStd.priority || 'must_execute',
     });
 
     activitiesDetail.push({
       activity_key: activityKey,
       action: 'MATERIALIZED',
-      frequency_source: 'POA',
+      frequency_source: opFreq.source,
       planned_qty: cantidad,
-      planned_frecuencia: rawFreq,
+      planned_frecuencia: opFreq.visits_per_month,
       planned_rendimiento: rend,
     });
   }
 
-  const isPartial = excludedMissingStandardCount > 0 || excludedInvalidContractCount > 0 || excludedZoneFrequencyPendingCount > 0;
+  const isPartial =
+    excludedMissingOperationalFreqCount > 0 ||
+    excludedMissingRendimientoCount > 0 ||
+    excludedMissingStandardCount > 0 ||
+    excludedInvalidContractCount > 0;
+
   const totalEvaluated = activitiesDetail.length;
   const status: 'SUCCESS' | 'PARTIAL' | 'FAILED' = isPartial ? 'PARTIAL' : 'SUCCESS';
 
@@ -320,9 +350,10 @@ export function classifySiteActivities(
     not_scheduled_no_freq_count: notScheduledNoFreqCount,
     not_scheduled_no_rendimiento_count: notScheduledNoRendimientoCount,
     skipped_zero_qty_count: skippedZeroQtyCount,
+    excluded_missing_operational_freq_count: excludedMissingOperationalFreqCount,
+    excluded_missing_rendimiento_count: excludedMissingRendimientoCount,
     excluded_missing_standard_count: excludedMissingStandardCount,
     excluded_invalid_contract_count: excludedInvalidContractCount,
-    excluded_zone_frequency_pending_count: excludedZoneFrequencyPendingCount,
     is_partial: isPartial,
     partial_reasons: partialReasons,
     activities_detail: activitiesDetail,
@@ -347,8 +378,8 @@ function getUtf8ByteLength(str: string): number {
 }
 
 /**
- * Persiste eventos P3 en materialization_events vía log_materialization_event_rpc.
- * Aplica truncamiento defensivo en bytes (M3) si el payload supera 60.000 bytes.
+ * Persiste eventos en materialization_events vía log_materialization_event_rpc.
+ * Aplica truncamiento defensivo en bytes si el payload supera 60.000 bytes.
  */
 export async function persistMaterializationEvent(
   supabase: SupabaseClient,
@@ -365,11 +396,10 @@ export async function persistMaterializationEvent(
     let payloadJson = JSON.stringify(sanitizedPayload);
     let payloadBytes = getUtf8ByteLength(payloadJson);
 
-    // Truncamiento defensivo progresivo basado en bytes UTF-8 (M3)
+    // Truncamiento defensivo progresivo basado en bytes UTF-8
     if (payloadBytes > 60000 && Array.isArray(sanitizedPayload.activities_detail)) {
       const details = [...sanitizedPayload.activities_detail];
       while (details.length > 0 && payloadBytes > 60000) {
-        // Reducción progresiva
         const newLength = Math.max(0, Math.floor(details.length * 0.75));
         details.splice(newLength);
         sanitizedPayload.activities_detail = details;

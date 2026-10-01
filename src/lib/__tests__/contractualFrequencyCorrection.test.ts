@@ -18,6 +18,7 @@ describe('Corrección Gobernada de Frecuencias Contractuales v1.0 — Test Suite
         unit: 'M²',
         rendimiento: 5000,
         frecuencia: 4, // Canonicalizada (1x/semana)
+        preferred_days: [1],
         cantidad: 5000,
       },
       {
@@ -28,6 +29,7 @@ describe('Corrección Gobernada de Frecuencias Contractuales v1.0 — Test Suite
         unit: 'M²',
         rendimiento: 3000,
         frecuencia: 4, // Canonicalizada (1x/semana)
+        preferred_days: [1],
         cantidad: 3000,
       },
       {
@@ -38,6 +40,7 @@ describe('Corrección Gobernada de Frecuencias Contractuales v1.0 — Test Suite
         unit: 'M²',
         rendimiento: 4000,
         frecuencia: 4, // Canonicalizada (1x/semana)
+        preferred_days: [1],
         cantidad: 4000,
       },
     ];
@@ -51,11 +54,11 @@ describe('Corrección Gobernada de Frecuencias Contractuales v1.0 — Test Suite
   });
 
   it('2. Comparativa Cuantitativa de Materialización: 18 slots/sitio (errónea) vs 3 slots/sitio (canónica)', () => {
-    // Escenario Erróneo (frecuencia = 1 en poa_activities)
+    // Escenario Erróneo (frecuencia = 25 diario en poa_activities)
     const templatesErroneos: RoutineBaseTemplate[] = [
-      { id: '1', activity_key: '1.09', name: 'A1.09', zone: 'Z', unit: 'M²', rendimiento: 1, frecuencia: 1, cantidad: 100 },
-      { id: '2', activity_key: '1.10', name: 'A1.10', zone: 'Z', unit: 'M²', rendimiento: 1, frecuencia: 1, cantidad: 100 },
-      { id: '3', activity_key: '1.11', name: 'A1.11', zone: 'Z', unit: 'M²', rendimiento: 1, frecuencia: 1, cantidad: 100 },
+      { id: '1', activity_key: '1.09', name: 'A1.09', zone: 'Z', unit: 'M²', rendimiento: 1, frecuencia: 25, cantidad: 100 },
+      { id: '2', activity_key: '1.10', name: 'A1.10', zone: 'Z', unit: 'M²', rendimiento: 1, frecuencia: 25, cantidad: 100 },
+      { id: '3', activity_key: '1.11', name: 'A1.11', zone: 'Z', unit: 'M²', rendimiento: 1, frecuencia: 25, cantidad: 100 },
     ];
     const projErronea = generateRoutineScheduleForWeek(templatesErroneos, weekStart);
     expect(projErronea.assignments.length).toBe(18); // 3 x 6 = 18 slots por sitio/semana

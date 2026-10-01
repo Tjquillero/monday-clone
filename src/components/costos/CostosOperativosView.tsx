@@ -248,7 +248,7 @@ function PerSiteDetail({ group, plan, costoJornal, rows, topKeys, wageMissing, e
                         )}
                       </td>
                       <td className="p-3 text-slate-400">{a.qty.toLocaleString('es-CO')} {a.unit}</td>
-                      <td className="p-3 text-slate-400">{a.rendimiento.toLocaleString('es-CO')}</td>
+                      <td className="p-3 text-slate-400">{a.rendimiento !== null && a.rendimiento !== undefined ? a.rendimiento.toLocaleString('es-CO') : '—'}</td>
                       <td className="p-3 text-slate-300">{a.theoretical_journals_month.toFixed(2)}</td>
                       <td className="p-3 text-slate-400">{pctJr.toFixed(1)}%</td>
                       <td className="p-3 text-white font-bold">

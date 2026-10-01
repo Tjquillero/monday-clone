@@ -49,11 +49,11 @@ export interface CapacityResult {
  */
 export function calculateTheoreticalJournals(
   qty: number,
-  rendimiento: number,
-  frecuencia: number | null,
+  rendimiento: number | null | undefined,
+  frecuencia: number | null | undefined,
   workingDays = WORKING_DAYS_MONTH,
 ): number {
-  if (qty <= 0 || rendimiento <= 0 || frecuencia === null || frecuencia <= 0 || workingDays <= 0) return 0;
+  if (qty <= 0 || !rendimiento || rendimiento <= 0 || frecuencia === null || frecuencia === undefined || frecuencia <= 0 || workingDays <= 0) return 0;
   return qty / (rendimiento * (frecuencia / workingDays));
 }
 

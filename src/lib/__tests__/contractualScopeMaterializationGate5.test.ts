@@ -269,6 +269,15 @@ describe('Hito 6.3 Gate 5 — Suite Integrativa de Materialización Contractual'
         if (table === 'board_activity_standards') {
           return createChainQuery(paStandardsData);
         }
+        if (table === 'operational_frequencies') {
+          return createChainQuery(
+            paActsData.map((a) => ({
+              activity_key: a.activity_key,
+              visits_per_month: 25,
+              source: 'CRONOGRAMA',
+            }))
+          );
+        }
         if (table === 'activity_scope_mappings') {
           return createChainQuery([]);
         }
@@ -373,6 +382,12 @@ describe('Hito 6.3 Gate 5 — Suite Integrativa de Materialización Contractual'
         if (table === 'poa_activities') return createChainQuery(poaActsData);
         if (table === 'poa_activity_zones') return createChainQuery(poaZonesData);
         if (table === 'board_activity_standards') return createChainQuery(standardsData);
+        if (table === 'operational_frequencies') {
+          return createChainQuery([
+            { activity_key: 'corte_grama', visits_per_month: 25, source: 'CRONOGRAMA' },
+            { activity_key: 'limpieza_zona_dura', visits_per_month: 25, source: 'CRONOGRAMA' },
+          ]);
+        }
         if (table === 'activity_scope_mappings') return createChainQuery([{ activity_key: 'corte_grama', scope_key: 'grama' }]);
         if (table === 'resource_analysis') {
           // RA residual tiene 80 m2 para corte_grama

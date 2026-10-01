@@ -120,7 +120,7 @@ export interface PlanningActivity {
   priority: ActivityPriority;
   qty: number;
   unit: string;
-  rendimiento: number;
+  rendimiento: number | null;
   /** Nunca null aquí: buildWeeklyPlanningContext() excluye actividades con frecuencia null (ADR-0005) antes de construir PlanningActivity. */
   frecuencia: number;
   theoretical_journals_month: number;
@@ -205,7 +205,7 @@ export interface WeeklyPlanItem {
   machinery_id?: string | null;
   planned_date?: string;          // ISO date YYYY-MM-DD
   poa_activity_zone_id: string;
-  planned_rendimiento: number;    // snapshot del estándar al planificar
+  planned_rendimiento: number | null;    // snapshot del estándar al planificar (null si requiere_rendimiento = false, D20)
   planned_frecuencia: number;
   priority: ActivityPriority;
   planned_qty: number;

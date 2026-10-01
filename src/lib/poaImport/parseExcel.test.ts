@@ -6,7 +6,7 @@ import { realWorkbookArrayBuffer, realWorkbookWithMutation } from './testFixture
 // referencia"). Si el Excel oficial cambia, estos números deben
 // re-verificarse deliberadamente, no ajustarse a ciegas para que el test pase.
 const EXPECTED_ACTIVITY_COUNT = 107;
-const EXPECTED_ZONE_COUNT = 9;
+const EXPECTED_ZONE_COUNT = 10; // 9 históricas con "(presupuesto mes)" + 1 SALINAS DEL REY con "(cantidad presupuesto mes)" (excluyendo CASTILLO SALGAR)
 const EXPECTED_EMPTY_ROWS = 6;
 const EXPECTED_CLOSURE_ROWS = 5; // TOTAL COSTOS DIRECTOS, ADMINISTRACION 20%, etc.
 
@@ -17,9 +17,11 @@ describe('parsePoaExcel — TC-06 (archivo real)', () => {
     expect(result.sheetName).toBe('POA INICIAL 2026');
   });
 
-  it('detecta las 9 zonas reales', () => {
+  it('detecta las 10 zonas reales incluyendo Salinas del Rey y excluyendo Castillo Salgar', () => {
     expect(result.zonas).toHaveLength(EXPECTED_ZONE_COUNT);
     expect(result.zonas.map((z) => z.excelZoneName)).toContain('SENDERO SANTA VERÓNICA');
+    expect(result.zonas.map((z) => z.excelZoneName)).toContain('SALINAS DEL REY');
+    expect(result.zonas.map((z) => z.excelZoneName)).not.toContain('CASTILLO SALGAR');
   });
 
   it('extrae exactamente 107 actividades reales (código N.NN válido)', () => {

@@ -193,6 +193,21 @@ describe('Test Suite 40 — Integración y Persistencia del Motor de Materializa
           };
         }
 
+        if (table === 'operational_frequencies') {
+          const opFreqs = [
+            { activity_key: 'corte_grama', visits_per_month: 25, source: 'CRONOGRAMA' },
+            { activity_key: 'limpieza_zona_dura', visits_per_month: 25, source: 'CRONOGRAMA' },
+          ];
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockImplementation(() => ({
+              eq: jest.fn().mockResolvedValue({ data: opFreqs, error: null }),
+              then: (resolve: any) => Promise.resolve({ data: opFreqs, error: null }).then(resolve),
+            })),
+            then: (resolve: any) => Promise.resolve({ data: opFreqs, error: null }).then(resolve),
+          };
+        }
+
         return { select: jest.fn().mockReturnThis() };
       }),
       rpc: jest.fn().mockImplementation((fn: string, params: any) => {

@@ -26,12 +26,12 @@ describe('DIAGNÓSTICO COMPLETO: Trazabilidad de Actividades Diarias (Frecuencia
       zone: std.category,
       unit: std.unit,
       rendimiento: std.rendimiento,
-      frecuencia: std.frecuencia,
+      frecuencia: (std.frecuencia === 1 ? 25 : std.frecuencia),
       cantidad: 1000,
     }));
 
     const projection = generateRoutineScheduleForWeek(templates, '2026-09-21', []);
-    const dailyAssignments = projection.assignments.filter((a) => a.frequency_interval === 1);
+    const dailyAssignments = projection.assignments.filter((a) => a.frequency_interval === 25);
 
     console.log(`[DIAGNÓSTICO ETAPA 3] Asignaciones diarias generadas por el scheduler (${dailyAssignments.length}):`);
     const dateMap = new Map<string, number>();
@@ -107,6 +107,13 @@ describe('DIAGNÓSTICO COMPLETO: Trazabilidad de Actividades Diarias (Frecuencia
               arboles: 50,
             },
           });
+        }
+        if (table === 'operational_frequencies') {
+          return createChainableQuery([
+            { activity_key: 'limpieza_zonas_duras', visits_per_month: 25, source: 'CRONOGRAMA' },
+            { activity_key: 'limpieza_marmol', visits_per_month: 25, source: 'CRONOGRAMA' },
+            { activity_key: 'poda_arboles', visits_per_month: 4, source: 'CRONOGRAMA' },
+          ]);
         }
         if (table === 'weekly_plans') {
           const q: any = {

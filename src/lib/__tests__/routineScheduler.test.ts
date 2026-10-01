@@ -22,7 +22,7 @@ describe('Test 33 — ADR-0007 Motor de Programación de Rutinas v1', () => {
       zone: 'Zona Dura',
       unit: 'm2/día',
       rendimiento: 10000,
-      frecuencia: 1, // Diario
+      frecuencia: 25, // Diario
       cantidad: 17150,
     },
     {
@@ -32,7 +32,7 @@ describe('Test 33 — ADR-0007 Motor de Programación de Rutinas v1', () => {
       zone: 'Zona Dura',
       unit: 'm2/día',
       rendimiento: 600,
-      frecuencia: 1, // Diario
+      frecuencia: 25, // Diario
       cantidad: 1192,
     },
     {
@@ -42,7 +42,7 @@ describe('Test 33 — ADR-0007 Motor de Programación de Rutinas v1', () => {
       zone: 'Zona Verde',
       unit: 'm2/día',
       rendimiento: 3500,
-      frecuencia: 2.083, // ~3x semana (L-Mi-V)
+      frecuencia: 12, // ~3x semana (L-Mi-V)
       cantidad: 2394.68,
       pattern_offset: 'turn_a',
     },
@@ -53,7 +53,7 @@ describe('Test 33 — ADR-0007 Motor de Programación de Rutinas v1', () => {
       zone: 'Zona Verde',
       unit: 'm2/día',
       rendimiento: 7500,
-      frecuencia: 2.083, // ~3x semana (M-J-S)
+      frecuencia: 12, // ~3x semana (M-J-S)
       cantidad: 2620,
       pattern_offset: 'turn_b',
     },
@@ -64,7 +64,7 @@ describe('Test 33 — ADR-0007 Motor de Programación de Rutinas v1', () => {
       zone: 'Zona Verde',
       unit: 'm2/día',
       rendimiento: 1200,
-      frecuencia: 12.5, // Quincenal (Jueves)
+      frecuencia: 2, // Quincenal (Jueves)
       cantidad: 1850,
       preferred_days: [4], // Jueves
     },
@@ -75,7 +75,7 @@ describe('Test 33 — ADR-0007 Motor de Programación de Rutinas v1', () => {
       zone: 'Zona Verde',
       unit: 'm2/día',
       rendimiento: 600,
-      frecuencia: 6.25, // Semanal (Viernes)
+      frecuencia: 4, // Semanal (Viernes)
       cantidad: 2620,
       preferred_days: [5], // Viernes
     },
@@ -86,7 +86,7 @@ describe('Test 33 — ADR-0007 Motor de Programación de Rutinas v1', () => {
       zone: 'Zona Verde',
       unit: 'Und/día',
       rendimiento: 160,
-      frecuencia: 12.5, // Quincenal (Sábado)
+      frecuencia: 2, // Quincenal (Sábado)
       cantidad: 225,
       preferred_days: [6], // Sábado
     },
@@ -162,14 +162,14 @@ describe('Test 33 — ADR-0007 Motor de Programación de Rutinas v1', () => {
     const weekStartHoliday = '2026-10-12';
     const projection = generateRoutineScheduleForWeek(puertoColombiaTemplates, weekStartHoliday);
 
-    // Lunes 12 Octubre (festivo): 0 asignaciones
+    // Lunes 12 Octubre (festivo): 0 asignaciones (D19: no se programa, no se corre)
     const lunesFestivo = projection.assignments.filter((a) => a.dateStr === '2026-10-12');
     expect(lunesFestivo).toHaveLength(0);
 
-    // Martes 13 Octubre (hábil): debe recibir las asignaciones desviadas del Lunes
-    const martesShifted = projection.assignments.filter((a) => a.dateStr === '2026-10-13').map((a) => a.activity_key);
-    expect(martesShifted).toContain('limpieza_zona_dura');
-    expect(martesShifted).toContain('riego_arbustos_grama'); // Desviado de Turno A debido al festivo
+    // Martes 13 Octubre (hábil): programa sus actividades regulares de martes
+    const martesRegular = projection.assignments.filter((a) => a.dateStr === '2026-10-13').map((a) => a.activity_key);
+    expect(martesRegular).toContain('limpieza_zona_dura');
+    expect(martesRegular).toContain('limpieza_general_paisajismo');
   });
 
   // -------------------------------------------------------------------------
@@ -198,10 +198,10 @@ describe('Test 33 — ADR-0007 Motor de Programación de Rutinas v1', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Test 33.5: Persistencia de Estado y Reprogramación por Historial Real
+  // Test 33.5: Determinismo y No Omisión por Historial Muerto (D19/D20)
   // -------------------------------------------------------------------------
-  test('Test 33.5: Respeto del historial de ejecución real (última fecha ejecutada)', () => {
-    // Si la poda de arbustos se ejecutó el 03 de Septiembre (hace 4 días hábiles)
+  test('Test 33.5: Determinismo semanal — no se omiten actividades rutinarias fijas por historial (código muerto removido)', () => {
+    // Si se pasa executionHistory, el motor determinista programa según calendario sin omitir por historial
     const executionHistory: ExecutionRecord[] = [
       {
         activity_key: 'poda_arbustos',
@@ -210,12 +210,12 @@ describe('Test 33 — ADR-0007 Motor de Programación de Rutinas v1', () => {
       },
     ];
 
-    // Para la semana del 07 al 13 de Septiembre, como el intervalo de la poda es 12.5 días hábiles (~14 días calendario),
-    // la poda NO debe volver a aparecer en esa misma semana.
+    // Para la semana del 07 al 13 de Septiembre (Semana 1 del mes), poda_arbustos (frec: 2) se programa el Jueves 10
     const projection = generateRoutineScheduleForWeek(puertoColombiaTemplates, '2026-09-07', executionHistory);
     const podaAssigned = projection.assignments.filter((a) => a.activity_key === 'poda_arbustos');
 
-    expect(podaAssigned).toHaveLength(0);
+    expect(podaAssigned).toHaveLength(1);
+    expect(podaAssigned[0].dateStr).toBe('2026-09-10');
   });
 
   // -------------------------------------------------------------------------

@@ -25,7 +25,8 @@ import type {
 } from './types';
 
 const SHEET_NAME = 'POA INICIAL 2026';
-const ZONE_HEADER_SUFFIX = '(presupuesto mes)';
+const ZONE_HEADER_SUFFIXES = ['(cantidad presupuesto mes)', '(presupuesto mes)'];
+const EXCLUDED_ZONE_NAMES = ['CASTILLO SALGAR'];
 const ACTIVITY_CODE_PATTERN = /^\d+\.\d+$/;
 
 const ZONE_ROW_INDEX = 1;
@@ -77,17 +78,25 @@ interface ZoneColumns extends ParsedZoneHeader {
 function locateZoneColumns(zoneRow: unknown[], subHeaderRow: unknown[]): ZoneColumns[] {
   const zonas: ParsedZoneHeader[] = [];
   zoneRow.forEach((cell, idx) => {
-    if (typeof cell === 'string' && cell.includes(ZONE_HEADER_SUFFIX)) {
-      zonas.push({
-        excelZoneName: cell.replace(ZONE_HEADER_SUFFIX, '').trim(),
-        startColumn: idx,
-      });
+    if (typeof cell === 'string') {
+      const matchedSuffix = ZONE_HEADER_SUFFIXES.find((s) => cell.includes(s));
+      if (matchedSuffix) {
+        const zoneName = cell.replace(matchedSuffix, '').trim();
+        // Exclusión explícita de zonas no operacionales (e.g. CASTILLO SALGAR)
+        if (EXCLUDED_ZONE_NAMES.some((ex) => zoneName.toUpperCase().includes(ex))) {
+          return;
+        }
+        zonas.push({
+          excelZoneName: zoneName,
+          startColumn: idx,
+        });
+      }
     }
   });
 
   if (zonas.length === 0) {
     throw new PoaExcelStructureError(
-      `No se detectó ningún bloque de zona (se esperaba el sufijo "${ZONE_HEADER_SUFFIX}" en la fila de zonas).`,
+      `No se detectó ningún bloque de zona (se esperaba el sufijo "(presupuesto mes)" o "(cantidad presupuesto mes)" en la fila de zonas).`,
     );
   }
 

@@ -50,9 +50,9 @@ describe('Harness de Certificación Final — Corrección Gobernada de Frecuenci
 
   it('CERT-02: Cuantificación Multisitio — Proyección de 18 slots a 3 slots/sitio (150 slots no elegibles en todo el contrato)', () => {
     const templatesErroneos: RoutineBaseTemplate[] = [
-      { id: '1.09', activity_key: '1.09', name: 'Limpieza manual de playa', zone: 'Playa', unit: 'M²', rendimiento: 5000, frecuencia: 1, cantidad: 5000 },
-      { id: '1.10', activity_key: '1.10', name: 'Trasiego con maquinaria', zone: 'Playa', unit: 'M²', rendimiento: 3000, frecuencia: 1, cantidad: 3000 },
-      { id: '1.11', activity_key: '1.11', name: 'Oxigenación mecánica', zone: 'Playa', unit: 'M²', rendimiento: 4000, frecuencia: 1, cantidad: 4000 },
+      { id: '1.09', activity_key: '1.09', name: 'Limpieza manual de playa', zone: 'Playa', unit: 'M²', rendimiento: 5000, frecuencia: 25, cantidad: 5000 },
+      { id: '1.10', activity_key: '1.10', name: 'Trasiego con maquinaria', zone: 'Playa', unit: 'M²', rendimiento: 3000, frecuencia: 25, cantidad: 3000 },
+      { id: '1.11', activity_key: '1.11', name: 'Oxigenación mecánica', zone: 'Playa', unit: 'M²', rendimiento: 4000, frecuencia: 25, cantidad: 4000 },
     ];
 
     const templatesCanonicos: RoutineBaseTemplate[] = [

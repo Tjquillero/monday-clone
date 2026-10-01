@@ -286,7 +286,10 @@ export async function syncWeeklyPlanForBoard(
     } catch (e) {}
 
     const preparePostgresRow = (item: any, seq: number) => {
-      const pRend = Number(item.planned_rendimiento ?? item.rendimiento);
+      const rawRend = item.planned_rendimiento !== undefined ? item.planned_rendimiento : item.rendimiento;
+      const isNullRend = rawRend === null;
+      const parsedRend = Number(rawRend);
+      const pRend = isNullRend ? null : (Number.isFinite(parsedRend) && parsedRend > 0 ? parsedRend : null);
       const pFreq = Number(item.planned_frecuencia ?? item.frecuencia);
       const pQty = Number(item.planned_qty);
       const pJr = Number(item.theoretical_jr ?? item.planned_jr);
@@ -295,12 +298,12 @@ export async function syncWeeklyPlanForBoard(
         plan_id: item.weekly_plan_id || item.plan_id,
         planned_sequence: item.planned_sequence || seq,
         activity_key: item.activity_key,
-        planned_rendimiento: Number.isFinite(pRend) && pRend > 0 ? pRend : 500,
+        planned_rendimiento: pRend,
         planned_frecuencia: Number.isFinite(pFreq) && pFreq > 0 ? pFreq : 1,
         priority: item.priority || 'must_execute',
         planned_qty: Number.isFinite(pQty) && pQty >= 0 ? pQty : 0,
         unit: item.unit || 'und',
-        planned_jr: Number.isFinite(pJr) && pJr >= 0 ? pJr : 0,
+        planned_jr: pRend === null ? 0 : (Number.isFinite(pJr) && pJr >= 0 ? pJr : 0),
         executed_qty: item.executed_qty || 0,
         executed_jr: item.executed_jr || 0,
         poa_activity_zone_id: (typeof item.poa_activity_zone_id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.poa_activity_zone_id))

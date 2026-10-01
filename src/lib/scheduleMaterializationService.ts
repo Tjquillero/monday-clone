@@ -363,7 +363,50 @@ export async function ensureWeeklyPlanMaterialized(
     }
   }
 
-  // 3. Obtener Catálogo Técnico para el board SIN el filtro requiere_rendimiento=true
+  // 3. Obtener Frecuencias Operativas para el sitio (D19 / FREQ-OP-01)
+  const { data: opFreqData, error: opFreqErr } = await supabase
+    .from('operational_frequencies')
+    .select('activity_key, visits_per_month, source')
+    .eq('board_id', boardId)
+    .eq('group_id', gId);
+
+  if (opFreqErr) {
+    await persistMaterializationEvent(
+      supabase,
+      boardId,
+      gId,
+      weekStartStr,
+      null,
+      'SITE_MATERIALIZATION_SUMMARY',
+      'FAILED',
+      {
+        board_id: boardId,
+        group_id: gId,
+        week_start: weekStartStr,
+        poa_id: activePoaId,
+        poa_version_id: activeVersionId,
+        status: 'FAILED',
+        error: {
+          stage: 'pre_validation',
+          code: 'OPERATIONAL_FREQ_READ_FAILED',
+          message: opFreqErr.message || 'Error al consultar operational_frequencies para el sitio',
+        },
+      }
+    );
+    throw new Error(`OPERATIONAL_FREQ_READ_FAILED: ${opFreqErr.message || 'Error al consultar operational_frequencies'}`);
+  }
+
+  const operationalFreqMap = new Map<string, { visits_per_month: number; source: 'CRONOGRAMA' | 'POA' }>();
+  for (const row of opFreqData || []) {
+    if (row.activity_key && row.visits_per_month !== null && row.visits_per_month !== undefined) {
+      operationalFreqMap.set(row.activity_key, {
+        visits_per_month: Number(row.visits_per_month),
+        source: row.source || 'CRONOGRAMA',
+      });
+    }
+  }
+
+  // 4. Obtener Catálogo Técnico para el board SIN el filtro requiere_rendimiento=true
   const { data: standardsData } = await supabase
     .from('board_activity_standards')
     .select('*')
@@ -380,10 +423,11 @@ export async function ensureWeeklyPlanMaterialized(
     priority: s.priority || 'must_execute',
   }));
 
-  // 4. Clasificar actividades del universo contractual del sitio (B1, B2)
+  // 5. Clasificar actividades del universo contractual del sitio (D19)
   const classification = classifySiteActivities(boardId, gId, weekStartStr, {
     poaActivitiesMap,
     poaZoneQtyMap,
+    operationalFreqMap,
     hasZoneScopeData,
     allBoardStandards,
   });
@@ -468,17 +512,18 @@ export async function ensureWeeklyPlanMaterialized(
       throw new Error(`MISSING_ZONE_LINK: La actividad ${assign.activity_key} no cuenta con enlace obligatorio a poa_activity_zones`);
     }
 
+    const isNoRendimiento = matchedStd.requiere_rendimiento === false;
     dtoItems.push({
       planned_sequence: idx + 1,
       activity_key: assign.activity_key,
       poa_activity_zone_id: zoneInfo.id,
       activity_standard_id: matchedStd.id,
-      planned_rendimiento: matchedStd.rendimiento,
+      planned_rendimiento: isNoRendimiento ? null : matchedStd.rendimiento,
       planned_frecuencia: assign.frequency_interval,
       priority: matchedStd.priority || 'must_execute',
       planned_qty: assign.cantidad,
       unit: assign.unit,
-      planned_jr: assign.theoretical_jr,
+      planned_jr: isNoRendimiento ? 0 : assign.theoretical_jr,
       planned_date: assign.dateStr,
     });
   }

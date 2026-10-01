@@ -44,12 +44,27 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
     return obj;
   }
 
+  const defaultOperationalFreqs = [
+    { id: 'opf_1', board_id: boardId, group_id: siteId, activity_key: '1.01', visits_per_month: 25, source: 'CRONOGRAMA' },
+    { id: 'opf_2', board_id: boardId, group_id: siteId, activity_key: '1.04', visits_per_month: 25, source: 'CRONOGRAMA' },
+    { id: 'opf_3', board_id: boardId, group_id: siteId, activity_key: '1.09', visits_per_month: 4, source: 'CRONOGRAMA' },
+    { id: 'opf_4', board_id: boardId, group_id: siteId, activity_key: '1.10', visits_per_month: 4, source: 'CRONOGRAMA' },
+    { id: 'opf_5', board_id: boardId, group_id: siteId, activity_key: '1.11', visits_per_month: 4, source: 'CRONOGRAMA' },
+    { id: 'opf_6', board_id: boardId, group_id: siteId, activity_key: '1.14', visits_per_month: 1, source: 'CRONOGRAMA' },
+    { id: 'opf_7', board_id: boardId, group_id: siteId, activity_key: '2.01', visits_per_month: 4, source: 'CRONOGRAMA' },
+    { id: 'opf_8', board_id: boardId, group_id: siteId, activity_key: 'corte_grama', visits_per_month: 25, source: 'CRONOGRAMA' },
+    { id: 'opf_9', board_id: boardId, group_id: siteId, activity_key: '1.99', visits_per_month: 25, source: 'CRONOGRAMA' },
+  ];
+
   beforeEach(() => {
     loggedEvents = [];
     (syncWeeklyPlanForBoard as jest.Mock).mockClear();
 
     mockSupabase = {
       from: jest.fn((table: string) => {
+        if (table === 'operational_frequencies') {
+          return createMockQuery(defaultOperationalFreqs);
+        }
         if (table === 'poa' || table === 'poas') {
           return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
         }
@@ -134,6 +149,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
   // T02
   test('T02 frecuencia no finita o <= 0 en POA → EXCLUDED_INVALID_CONTRACT, plan PARCIAL', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') {
         return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       }
@@ -174,6 +190,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
   // T03
   test('T03 cantidad en la zona sin estándar → EXCLUDED_MISSING_STANDARD, PARCIAL', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') {
         return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       }
@@ -211,6 +228,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
   // T04
   test('T04 requiere_rendimiento=false → NOT_SCHEDULED_NO_RENDIMIENTO, no PARCIAL', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') {
         return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       }
@@ -250,6 +268,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
   // T05
   test('T05 cantidad 0 → SKIPPED_ZERO_QTY', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') {
         return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       }
@@ -403,6 +422,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
   // T11 (D14: Conflicto de identidad previo -> Bloqueo total)
   test('T11 conflicto de identidad de secuencia previa → FAILED SEQUENCE_IDENTITY_CONFLICT, 0 escrituras (D14)', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') return createMockQuery([{ id: 'poa_v10', poa_id: 'poa_1', status: 'active' }]);
       if (table === 'weekly_plans') {
@@ -471,6 +491,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
   // T13
   test('T13 POA activo y cero plantillas → FAILED NO_TEMPLATES, catálogo V3 no usado, header no llamado', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') return createMockQuery([{ id: 'poa_v10', poa_id: 'poa_1', status: 'active' }]);
       if (table === 'poa_activities') {
@@ -560,6 +581,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
   // T17 (H6.3)
   test('T17 materialización para trigger ejecuta tubería canónica y clasifica actividades', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') {
         return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       }
@@ -614,6 +636,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
   // T18 (B1)
   test('T18 POA activo sin fila de zona + resource_analysis con cantidad → no materializa (NO_TEMPLATES)', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') return createMockQuery([{ id: 'poa_v10', poa_id: 'poa_1', status: 'active' }]);
       if (table === 'poa_activities') {
@@ -641,6 +664,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
   // T19 (B2)
   test('T19 actividades de otros sitios no aparecen en el detalle del sitio', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') return createMockQuery([{ id: 'poa_v10', poa_id: 'poa_1', status: 'active' }]);
       if (table === 'poa_activities') {
@@ -675,6 +699,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
   // T20 (D11)
   test('T20 tablero sin POA activo → falla cerrado con NO_ACTIVE_POA', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([]);
       if (table === 'poa_versions') return createMockQuery([]);
       if (table === 'poa_activities') return createMockQuery([]);
@@ -694,15 +719,20 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
     expect(failedEvent.p_payload.error.code).toBe('NO_ACTIVE_POA');
   });
 
-  // T21 (D12)
-  test('T21 1.15 con frecuencia NULL y cantidad > 0 → EXCLUDED_ZONE_FREQUENCY_PENDING, plan PARCIAL, no se envía al RPC, motivo en partial_reasons', async () => {
+  // T21 (D19)
+  test('T21 1.15 con cantidad > 0 pero sin frecuencia operativa → EXCLUDED_MISSING_OPERATIONAL_FREQ, plan PARCIAL, no se envía al RPC, motivo en partial_reasons', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') {
+        return createMockQuery([
+          { id: 'opf_1', board_id: boardId, group_id: siteId, activity_key: '1.01', visits_per_month: 25, source: 'CRONOGRAMA' },
+        ]);
+      }
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') return createMockQuery([{ id: 'poa_v10', poa_id: 'poa_1', status: 'active' }]);
       if (table === 'poa_activities') {
         return createMockQuery([
           { id: 'pa_1', poa_version_id: 'poa_v10', activity_key: '1.01', frecuencia: 25 },
-          { id: 'pa_2', poa_version_id: 'poa_v10', activity_key: '1.15', frecuencia: null },
+          { id: 'pa_2', poa_version_id: 'poa_v10', activity_key: '1.15', frecuencia: 8 },
         ]);
       }
       if (table === 'poa_activity_zones') {
@@ -733,18 +763,23 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
     expect(summaryEvent).toBeDefined();
     expect(summaryEvent.p_status).toBe('PARTIAL');
     expect(summaryEvent.p_payload.is_partial).toBe(true);
-    expect(summaryEvent.p_payload.excluded_zone_frequency_pending_count).toBe(1);
+    expect(summaryEvent.p_payload.excluded_missing_operational_freq_count).toBe(1);
 
     const detail115 = summaryEvent.p_payload.activities_detail.find((a: any) => a.activity_key === '1.15');
     expect(detail115).toBeDefined();
-    expect(detail115.action).toBe('EXCLUDED_ZONE_FREQUENCY_PENDING');
-    expect(detail115.reason).toBe('Frecuencia por zona pendiente de carga (POA V.10, FREQ-SITE-01)');
-    expect(summaryEvent.p_payload.partial_reasons).toContain('1.15: Frecuencia por zona pendiente de carga (POA V.10, FREQ-SITE-01)');
+    expect(detail115.action).toBe('EXCLUDED_MISSING_OPERATIONAL_FREQ');
+    expect(detail115.reason).toBe('Actividad 1.15 tiene cantidad y rendimiento pero no tiene frecuencia operativa configurada');
+    expect(summaryEvent.p_payload.partial_reasons).toContain('1.15: Actividad 1.15 tiene cantidad y rendimiento pero no tiene frecuencia operativa configurada');
   });
 
-  // T22 (D12)
-  test('T22 3.14 con frecuencia NULL → NOT_SCHEDULED_NO_PERIODIC_FREQ, plan NO parcial', async () => {
+  // T22 (D12/D19)
+  test('T22 3.14 con frecuencia NULL en POA y sin frecuencia operativa → NOT_SCHEDULED_NO_PERIODIC_FREQ, plan NO parcial', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') {
+        return createMockQuery([
+          { id: 'opf_1', board_id: boardId, group_id: siteId, activity_key: '1.01', visits_per_month: 25, source: 'CRONOGRAMA' },
+        ]);
+      }
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') return createMockQuery([{ id: 'poa_v10', poa_id: 'poa_1', status: 'active' }]);
       if (table === 'poa_activities') {
@@ -788,6 +823,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
     const testBoardId = 'board_test_d13';
 
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') {
         const obj: any = {};
         obj.select = jest.fn(() => obj);
@@ -849,7 +885,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
     const syncCalls = mockSupabase.rpc.mock.calls.filter((c: any) => c[0] === 'sync_weekly_plan_items_rpc');
     expect(syncCalls.length).toBe(1);
     const sentItems = syncCalls[0][1].p_items;
-    expect(sentItems.length).toBe(1);
+    expect(sentItems.length).toBe(6);
     expect(sentItems[0].activity_key).toBe('1.01');
     expect(sentItems[0].planned_qty).toBe(5000);
     expect(sentItems[0].planned_frecuencia).toBe(25);
@@ -863,6 +899,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
   // T24 (D13)
   test('T24 tablero sin fila en poa → NO_ACTIVE_POA, sin llamar a ensure_weekly_plan_header', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([]);
       if (table === 'poa_versions') return createMockQuery([]);
       return createMockQuery(null);
@@ -881,6 +918,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
   // T25 (D13)
   test('T25 dos versiones activas → FAILED MULTIPLE_ACTIVE_POA_VERSIONS, sin cabecera', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') {
         return createMockQuery([
@@ -904,6 +942,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
   // T26 (D13)
   test('T26 clave duplicada en la versión activa → FAILED DUPLICATE_ACTIVITY_KEY, sin cabecera', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') return createMockQuery([{ id: 'ver_1', poa_id: 'poa_1', status: 'active' }]);
       if (table === 'poa_activities') {
@@ -930,6 +969,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
   test('T27 orden determinista: poa_activities barajado produce asignaciones y secuencias idénticas', async () => {
     // Escenario 1: Orden natural
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') return createMockQuery([{ id: 'ver_1', poa_id: 'poa_1', status: 'active' }]);
       if (table === 'poa_activities') {
@@ -960,6 +1000,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
     // Escenario 2: Barajado / Invertido
     mockSupabase.rpc.mockClear();
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') return createMockQuery([{ id: 'ver_1', poa_id: 'poa_1', status: 'active' }]);
       if (table === 'poa_activities') {
@@ -995,6 +1036,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
   // T28 (D14: Conflicto de Clave o Fecha - KEY_OR_DATE_MISMATCH)
   test('T28 conflicto de clave o fecha → 0 header, 0 sync, exactamente 1 evento FAILED con SEQUENCE_IDENTITY_CONFLICT', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') return createMockQuery([{ id: 'ver_1', poa_id: 'poa_1', status: 'active' }]);
       if (table === 'weekly_plans') {
@@ -1036,6 +1078,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
   // T29 (D14: Hueco - MISSING_IN_PLAN)
   test('T29 hueco en el plan (MISSING_IN_PLAN) → bloqueo total D14', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') return createMockQuery([{ id: 'ver_1', poa_id: 'poa_1', status: 'active' }]);
       if (table === 'weekly_plans') {
@@ -1075,6 +1118,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
   // T30 (D14: Ítems Extra - EXTRA_IN_PLAN)
   test('T30 ítems extra en plan existente (EXTRA_IN_PLAN) → bloqueo total D14', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') return createMockQuery([{ id: 'ver_1', poa_id: 'poa_1', status: 'active' }]);
       if (table === 'weekly_plans') {
@@ -1109,6 +1153,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
   // T31 (Plan Idéntico -> 0 Escrituras)
   test('T31 plan existente con ítems idénticos → 0 llamadas a header y sync, retorna estado', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') return createMockQuery([{ id: 'ver_1', poa_id: 'poa_1', status: 'active' }]);
       if (table === 'weekly_plans') {
@@ -1117,6 +1162,11 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
       if (table === 'weekly_plan_items') {
         return createMockQuery([
           { planned_sequence: 1, activity_key: '1.01', planned_date: '2026-09-28' },
+          { planned_sequence: 2, activity_key: '1.01', planned_date: '2026-09-29' },
+          { planned_sequence: 3, activity_key: '1.01', planned_date: '2026-09-30' },
+          { planned_sequence: 4, activity_key: '1.01', planned_date: '2026-10-01' },
+          { planned_sequence: 5, activity_key: '1.01', planned_date: '2026-10-02' },
+          { planned_sequence: 6, activity_key: '1.01', planned_date: '2026-10-03' },
         ]);
       }
       if (table === 'poa_activities') {
@@ -1141,12 +1191,13 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
     expect(syncCalls.length).toBe(0);
     expect(result.weeklyPlan.id).toBe('plan_identical_31');
     expect(result.insertedCount).toBe(0);
-    expect(result.protectedCount).toBe(1);
+    expect(result.protectedCount).toBe(6);
   });
 
   // T32 (Plan Inexistente -> Flujo Normal)
   test('T32 plan inexistente → ejecuta ensure_weekly_plan_header y sync_weekly_plan_items_rpc', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') return createMockQuery([{ id: 'ver_1', poa_id: 'poa_1', status: 'active' }]);
       if (table === 'weekly_plans') return createMockQuery(null);
@@ -1171,12 +1222,13 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
     const syncCalls = mockSupabase.rpc.mock.calls.filter((c: any) => c[0] === 'sync_weekly_plan_items_rpc');
     expect(headerCalls.length).toBe(1);
     expect(syncCalls.length).toBe(1);
-    expect(result.insertedCount).toBe(1);
+    expect(result.insertedCount).toBe(6);
   });
 
   // T33 (Falla Lectura del Plan)
   test('T33 falla lectura del plan → FAILED PLAN_STATE_READ_FAILED, 0 escrituras', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') return createMockQuery([{ id: 'ver_1', poa_id: 'poa_1', status: 'active' }]);
       if (table === 'weekly_plans') {
@@ -1215,6 +1267,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
   // T34 (Falla Lectura de Items del Plan Existente)
   test('T34 falla lectura de ítems del plan existente → FAILED PLAN_STATE_READ_FAILED, 0 escrituras', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') return createMockQuery([{ id: 'ver_1', poa_id: 'poa_1', status: 'active' }]);
       if (table === 'weekly_plans') {
@@ -1256,6 +1309,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
     }));
 
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') return createMockQuery([{ id: 'ver_1', poa_id: 'poa_1', status: 'active' }]);
       if (table === 'weekly_plans') {
@@ -1301,6 +1355,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
     // Caso 2: Sin plantillas si no hay zonas contratadas
     mockSupabase.rpc.mockClear();
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') return createMockQuery([{ id: 'ver_1', poa_id: 'poa_1', status: 'active' }]);
       if (table === 'weekly_plans') return createMockQuery(null);
@@ -1410,6 +1465,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
   // T40 (Zonas duplicadas para la misma actividad en el sitio)
   test('T40 zonas duplicadas para la misma actividad en el sitio → FAILED DUPLICATE_ZONE_LINK, 0 escrituras', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') return createMockQuery([{ id: 'ver_1', poa_id: 'poa_1', status: 'active' }]);
       if (table === 'weekly_plans') return createMockQuery(null);
@@ -1447,6 +1503,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
   // T41 (Error de lectura en poa_activity_zones)
   test('T41 error de lectura en poa_activity_zones → FAILED ZONE_READ_FAILED, 0 escrituras', async () => {
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') return createMockQuery([{ id: 'ver_1', poa_id: 'poa_1', status: 'active' }]);
       if (table === 'weekly_plans') return createMockQuery(null);
@@ -1488,6 +1545,18 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
     ];
 
     mockSupabase.from = jest.fn((table: string) => {
+      if (table === 'operational_frequencies') {
+        return createMockQuery(
+          shuffledActs.map((a) => ({
+            id: `opf_${a.activity_key}`,
+            board_id: boardId,
+            group_id: siteId,
+            activity_key: a.activity_key,
+            visits_per_month: 25,
+            source: 'CRONOGRAMA',
+          }))
+        );
+      }
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
       if (table === 'poa_versions') return createMockQuery([{ id: 'ver_1', poa_id: 'poa_1', status: 'active' }]);
       if (table === 'weekly_plans') return createMockQuery(null);

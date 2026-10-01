@@ -29,7 +29,7 @@ describe('Test Suite 42 — CRONOGRAMA OPERATIVO + MATERIALIZACIÓN SEMANAL V1 (
           zone: 'Zona Verde',
           unit: 'M2',
           rendimiento: 500,
-          frecuencia: 2.083, // ~3x por semana
+          frecuencia: 12, // ~3x por semana (L-Mi-V)
           cantidad: 1000,
         },
         {
@@ -39,7 +39,7 @@ describe('Test Suite 42 — CRONOGRAMA OPERATIVO + MATERIALIZACIÓN SEMANAL V1 (
           zone: 'Zona Dura',
           unit: 'M2',
           rendimiento: 1000,
-          frecuencia: 1, // Diaria (6x por semana Mon-Sat)
+          frecuencia: 25, // Diaria (6x por semana Mon-Sat)
           cantidad: 2000,
         },
       ];
@@ -65,7 +65,7 @@ describe('Test Suite 42 — CRONOGRAMA OPERATIVO + MATERIALIZACIÓN SEMANAL V1 (
           zone: 'Zona Verde',
           unit: 'M2',
           rendimiento: 500,
-          frecuencia: 2.083, // 3x por semana (Mon, Wed, Fri)
+          frecuencia: 12, // 3x por semana (Mon, Wed, Fri)
           cantidad: 1500,
           pattern_offset: 'turn_a',
         },
@@ -76,7 +76,7 @@ describe('Test Suite 42 — CRONOGRAMA OPERATIVO + MATERIALIZACIÓN SEMANAL V1 (
           zone: 'Zona Verde',
           unit: 'M2',
           rendimiento: 800,
-          frecuencia: 3.125, // 2x por semana (Mon, Thu)
+          frecuencia: 8, // 2x por semana (Mar, Jue)
           cantidad: 1000,
         },
         {
@@ -86,7 +86,7 @@ describe('Test Suite 42 — CRONOGRAMA OPERATIVO + MATERIALIZACIÓN SEMANAL V1 (
           zone: 'Zona Dura',
           unit: 'M2',
           rendimiento: 2000,
-          frecuencia: 1, // 6x por semana (Mon-Sat)
+          frecuencia: 25, // 6x por semana (Mon-Sat)
           cantidad: 5000,
         },
       ];
@@ -128,7 +128,7 @@ describe('Test Suite 42 — CRONOGRAMA OPERATIVO + MATERIALIZACIÓN SEMANAL V1 (
           zone: 'Zona Verde',
           unit: 'M2',
           rendimiento: 500,
-          frecuencia: 2.083, // ~3x por semana
+          frecuencia: 12, // ~3x por semana
           cantidad: 1000,
           pattern_offset: 'turn_a', // Mon, Wed, Fri
         },
@@ -153,7 +153,7 @@ describe('Test Suite 42 — CRONOGRAMA OPERATIVO + MATERIALIZACIÓN SEMANAL V1 (
           zone: 'Zona Dura',
           unit: 'M2',
           rendimiento: 1000,
-          frecuencia: 1, // Diaria
+          frecuencia: 25, // Diaria
           cantidad: 2000,
         },
       ];
@@ -179,8 +179,8 @@ describe('Test Suite 42 — CRONOGRAMA OPERATIVO + MATERIALIZACIÓN SEMANAL V1 (
           zone: 'Zona Verde',
           unit: 'M2',
           rendimiento: 500, // 500 M2 por trabajador/día
-          frecuencia: 1, // Todos los días hábiles
-          cantidad: 1000, // 1,000 M2
+          frecuencia: 25, // Todos los días hábiles
+          cantidad: 25000, // 25,000 M2 -> 50 JR por ocurrencia (D19: cantidad / rendimiento)
         },
       ];
 
@@ -249,11 +249,11 @@ describe('Test Suite 42 — CRONOGRAMA OPERATIVO + MATERIALIZACIÓN SEMANAL V1 (
   describe('Gate E — Aislamiento Estricto por Selector de Sitio (group_id)', () => {
     test('Gate E: Conmutar de Sitio A a Sitio B y regresar a Sitio A no deja residuos de estado', () => {
       const siteATemplates: RoutineBaseTemplate[] = [
-        { id: 'a1', activity_key: 'grama_sitio_a', name: 'Grama Sitio A', zone: 'Verde', unit: 'M2', rendimiento: 500, frecuencia: 1, cantidad: 1000 },
+        { id: 'a1', activity_key: 'grama_sitio_a', name: 'Grama Sitio A', zone: 'Verde', unit: 'M2', rendimiento: 500, frecuencia: 25, cantidad: 1000 },
       ];
 
       const siteBTemplates: RoutineBaseTemplate[] = [
-        { id: 'b1', activity_key: 'playa_sitio_b', name: 'Playa Sitio B', zone: 'Playa', unit: 'M2', rendimiento: 800, frecuencia: 1, cantidad: 3000 },
+        { id: 'b1', activity_key: 'playa_sitio_b', name: 'Playa Sitio B', zone: 'Playa', unit: 'M2', rendimiento: 800, frecuencia: 25, cantidad: 3000 },
       ];
 
       const mondayDate = new Date(Date.UTC(2026, 8, 7));
@@ -280,7 +280,7 @@ describe('Test Suite 42 — CRONOGRAMA OPERATIVO + MATERIALIZACIÓN SEMANAL V1 (
   describe('Gate F — Edición de Frecuencia y Preservación de Ocurrencias Históricas', () => {
     test('Gate F: Cambiar frecuencia de 3/semana a 2/semana actualiza el futuro y mantiene intacto el historial pasado', () => {
       const historicTemplates: RoutineBaseTemplate[] = [
-        { id: 'h1', activity_key: 'corte_grama', name: 'Corte de Grama', zone: 'Verde', unit: 'M2', rendimiento: 500, frecuencia: 2.083, cantidad: 1000 }, // 3/semana
+        { id: 'h1', activity_key: 'corte_grama', name: 'Corte de Grama', zone: 'Verde', unit: 'M2', rendimiento: 500, frecuencia: 12, cantidad: 1000 }, // 3/semana
       ];
 
       const week1Monday = new Date(Date.UTC(2026, 8, 7)); // Semana 1 (Histórica)
@@ -291,7 +291,7 @@ describe('Test Suite 42 — CRONOGRAMA OPERATIVO + MATERIALIZACIÓN SEMANAL V1 (
 
       // Admin cambia la frecuencia para semanas futuras (Semana 2 en adelante): 3/semana -> 2/semana
       const updatedTemplatesForFuture: RoutineBaseTemplate[] = [
-        { id: 'h1', activity_key: 'corte_grama', name: 'Corte de Grama', zone: 'Verde', unit: 'M2', rendimiento: 500, frecuencia: 3.125, cantidad: 1000 }, // ~2x por semana (Mon, Thu)
+        { id: 'h1', activity_key: 'corte_grama', name: 'Corte de Grama', zone: 'Verde', unit: 'M2', rendimiento: 500, frecuencia: 8, cantidad: 1000 }, // ~2x por semana (Mar, Jue)
       ];
 
       const week2Monday = new Date(Date.UTC(2026, 8, 14)); // Semana 2 (Futura)

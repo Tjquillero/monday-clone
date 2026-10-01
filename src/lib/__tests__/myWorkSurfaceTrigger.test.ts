@@ -247,6 +247,18 @@ describe('Test Suite 46 — Gatillo Independiente de Superficie para /my-work (F
           };
         }
 
+        if (table === 'operational_frequencies') {
+          const freqs = [
+            { activity_key: 'corte_grama', visits_per_month: 25, source: 'POA' },
+            { activity_key: 'poda_arboles', visits_per_month: 12, source: 'POA' },
+          ];
+          return {
+            select: jest.fn().mockReturnThis(),
+            eq: jest.fn().mockReturnThis(),
+            then: (resolve: any) => Promise.resolve({ data: freqs, error: null }).then(resolve),
+          };
+        }
+
         if (table === 'activity_scope_mappings') {
           return {
             select: jest.fn().mockResolvedValue({

@@ -28,7 +28,7 @@ export interface PlanItemInput {
   planned_sequence:    number;
   activity_key:        string;
   poa_activity_zone_id: string;
-  planned_rendimiento: number;
+  planned_rendimiento: number | null;
   planned_frecuencia:  number;
   priority:            ActivityPriority;
   planned_qty:         number;

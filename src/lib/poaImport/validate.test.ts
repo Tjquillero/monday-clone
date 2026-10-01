@@ -13,6 +13,7 @@ const REAL_ZONE_NAMES = [
   'MERCADO LA SAZÓN',
   'SENDERO SANTA VERÓNICA',
   'PLAYA PUNTA ASTILLEROS',
+  'SALINAS DEL REY',
 ];
 
 // Las 14 actividades que tenían FREC. inconsistente entre zonas quedaron

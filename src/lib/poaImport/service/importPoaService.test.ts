@@ -44,6 +44,7 @@ const REAL_ZONE_NAMES = [
   'MERCADO LA SAZÓN',
   'SENDERO SANTA VERÓNICA',
   'PLAYA PUNTA ASTILLEROS',
+  'SALINAS DEL REY',
 ];
 
 function fullyMappedContext(_parseResult: ParseResult): ValidatePoaImportContext {
@@ -124,7 +125,7 @@ describe('importPoaVersion — Commits 2-3: integración parser -> validator, re
 
     expect(result.status).toBe('blocked');
     if (result.status !== 'blocked') throw new Error('esperaba blocked');
-    expect(result.unresolvedZones).toHaveLength(9);
+    expect(result.unresolvedZones).toHaveLength(REAL_ZONE_NAMES.length);
     expect(result.unresolvedZones.map((z) => z.excelZoneName)).toEqual(
       expect.arrayContaining(REAL_ZONE_NAMES),
     );
