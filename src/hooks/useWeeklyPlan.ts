@@ -95,19 +95,23 @@ export function useWeeklyPlan(
     refetchOnWindowFocus: false,
   });
 
-  // Personal adscrito al sitio desde Módulo 2 (personnel_site_assignments)
-  const { data: assignmentsCount } = useQuery({
-    queryKey: ['personnel_site_assignments_count', group?.id],
+  // Capacidad Diaria del sitio (site_daily_capacity, D24 / B3)
+  const { data: siteDailyCapacity } = useQuery({
+    queryKey: ['site_daily_capacity', boardId, group?.id],
     queryFn: async () => {
-      if (!group?.id) return 0;
-      const { count, error } = await supabase
-        .from('personnel_site_assignments')
-        .select('*', { count: 'exact', head: true })
-        .eq('site_id', group.id);
-      if (error) return 0;
-      return count ?? 0;
+      if (!boardId || !group?.id) return null;
+      const { data, error } = await supabase
+        .from('site_daily_capacity')
+        .select('jornales_dia')
+        .eq('board_id', boardId)
+        .eq('group_id', group.id)
+        .maybeSingle();
+      if (error) return null;
+      return data?.jornales_dia !== null && data?.jornales_dia !== undefined
+        ? Number(data.jornales_dia)
+        : null;
     },
-    enabled: !!group?.id,
+    enabled: !!boardId && !!group?.id,
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
@@ -141,7 +145,7 @@ export function useWeeklyPlan(
 
     const mergedStandards = mergeStandardsForZone(standards, poaCatalog, group.id);
     const scopeQuantities: Record<string, number> = analysisRow?.scope_data ?? {};
-    const dailyCapacity = assignmentsCount ?? 0;
+    const dailyCapacity = siteDailyCapacity ?? 0;
     const zone = {
       id: group?.id ?? '',
       name: group?.title ?? '',
@@ -155,7 +159,7 @@ export function useWeeklyPlan(
     };
 
     return buildWeeklyPlanningContext(mergedStandards, scopeMappings, scopeQuantities, zone, week);
-  }, [isNotOperational, standards, poaCatalog, scopeMappings, analysisRow, group, weekStart, missingStandards, assignmentsCount]);
+  }, [isNotOperational, standards, poaCatalog, scopeMappings, analysisRow, group, weekStart, missingStandards, siteDailyCapacity]);
 
   const isLoading = stdLoading || poaLoading || mapLoading || qtyLoading || missingLoading || matLoading;
 

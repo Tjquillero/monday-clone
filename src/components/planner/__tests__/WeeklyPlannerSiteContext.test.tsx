@@ -39,10 +39,16 @@ jest.mock('@/hooks/useWeeklyPlan', () => ({
 jest.mock('@/hooks/useWeeklyPlans', () => ({
   useWeeklyPlans: jest.fn(() => ({ data: [] })),
   useWeeklyPlanConfirmationSummary: jest.fn(() => ({ data: null })),
+  useWeeklyPlanWithItems: jest.fn(() => ({ data: null })),
+  useSiteDailyCapacity: jest.fn(() => ({ data: null })),
 }));
 
 jest.mock('@/hooks/usePoaActivities', () => ({
   usePoaActiveCatalog: jest.fn(() => ({ data: new Map() })),
+}));
+
+jest.mock('@/hooks/useActivityStandards', () => ({
+  useContractStandards: jest.fn(() => ({ data: [] })),
 }));
 
 jest.mock('@/hooks/useWeeklyPlanMutations', () => ({

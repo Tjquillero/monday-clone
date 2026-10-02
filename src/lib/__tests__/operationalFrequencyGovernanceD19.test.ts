@@ -164,52 +164,52 @@ describe('Gobernanza D19: Frecuencia Operativa y Despacho Semanal', () => {
       expect(week4.assignments.length).toBe(0);
     });
 
-    // 1 visita/mes → Semana 2
-    test('1 visita/mes → solo en semana 2', () => {
+    // 1 visita/mes → Reparto mensual D29 (menor carga / semana 1)
+    test('1 visita/mes → exactamente 1 semana del mes (semana 1 por menor carga)', () => {
       const tmpl = makeTemplate('2.13', 1);
       const week1 = generateRoutineScheduleForWeek([tmpl], '2026-09-07', []); // sem 1
       const week2 = generateRoutineScheduleForWeek([tmpl], '2026-09-14', []); // sem 2
       const week3 = generateRoutineScheduleForWeek([tmpl], '2026-09-21', []); // sem 3
       const week4 = generateRoutineScheduleForWeek([tmpl], '2026-09-28', []); // sem 4
 
-      expect(week1.assignments.length).toBe(0);
-      expect(week2.assignments.length).toBe(1);
+      expect(week1.assignments.length).toBe(1);
+      expect(week2.assignments.length).toBe(0);
       expect(week3.assignments.length).toBe(0);
       expect(week4.assignments.length).toBe(0);
     });
 
-    // 0.5 visitas/mes → Semana 3 en meses pares
-    test('0.5 visitas/mes → solo en semana 3 de meses pares (febrero, abril, junio, agosto, octubre, diciembre)', () => {
+    // 0.5 visitas/mes → Solo en meses pares (febrero, abril, junio, agosto, octubre, diciembre)
+    test('0.5 visitas/mes → solo en meses pares (semana 1 de octubre vs 0 en septiembre)', () => {
       const tmpl = makeTemplate('2.06', 0.5);
 
-      // Septiembre (mes 9, impar) sem 3: 2026-09-21 -> 0
-      const sepWeek3 = generateRoutineScheduleForWeek([tmpl], '2026-09-21', []);
-      expect(sepWeek3.assignments.length).toBe(0);
+      // Septiembre (mes 9, impar) sem 1: 2026-09-07 -> 0
+      const sepWeek1 = generateRoutineScheduleForWeek([tmpl], '2026-09-07', []);
+      expect(sepWeek1.assignments.length).toBe(0);
 
-      // Octubre (mes 10, par) sem 3: 2026-10-19 (ceil(19/7)=3) -> 1
-      const octWeek3 = generateRoutineScheduleForWeek([tmpl], '2026-10-19', []);
-      expect(octWeek3.assignments.length).toBe(1);
+      // Octubre (mes 10, par) sem 1: 2026-10-05 -> 1
+      const octWeek1 = generateRoutineScheduleForWeek([tmpl], '2026-10-05', []);
+      expect(octWeek1.assignments.length).toBe(1);
 
-      // Octubre sem 2: 2026-10-12 (ceil(12/7)=2) -> 0
+      // Octubre sem 2: 2026-10-12 -> 0
       const octWeek2 = generateRoutineScheduleForWeek([tmpl], '2026-10-12', []);
       expect(octWeek2.assignments.length).toBe(0);
     });
 
-    // 0.33 visitas/mes → Semana 4 en meses donde (mes % 3 === 1) (enero, abril, julio, octubre)
-    test('0.33 visitas/mes → solo en semana 4 de meses con (mes % 3 = 1)', () => {
+    // 0.33 visitas/mes → Solo en meses donde (mes % 3 === 1) (enero, abril, julio, octubre)
+    test('0.33 visitas/mes → solo en meses con (mes % 3 = 1) (octubre vs noviembre)', () => {
       const tmpl = makeTemplate('2.09', 0.33);
 
-      // Septiembre (mes 9, 9 % 3 = 0) sem 4: 2026-09-28 -> 0
-      const sepWeek4 = generateRoutineScheduleForWeek([tmpl], '2026-09-28', []);
-      expect(sepWeek4.assignments.length).toBe(0);
+      // Septiembre (mes 9, 9 % 3 = 0) sem 1: 2026-09-07 -> 0
+      const sepWeek1 = generateRoutineScheduleForWeek([tmpl], '2026-09-07', []);
+      expect(sepWeek1.assignments.length).toBe(0);
 
-      // Octubre (mes 10, 10 % 3 = 1) sem 4: 2026-10-26 (ceil(26/7)=4) -> 1
-      const octWeek4 = generateRoutineScheduleForWeek([tmpl], '2026-10-26', []);
-      expect(octWeek4.assignments.length).toBe(1);
+      // Octubre (mes 10, 10 % 3 = 1) sem 1: 2026-10-05 -> 1
+      const octWeek1 = generateRoutineScheduleForWeek([tmpl], '2026-10-05', []);
+      expect(octWeek1.assignments.length).toBe(1);
 
-      // Noviembre (mes 11, 11 % 3 = 2) sem 4: 2026-11-23 (ceil(23/7)=4) -> 0
-      const novWeek4 = generateRoutineScheduleForWeek([tmpl], '2026-11-23', []);
-      expect(novWeek4.assignments.length).toBe(0);
+      // Noviembre (mes 11, 11 % 3 = 2) sem 1: 2026-11-02 -> 0
+      const novWeek1 = generateRoutineScheduleForWeek([tmpl], '2026-11-02', []);
+      expect(novWeek1.assignments.length).toBe(0);
     });
 
     // Semana 5: solo frecuencias >= 4

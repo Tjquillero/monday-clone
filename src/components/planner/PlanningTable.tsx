@@ -6,8 +6,25 @@ import { PlanningActivity, ActivityPriority, ActivityCategory } from '@/types/sc
 import { isColombianHoliday, getColombianHolidayName } from '@/lib/colombianHolidays';
 import { isOperationalWorkingDay } from '@/lib/routineScheduler';
 
+export interface PlanningTableActivityItem {
+  activity_key: string;
+  name: string;
+  category: ActivityCategory;
+  priority: ActivityPriority;
+  qty: number;
+  unit: string;
+  rendimiento: number | null;
+  frecuencia: number;
+  theoretical_journals_month?: number;
+  theoretical_journals_week?: number;
+  dailyJournals?: Record<string, number>;
+  planned_jr?: number;
+  status?: string;
+  is_manual_override?: boolean;
+}
+
 interface Props {
-  activities: PlanningActivity[];
+  activities: (PlanningActivity | PlanningTableActivityItem)[];
   weeklyAvailable: number;
   weekStartStr?: string; // YYYY-MM-DD (Monday ISO)
 }
@@ -32,12 +49,15 @@ const CATEGORY_STYLE: Record<ActivityCategory, string> = {
 
 function getFrequencyBadge(frecuencia?: number | null): { label: string; color: string } {
   if (!frecuencia || frecuencia <= 0) return { label: 'Ocasional', color: 'bg-slate-500/20 text-slate-400 border-slate-500/30' };
-  if (frecuencia === 1) return { label: 'Diaria', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' };
-  if (Math.abs(frecuencia - 2.083) < 0.2) return { label: '3x / sem', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' };
-  if (Math.abs(frecuencia - 3.125) < 0.2) return { label: '2x / sem', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' };
-  if (Math.abs(frecuencia - 6.25) < 0.5) return { label: 'Semanal', color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' };
-  if (Math.abs(frecuencia - 12.5) < 1.0) return { label: 'Quincenal', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' };
-  if (Math.abs(frecuencia - 25) < 2.0) return { label: 'Mensual', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' };
+  if (frecuencia === 1) return { label: '1x / mes', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' };
+  if (frecuencia === 2) return { label: 'Quincenal', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' };
+  if (frecuencia === 4) return { label: 'Semanal', color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' };
+  if (frecuencia === 6) return { label: '6x / mes', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' };
+  if (frecuencia === 8) return { label: '2x / sem', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' };
+  if (frecuencia === 12) return { label: '3x / sem', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' };
+  if (frecuencia >= 25) return { label: 'Diaria', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' };
+  if (frecuencia === 0.5) return { label: 'Bimestral', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' };
+  if (Math.abs(frecuencia - 0.33) < 0.05 || Math.abs(frecuencia - 1 / 3) < 0.05) return { label: 'Trimestral', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' };
   return { label: `Frec ${frecuencia.toFixed(1)}`, color: 'bg-slate-500/20 text-slate-300 border-slate-500/30' };
 }
 
@@ -108,7 +128,7 @@ export default function PlanningTable({ activities, weeklyAvailable, weekStartSt
               <Th minWidth="w-56">Actividad & Recurrencia</Th>
               <Th width="w-24">Prioridad</Th>
               <Th width="w-24">Cantidad</Th>
-              <Th right width="w-20">JR / Mes</Th>
+              <Th right width="w-20">Rendimiento</Th>
 
               {/* Day Headers */}
               {weekDays.map((wd) => (
@@ -169,15 +189,24 @@ function ActivityRow({
   weeklyAvailable,
   weekDays,
 }: {
-  activity: PlanningActivity;
+  activity: PlanningActivity | PlanningTableActivityItem;
   weeklyAvailable: number;
   weekDays: OperationalDayHeader[];
 }) {
+  const weeklyJR =
+    typeof a.theoretical_journals_week === 'number'
+      ? a.theoretical_journals_week
+      : typeof (a as any).planned_jr === 'number'
+      ? (a as any).planned_jr
+      : 0;
+
   const pct = weeklyAvailable > 0
-    ? Math.min(100, Math.round((a.theoretical_journals_week / weeklyAvailable) * 100))
+    ? Math.min(100, Math.round((weeklyJR / weeklyAvailable) * 100))
     : 0;
 
   const freqBadge = getFrequencyBadge(a.frecuencia);
+
+  const dailyJournalsMap = (a as any).dailyJournals as Record<string, number> | undefined;
 
   return (
     <tr className="border-b border-[var(--border-color)] hover:bg-white/[0.02] transition-colors">
@@ -185,20 +214,25 @@ function ActivityRow({
       <td className="px-4 py-3 min-w-[220px]">
         <p className="text-xs font-bold text-[var(--text-primary)] leading-snug">{a.name}</p>
         <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-          <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${CATEGORY_STYLE[a.category]}`}>
+          <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${CATEGORY_STYLE[a.category] || 'bg-slate-500/15 text-slate-400'}`}>
             {a.category}
           </span>
           <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border ${freqBadge.color}`}>
             <Clock className="w-2.5 h-2.5 inline-block mr-0.5" />
             {freqBadge.label}
           </span>
+          {a.theoretical_journals_month !== undefined && a.theoretical_journals_month !== null && (
+            <span className="text-[9px] font-mono text-[var(--text-secondary)]">
+              <span className="text-[var(--text-primary)] font-bold">{a.theoretical_journals_month.toFixed(2)}</span> JR/m
+            </span>
+          )}
         </div>
       </td>
 
       {/* Priority */}
       <td className="px-4 py-3">
-        <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${PRIORITY_STYLE[a.priority]}`}>
-          {PRIORITY_LABEL[a.priority]}
+        <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${PRIORITY_STYLE[a.priority] || 'bg-slate-500/20 text-slate-400'}`}>
+          {PRIORITY_LABEL[a.priority] || a.priority}
         </span>
       </td>
 
@@ -208,15 +242,23 @@ function ActivityRow({
         <span className="text-[10px] text-slate-400">{a.unit}</span>
       </td>
 
-      {/* Theoretical Monthly Journals */}
-      <td className="px-4 py-3 text-right text-xs font-black text-[var(--text-primary)]">
-        {a.theoretical_journals_month.toFixed(2)}
+      {/* Rendimiento (o N/A si null) */}
+      <td className="px-4 py-3 text-right text-xs font-mono font-bold text-[var(--text-primary)]">
+        {a.rendimiento !== null && a.rendimiento !== undefined && a.rendimiento > 0
+          ? a.rendimiento.toLocaleString('es-CO')
+          : '—'}
       </td>
 
       {/* Days (Mon - Sat) Grid Projection */}
       {weekDays.map((wd) => {
         const isProtected = a.status === 'completed' || a.status === 'in_progress' || a.is_manual_override;
-        const dailyJR = a.theoretical_journals_week > 0 ? (a.theoretical_journals_week / 6) : 0;
+
+        let dailyJR = 0;
+        if (dailyJournalsMap && wd.dateStr) {
+          dailyJR = dailyJournalsMap[wd.dateStr] || 0;
+        } else if (weeklyJR > 0 && wd.isWorkingDay) {
+          dailyJR = weeklyJR / 6;
+        }
 
         return (
           <td
@@ -257,11 +299,10 @@ function ActivityRow({
             <div className="h-full bg-[var(--color-primary)] dark:bg-[var(--color-accent)] rounded-full" style={{ width: `${pct}%` }} />
           </div>
           <span className="text-xs font-mono font-bold text-[var(--text-primary)] w-10 text-right">
-            {a.theoretical_journals_week.toFixed(2)}
+            {weeklyJR.toFixed(2)}
           </span>
         </div>
       </td>
     </tr>
   );
 }
-

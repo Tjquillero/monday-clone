@@ -10,6 +10,8 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import {
   generateRoutineScheduleForWeek,
+  getMonthlyCandidateWeeks,
+  MonthlyPlanInput,
   RoutineBaseTemplate,
 } from './routineScheduler';
 import { SyncWeeklyPlanResult } from './weeklyPlanService';
@@ -541,7 +543,131 @@ export async function ensureWeeklyPlanMaterialized(
     throw new Error('NO_TEMPLATES: Cero plantillas operacionales viables generadas para el sitio con POA activo');
   }
 
-  // 7. Generar Ocurrencias Diarias con Calendario Laboral Colombiano (F3.1, D26, D27, D28)
+  // 6.b. Leer planes existentes del mes para proyección determinista de baja frecuencia (D29 / A6)
+  const candidateWeeks = getMonthlyCandidateWeeks(mondayDate);
+  const candidateMondays = candidateWeeks.map((w) => w.weekStartStr);
+  const existingMonthPlans: MonthlyPlanInput[] = [];
+
+  try {
+    let monthPlansQuery: any = supabase
+      .from('weekly_plans')
+      .select('id, week_start, status')
+      .eq('board_id', boardId)
+      .eq('group_id', gId);
+
+    if (typeof monthPlansQuery?.in === 'function') {
+      monthPlansQuery = monthPlansQuery.in('week_start', candidateMondays);
+    }
+
+    const { data: monthPlans, error: monthPlansErr } = await monthPlansQuery;
+
+    if (monthPlansErr) {
+      await persistMaterializationEvent(
+        supabase,
+        boardId,
+        gId,
+        weekStartStr,
+        null,
+        'SITE_MATERIALIZATION_SUMMARY',
+        'FAILED',
+        {
+          ...classification.summary,
+          poa_id: activePoaId,
+          poa_version_id: activeVersionId,
+          status: 'FAILED',
+          error: {
+            stage: 'month_projection_read',
+            code: 'MONTH_PROJECTION_READ_FAILED',
+            message: monthPlansErr.message || 'Error al consultar planes del mes para proyección',
+          },
+        }
+      );
+      throw new Error(`MONTH_PROJECTION_READ_FAILED: ${monthPlansErr.message}`);
+    }
+
+    if (monthPlans && monthPlans.length > 0) {
+      const planIds = monthPlans.map((p: any) => p.id);
+      let itemsQuery: any = supabase
+        .from('weekly_plan_items')
+        .select('plan_id, activity_key, planned_jr, planned_rendimiento');
+
+      if (typeof itemsQuery?.in === 'function') {
+        itemsQuery = itemsQuery.in('plan_id', planIds);
+      }
+
+      const { data: monthItems, error: itemsErr } = await itemsQuery;
+
+      if (itemsErr) {
+        await persistMaterializationEvent(
+          supabase,
+          boardId,
+          gId,
+          weekStartStr,
+          null,
+          'SITE_MATERIALIZATION_SUMMARY',
+          'FAILED',
+          {
+            ...classification.summary,
+            poa_id: activePoaId,
+            poa_version_id: activeVersionId,
+            status: 'FAILED',
+            error: {
+              stage: 'month_projection_read',
+              code: 'MONTH_PROJECTION_READ_FAILED',
+              message: itemsErr.message || 'Error al consultar items de planes del mes',
+            },
+          }
+        );
+        throw new Error(`MONTH_PROJECTION_READ_FAILED: ${itemsErr.message}`);
+      }
+
+      for (const p of monthPlans) {
+        const pItems = (monthItems || [])
+          .filter((i: any) => i.plan_id === p.id)
+          .map((i: any) => {
+            const opFreq = operationalFreqMap.get(i.activity_key);
+            const countsCap = opFreq?.counts_capacity !== false;
+            return {
+              activity_key: i.activity_key,
+              planned_jr: Number(i.planned_jr || 0),
+              counts_capacity: countsCap,
+            };
+          });
+
+        existingMonthPlans.push({
+          week_start: p.week_start,
+          items: pItems,
+        });
+      }
+    }
+  } catch (err: any) {
+    if (err.message && err.message.startsWith('MONTH_PROJECTION_READ_FAILED')) {
+      throw err;
+    }
+    await persistMaterializationEvent(
+      supabase,
+      boardId,
+      gId,
+      weekStartStr,
+      null,
+      'SITE_MATERIALIZATION_SUMMARY',
+      'FAILED',
+      {
+        ...classification.summary,
+        poa_id: activePoaId,
+        poa_version_id: activeVersionId,
+        status: 'FAILED',
+        error: {
+          stage: 'month_projection_read',
+          code: 'MONTH_PROJECTION_READ_FAILED',
+          message: err.message || String(err),
+        },
+      }
+    );
+    throw new Error(`MONTH_PROJECTION_READ_FAILED: ${err.message || String(err)}`);
+  }
+
+  // 7. Generar Ocurrencias Diarias con Calendario Laboral Colombiano (F3.1, D26, D27, D28, D29)
   const projection = generateRoutineScheduleForWeek(
     templates,
     mondayDate,
@@ -549,6 +675,7 @@ export async function ensureWeeklyPlanMaterialized(
     {
       customNonWorkingDays: options.customNonWorkingDays,
       siteDailyCapacity,
+      existingMonthPlans,
     }
   );
 
@@ -970,7 +1097,7 @@ export async function ensureWeeklyPlanMaterialized(
   const exceededCapacityDays: Array<{ date: string; journals: number; machine_journals?: number; capacity: number; deficit: number }> = [];
   if (siteDailyCapacity !== null && siteDailyCapacity > 0) {
     for (const [dateStr, jrTotal] of Object.entries(dailyJournalsMap)) {
-      if (jrTotal > siteDailyCapacity) {
+      if (jrTotal > siteDailyCapacity + 0.005) {
         const machineJr = dailyMachineJournalsMap[dateStr] || 0;
         exceededCapacityDays.push({
           date: dateStr,
@@ -990,7 +1117,7 @@ export async function ensureWeeklyPlanMaterialized(
     const cJr = dailyJournalsMap[d] || 0;
     const mJr = dailyMachineJournalsMap[d] || 0;
     const cap = siteDailyCapacity;
-    const def = cap !== null && cap > 0 && cJr > cap ? Number((cJr - cap).toFixed(4)) : 0;
+    const def = cap !== null && cap > 0 && cJr > cap + 0.005 ? Number((cJr - cap).toFixed(4)) : 0;
     dailyCapacityDetail[d] = {
       counting_journals: cJr,
       machine_journals: mJr,

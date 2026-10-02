@@ -4,7 +4,8 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Group } from '@/types/monday';
 import { useWeeklyPlan } from '@/hooks/useWeeklyPlan';
-import { useWeeklyPlans } from '@/hooks/useWeeklyPlans';
+import { useWeeklyPlans, useWeeklyPlanWithItems, useSiteDailyCapacity } from '@/hooks/useWeeklyPlans';
+import { useContractStandards } from '@/hooks/useActivityStandards';
 import { useWeeklyPlanMutations, PlanItemInput } from '@/hooks/useWeeklyPlanMutations';
 import { usePoaActiveCatalog } from '@/hooks/usePoaActivities';
 import { WeeklyPlan } from '@/types/scheduler';
@@ -85,6 +86,15 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
     () => savedPlans?.find(p => p.week_start === weekStartISO),
     [savedPlans, weekStartISO],
   );
+
+  // Items del plan persistido (B1: si existe plan, mostrar weekly_plan_items)
+  const { data: savedPlanWithItems } = useWeeklyPlanWithItems(savedPlan?.id);
+
+  // Estándares técnicos a nivel de contrato
+  const { data: standards } = useContractStandards(boardId);
+
+  // Capacidad diaria del sitio (B3: site_daily_capacity)
+  const { data: siteDailyCapacity } = useSiteDailyCapacity(boardId, validSelectedGroup?.id);
 
   const isSaving    = createPlan.isPending || savePlanItems.isPending;
   const isPublishing = publishPlan.isPending;
@@ -204,6 +214,9 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
       group={group}
       weekStart={weekStart}
       savedPlan={savedPlan}
+      savedPlanItems={savedPlanWithItems?.items}
+      siteDailyCapacity={siteDailyCapacity ?? null}
+      standards={standards}
       onSave={handleSave}
       isSaving={isSaving}
       onPublish={handlePublish}

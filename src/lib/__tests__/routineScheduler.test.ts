@@ -139,11 +139,11 @@ describe('Test 33 — ADR-0007 Motor de Programación de Rutinas v1', () => {
     expect(viernes).toContain('limpieza_marmol');
     expect(viernes).toContain('riego_arbustos_grama');
 
-    // Sábado 12: Limpieza zonas duras, Limpieza mármol, Plateo de árboles
+    // Sábado 12: Limpieza zonas duras, Limpieza mármol, Limpieza paisajismo (D29: plateo_arboles balanceado al par 2-4)
     const sabado = getAssignedKeys('2026-09-12');
     expect(sabado).toContain('limpieza_zona_dura');
     expect(sabado).toContain('limpieza_marmol');
-    expect(sabado).toContain('plateo_arboles');
+    expect(sabado).toContain('limpieza_general_paisajismo');
 
     // Domingo 13: Día No Laborable (0 asignaciones)
     const domingo = getAssignedKeys('2026-09-13');

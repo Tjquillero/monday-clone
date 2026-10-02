@@ -1,30 +1,94 @@
 'use client';
 
-import { WeeklyPlanningContext } from '@/types/scheduler';
+import { WeeklyPlanningContext, WeeklyPlanItem } from '@/types/scheduler';
 import { ShieldCheck, AlertTriangle } from 'lucide-react';
 
-interface Props {
-  plan: WeeklyPlanningContext;
+export interface DailyCapacityDetailItem {
+  dateStr: string;
+  dayName: string;
+  dayNumber: number;
+  isWorking: boolean;
+  isHoliday?: boolean;
+  holidayName?: string | null;
+  countingJournals: number;
+  machineJournals: number;
+  capacity: number | null;
+  deficit: number;
+  exceeded: boolean;
 }
 
-export default function CapacitySummary({ plan }: Props) {
-  const { capacity, zone } = plan;
-  const pct = capacity.weekly_available > 0
-    ? Math.round((capacity.weekly_required / capacity.weekly_available) * 100)
+interface Props {
+  plan?: WeeklyPlanningContext | null;
+  siteDailyCapacity?: number | null;
+  workingDaysCount?: number;
+  dailyDetails?: DailyCapacityDetailItem[];
+  zoneName?: string;
+}
+
+export default function CapacitySummary({
+  plan,
+  siteDailyCapacity,
+  workingDaysCount,
+  dailyDetails,
+  zoneName,
+}: Props) {
+  const zoneTitle = zoneName || plan?.zone.name || 'Sitio';
+
+  // Capacidad diaria del sitio (B3: site_daily_capacity)
+  const capPerDay = siteDailyCapacity !== undefined && siteDailyCapacity !== null
+    ? siteDailyCapacity
+    : (plan?.zone.daily_capacity && plan.zone.daily_capacity > 0 ? plan.zone.daily_capacity : null);
+
+  const numWorkingDays = workingDaysCount ?? (plan?.week.working_days ?? 6);
+
+  // Capacidad semanal = site_daily_capacity * días hábiles de la semana
+  const weeklyCapacity = capPerDay !== null && capPerDay > 0
+    ? Number((capPerDay * numWorkingDays).toFixed(2))
+    : null;
+
+  // Cómputos de jornales
+  let totalCounting = 0;
+  let totalMachine = 0;
+  let totalDeficit = 0;
+  let hasExceededDay = false;
+
+  if (dailyDetails && dailyDetails.length > 0) {
+    for (const d of dailyDetails) {
+      totalCounting += d.countingJournals;
+      totalMachine += d.machineJournals;
+      totalDeficit += d.deficit;
+      if (d.exceeded) hasExceededDay = true;
+    }
+  } else if (plan) {
+    totalCounting = plan.capacity.weekly_required;
+    totalDeficit = plan.capacity.deficit;
+    hasExceededDay = !plan.capacity.feasible;
+  }
+
+  totalCounting = Number(totalCounting.toFixed(2));
+  totalMachine = Number(totalMachine.toFixed(2));
+  totalDeficit = Number(totalDeficit.toFixed(2));
+
+  // B4: Tolerancia de 0.005 en la verificación de capacidad
+  const isWeeklyExceeded = weeklyCapacity !== null && totalCounting > weeklyCapacity + 0.005;
+  const feasible = !hasExceededDay && !isWeeklyExceeded;
+
+  const pct = weeklyCapacity && weeklyCapacity > 0
+    ? Math.round((totalCounting / weeklyCapacity) * 100)
     : 0;
   const clamped = Math.min(pct, 100);
-  const feasible = capacity.feasible;
 
   return (
     <div className="industrial-card rounded-xl border border-[var(--border-color)] p-4 space-y-3">
+      {/* ── Encabezado ──────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-            Proyección de Capacidad Semanal — {zone.name}
+            Proyección de Capacidad Semanal — {zoneTitle}
           </p>
           <span
             className="text-[9px] text-slate-500 cursor-help"
-            title="Cálculo derivado de jornales teóricos de actividades planificadas vs disponibilidad de la zona. No muta POA ni base de datos."
+            title="Cálculo basado en site_daily_capacity × días hábiles. Actividades de máquina están excluidas de la capacidad (D28)."
           >
             ⓘ
           </span>
@@ -39,28 +103,103 @@ export default function CapacitySummary({ plan }: Props) {
         </span>
       </div>
 
+      {/* ── Métricas Globales ───────────────────────────────────── */}
       <div className="grid grid-cols-3 gap-3">
-        <Metric label="Disponible (Sitio)" value={`${capacity.weekly_available} JR`} sub={`${zone.daily_capacity} JR/día`} />
-        <Metric label="Requerido (Plan)" value={`${capacity.weekly_required.toFixed(2)} JR`} danger={!feasible} />
-        <Metric label="Tasa de Utilización" value={`${pct}%`} danger={pct > 100} warning={pct >= 85 && pct <= 100} />
-      </div>
-
-      <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all duration-500 ${
-            pct > 100
-              ? 'bg-red-500'
-              : pct >= 85
-              ? 'bg-amber-400'
-              : 'bg-[#10B981]'
-          }`}
-          style={{ width: `${clamped}%` }}
+        <Metric
+          label="Disponible (Sitio)"
+          value={weeklyCapacity !== null ? `${weeklyCapacity} JR` : 'Sin límite'}
+          sub={capPerDay !== null ? `${capPerDay} JR/día (${numWorkingDays} días hábiles)` : 'Sin límite configurado'}
+        />
+        <Metric
+          label="Requerido (Plan)"
+          value={`${totalCounting.toFixed(2)} JR`}
+          sub={totalMachine > 0 ? `+${totalMachine.toFixed(2)} JR de máquina (excluidos)` : '0.00 JR de máquina'}
+          danger={!feasible}
+        />
+        <Metric
+          label="Tasa de Utilización"
+          value={weeklyCapacity !== null ? `${pct}%` : 'N/A'}
+          danger={pct > 100}
+          warning={pct >= 85 && pct <= 100}
         />
       </div>
 
-      {!feasible && capacity.deficit > 0 && (
+      {/* ── Barra de Utilización ────────────────────────────────── */}
+      {weeklyCapacity !== null && (
+        <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${
+              pct > 100
+                ? 'bg-red-500'
+                : pct >= 85
+                ? 'bg-amber-400'
+                : 'bg-[#10B981]'
+            }`}
+            style={{ width: `${clamped}%` }}
+          />
+        </div>
+      )}
+
+      {/* ── Detalle Diario (B3: por día los jornales que cuentan, los de máquina y el déficit) ── */}
+      {dailyDetails && dailyDetails.length > 0 && (
+        <div className="pt-2 border-t border-[var(--border-color)]/60">
+          <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">
+            Desglose Diario de Capacidad (Lunes – Sábado)
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+            {dailyDetails.map((d) => {
+              const isExceeded = d.exceeded;
+              return (
+                <div
+                  key={d.dateStr || d.dayName}
+                  className={`rounded-lg p-2 text-center border ${
+                    !d.isWorking
+                      ? 'bg-slate-900/40 border-slate-800/40 text-slate-600'
+                      : isExceeded
+                      ? 'bg-red-500/10 border-red-500/30'
+                      : 'bg-black/20 border-white/5'
+                  }`}
+                >
+                  <div className="flex items-center justify-between text-[9px] font-bold text-slate-400 mb-1">
+                    <span>{d.dayName}</span>
+                    {d.dateStr && <span className="font-mono text-[8px] text-slate-500">{d.dateStr.slice(8, 10)}/{d.dateStr.slice(5, 7)}</span>}
+                  </div>
+                  {d.isWorking ? (
+                    <div className="space-y-0.5">
+                      <div className="text-[11px] font-black text-white">
+                        {d.countingJournals.toFixed(2)} <span className="text-[8px] text-slate-400 font-normal">JR</span>
+                      </div>
+                      {d.machineJournals > 0 && (
+                        <div className="text-[8px] text-cyan-400 font-mono">
+                          +{d.machineJournals.toFixed(2)} Máq
+                        </div>
+                      )}
+                      {isExceeded ? (
+                        <div className="text-[8px] font-black text-red-400 bg-red-500/20 rounded px-1 mt-0.5">
+                          Déficit +{d.deficit.toFixed(2)}
+                        </div>
+                      ) : (
+                        <div className="text-[8px] text-slate-500 font-mono">
+                          {capPerDay !== null ? `Cap ${capPerDay}` : 'OK'}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-[9px] text-slate-600 font-mono py-1">
+                      {d.isHoliday ? 'Festivo' : 'No lab'}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Aviso de Déficit ────────────────────────────────────── */}
+      {!feasible && totalDeficit > 0 && (
         <p className="text-[10px] text-red-400 font-medium">
-          ⚠️ Déficit detectado: <span className="font-black">{capacity.deficit.toFixed(2)} JR</span> — requiere ajustar distribución de días o capacidad contratada.
+          ⚠️ Déficit detectado: <span className="font-black">{totalDeficit.toFixed(2)} JR</span> — requiere ajustar distribución de días o capacidad contratada.
         </p>
       )}
     </div>
@@ -90,4 +229,3 @@ function Metric({
     </div>
   );
 }
-

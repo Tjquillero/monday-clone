@@ -267,6 +267,69 @@ Fuente: `COSTOS GENERALES V3` (Tablero `3ea0326f-6ff7-409f-848a-1f296e6e3cc8`):
 3. **Protección de Rutas `/poa/[poaId]/import` y `/poa/[poaId]/zone-mappings`:**
    Si el usuario no cuenta con `app_metadata.role === 'admin'`, se muestra pantalla `"Acceso restringido"` y no se renderiza el formulario de carga/mapeo. Ambas páginas incluyen enlace de retorno `"Volver a POA"`.
 
+---
+
+## 10. Decisión D29: Reparto Mensual entre Semanas según Carga (GATE FREQ-OP-04)
+
+> **Aprobada por Tomás (2026-10-02):** Visitas de baja frecuencia repartidas entre las semanas del mes según la carga proyectada.
+
+### 10.1. Reglas de Balanceo Mensual (A1–A6)
+
+1. **A1 (Frecuencias de Aplicación):**
+   - Aplica a frecuencias `2`, `1`, `0.5` y `0.33` visitas/mes.
+   - `0.5`: solo en meses pares (`month % 2 === 0`).
+   - `0.33`: solo en meses donde `month % 3 === 1` (enero, abril, julio, octubre).
+   - Las frecuencias `25`, `12`, `8`, `6` y `4` no cambian.
+
+2. **A2 (Semanas Candidatas y Protección de Semanas Fijas):**
+   - Semanas candidatas: semanas cuyo lunes cae en el mes, números 1 a 4.
+   - La semana 5 no recibe visitas de baja frecuencia (`freq < 4`).
+   - Una semana con plan ya existente en `weekly_plans` (cualquier estado) es **fija**: no recibe visitas nuevas. Si su plan ya contiene esa `activity_key`, la visita cuenta como realizada.
+
+3. **A3 (Proyección Mensual Determinista):**
+   - Para cada semana candidata se calcula la carga base de jornales que cuentan (`counts_capacity = true`) de las actividades de `25`, `12`, `8`, `6` y `4` (considerando festivos).
+   - Las visitas de baja frecuencia se ordenan por jornales requeridos (mayor primero; empate `activity_key` ascendente).
+   - Cada visita de freq 1, 0.5 o 0.33 va a la semana con menor carga proyectada (empate: la semana más temprana).
+   - Para **frecuencia 2**: sus dos visitas van en semanas distintas separadas al menos 2 semanas (pares 1-3 o 2-4), eligiendo el par de menor carga acumulada.
+
+4. **A4 (Intra-semana con D27):**
+   - Dentro de la semana elegida, se aplica la asignación D27 al día hábil de menor carga acumulada y división de visita si no cabe bajo `site_daily_capacity`.
+
+5. **A5 (Invarianza del Orden de Materialización):**
+   - Misma entrada $\rightarrow$ misma asignación. Materializar la semana 3 antes que la 2 produce un resultado idéntico que materializarlas en orden cronológico.
+
+6. **A6 (Gobernanza de Error en Lectura de Planes del Mes):**
+   - Los planes existentes del mes se consultan en `weekly_plans` / `weekly_plan_items` en modo solo lectura.
+   - Ante cualquier error de consulta, la materialización falla cerrado con código `MONTH_PROJECTION_READ_FAILED` y 0 mutaciones en base de datos.
+
+---
+
+## 11. Gobernanza UI-CRON-01: Visualización del Plan Guardado en Cronograma
+
+> **Aprobada por Tomás (2026-10-02):** El Cronograma muestra los ítems del plan guardado y su estado real, eliminando el uso de `assignmentsCount` y fórmulas no auditadas.
+
+### 11.1. Criterios de Visualización y Capacidad (B1–B4)
+
+1. **B1 (Plan Guardado en Tabla):**
+   - Si existe `weekly_plan` para `(board_id, group_id, week_start)`, la tabla del Cronograma muestra sus `weekly_plan_items` (actividad, cantidad, rendimiento formateado o `—`, jornales, por día) y el estado del plan (`draft`, `published`, `confirmed`, `closed`).
+   - No muestra el borrador de `buildWeeklyPlanningContext`.
+   - Con plan persistido, nunca se muestra `"Sin guardar"`.
+
+2. **B2 (Ocultamiento de "GUARDAR PLAN"):**
+   - Con plan persistido, se oculta el botón `"GUARDAR PLAN"`.
+   - El botón `"Confirmar plan"` conserva su lógica de transición gobernada.
+
+3. **B3 (Panel de Capacidad Diaria):**
+   - Capacidad semanal = `site_daily_capacity` del sitio (jornales/día) $\times$ días hábiles de la semana.
+   - Requerido = suma de `planned_jr` de ítems cuya actividad tiene `counts_capacity = true`.
+   - Desglose diario: muestra por día los jornales que cuentan, los jornales de maquinaria (`counts_capacity = false`) y el déficit.
+   - Se elimina el uso de `assignmentsCount` y la fórmula no auditada de jornales/mes.
+
+4. **B4 (Tolerancia de Capacidad de 0.005):**
+   - Un día exactamente en el límite o con sobrecarga $\le 0.005$ **NO se considera excedido**.
+   - Se aplica tolerancia numérica de `0.005` tanto en el servicio de materialización como en los componentes de la interfaz de usuario.
+
+
 
 
 

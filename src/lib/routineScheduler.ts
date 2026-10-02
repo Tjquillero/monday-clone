@@ -144,8 +144,286 @@ interface WorkingDayState {
   machineJournals: number;
 }
 
+export interface MonthlyPlanItemInput {
+  activity_key: string;
+  planned_jr: number;
+  counts_capacity?: boolean;
+}
+
+export interface MonthlyPlanInput {
+  week_start: string;
+  items: MonthlyPlanItemInput[];
+}
+
+export interface SchedulerOptions {
+  customNonWorkingDays?: string[];
+  siteDailyCapacity?: number | null;
+  existingMonthPlans?: MonthlyPlanInput[];
+  skipMonthlyAllocation?: boolean;
+}
+
+export interface CandidateWeekInfo {
+  weekNumber: number; // 1..4 (or 5)
+  mondayDate: Date;
+  weekStartStr: string;
+}
+
 /**
- * Core Routine Scheduler Engine (FREQ-OP-01 / FREQ-OP-02 / FREQ-OP-03 / D19 / D26 / D27 / D28).
+ * Retorna todos los lunes que caen dentro del mes de la fecha indicada.
+ * Semanas candidatas para visitas de baja frecuencia son las semanas 1 a 4.
+ */
+export function getMonthlyCandidateWeeks(targetMondayInput: Date | string): CandidateWeekInfo[] {
+  const dt = parseUTCDate(targetMondayInput);
+  const year = dt.getUTCFullYear();
+  const month = dt.getUTCMonth(); // 0..11
+
+  const mondays: CandidateWeekInfo[] = [];
+  let weekNum = 1;
+
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  for (let day = 1; day <= lastDay; day++) {
+    const cur = new Date(Date.UTC(year, month, day));
+    if (cur.getUTCDay() === 1) {
+      mondays.push({
+        weekNumber: weekNum++,
+        mondayDate: cur,
+        weekStartStr: formatDateISO(cur),
+      });
+    }
+  }
+  return mondays;
+}
+
+interface WeekLoadState {
+  weekNumber: number;
+  mondayDate: Date;
+  weekStartStr: string;
+  isFixed: boolean;
+  baseLoad: number;
+  presentKeys: Set<string>;
+}
+
+/**
+ * Calcula la carga base de actividades fijas y recurrentes (25, 12, 8, 6, 4) para una semana dada.
+ */
+function calculateBaseWeekCountingLoad(
+  templates: RoutineBaseTemplate[],
+  mondayDate: Date,
+  customNonWorkingDays: string[]
+): number {
+  const recurringTemplates = templates.filter((t) => {
+    const f = t.frecuencia;
+    return (
+      Math.abs(f - 25) < 0.1 ||
+      f >= 25 ||
+      Math.abs(f - 12) < 0.1 ||
+      Math.abs(f - 8) < 0.1 ||
+      Math.abs(f - 6) < 0.1 ||
+      Math.abs(f - 4) < 0.1
+    );
+  });
+
+  // Programar solo recurrentes para esta semana
+  const proj = generateRoutineScheduleForWeek(recurringTemplates, mondayDate, [], {
+    customNonWorkingDays,
+    siteDailyCapacity: null,
+    skipMonthlyAllocation: true,
+  });
+
+  return proj.assignments
+    .filter((a) => a.counts_capacity !== false)
+    .reduce((sum, a) => sum + a.theoretical_jr, 0);
+}
+
+/**
+ * Proyección mensual determinista (D29): reparte visitas de baja frecuencia (2, 1, 0.5, 0.33)
+ * entre las semanas candidatas 1 a 4 del mes según la carga acumulada.
+ */
+export function projectMonthlyLowFrequencyAllocation(
+  templates: RoutineBaseTemplate[],
+  targetMondayInput: Date | string,
+  options: SchedulerOptions = {}
+): Map<string, RoutineBaseTemplate[]> {
+  const targetMonday = parseUTCDate(targetMondayInput);
+  const customNonWorkingDays = options.customNonWorkingDays || [];
+  const existingPlans = options.existingMonthPlans || [];
+
+  const candidateWeeks = getMonthlyCandidateWeeks(targetMonday);
+  const eligibleWeeks = candidateWeeks.filter((w) => w.weekNumber <= 4);
+
+  const weekStates: WeekLoadState[] = eligibleWeeks.map((ew) => {
+    const existing = existingPlans.find((p) => p.week_start === ew.weekStartStr);
+    if (existing) {
+      const fixedLoad = (existing.items || [])
+        .filter((i) => i.counts_capacity !== false)
+        .reduce((sum, i) => sum + (i.planned_jr || 0), 0);
+      const keys = new Set((existing.items || []).map((i) => i.activity_key));
+      return {
+        weekNumber: ew.weekNumber,
+        mondayDate: ew.mondayDate,
+        weekStartStr: ew.weekStartStr,
+        isFixed: true,
+        baseLoad: fixedLoad,
+        presentKeys: keys,
+      };
+    } else {
+      const baseLoad = calculateBaseWeekCountingLoad(templates, ew.mondayDate, customNonWorkingDays);
+      return {
+        weekNumber: ew.weekNumber,
+        mondayDate: ew.mondayDate,
+        weekStartStr: ew.weekStartStr,
+        isFixed: false,
+        baseLoad,
+        presentKeys: new Set<string>(),
+      };
+    }
+  });
+
+  const mondayMonth = targetMonday.getUTCMonth() + 1;
+
+  // Filtrar templates de baja frecuencia aplicables en este mes
+  const lowFreqTemplates: Array<{
+    template: RoutineBaseTemplate;
+    theoreticalJr: number;
+    countsCapacity: boolean;
+    visitsCount: number; // 2 o 1
+  }> = [];
+
+  for (const template of templates) {
+    const freq = template.frecuencia;
+    const theoreticalJr =
+      template.rendimiento !== null && template.rendimiento !== undefined && template.rendimiento > 0
+        ? template.cantidad / template.rendimiento
+        : 0;
+    const countsCapacity = template.counts_capacity !== false;
+
+    // Frecuencia 2: 2 visitas en el mes
+    if (Math.abs(freq - 2) < 0.1) {
+      lowFreqTemplates.push({ template, theoreticalJr, countsCapacity, visitsCount: 2 });
+    }
+    // Frecuencia 1: 1 visita en el mes
+    else if (Math.abs(freq - 1) < 0.1) {
+      lowFreqTemplates.push({ template, theoreticalJr, countsCapacity, visitsCount: 1 });
+    }
+    // Frecuencia 0.5: 1 visita en meses pares
+    else if (Math.abs(freq - 0.5) < 0.05) {
+      if (mondayMonth % 2 === 0) {
+        lowFreqTemplates.push({ template, theoreticalJr, countsCapacity, visitsCount: 1 });
+      }
+    }
+    // Frecuencia 0.33: 1 visita en meses donde (mes % 3 = 1)
+    else if (Math.abs(freq - 0.33) < 0.05 || Math.abs(freq - 1 / 3) < 0.05) {
+      if (mondayMonth % 3 === 1) {
+        lowFreqTemplates.push({ template, theoreticalJr, countsCapacity, visitsCount: 1 });
+      }
+    }
+  }
+
+  // Ordenar por jornales de la visita (mayor primero; empate activity_key asc)
+  lowFreqTemplates.sort((a, b) => {
+    const diff = b.theoreticalJr - a.theoreticalJr;
+    if (Math.abs(diff) > 1e-6) return diff;
+    return compareStringsCode(a.template.activity_key, b.template.activity_key);
+  });
+
+  const allocationMap = new Map<string, RoutineBaseTemplate[]>();
+  for (const ew of eligibleWeeks) {
+    allocationMap.set(ew.weekStartStr, []);
+  }
+
+  // Distribuir cada actividad
+  for (const item of lowFreqTemplates) {
+    const key = item.template.activity_key;
+
+    if (item.visitsCount === 2) {
+      // Frecuencia 2: sus 2 visitas en semanas distintas separadas al menos 2 semanas (pares 1-3 o 2-4)
+      const w1 = weekStates.find((w) => w.weekNumber === 1);
+      const w2 = weekStates.find((w) => w.weekNumber === 2);
+      const w3 = weekStates.find((w) => w.weekNumber === 3);
+      const w4 = weekStates.find((w) => w.weekNumber === 4);
+
+      // Verificar si ya está en semanas fijas
+      const inW1 = w1?.presentKeys.has(key);
+      const inW3 = w3?.presentKeys.has(key);
+      const inW2 = w2?.presentKeys.has(key);
+      const inW4 = w4?.presentKeys.has(key);
+
+      let chosenPair: 13 | 24 = 13;
+
+      if (inW1 || inW3) {
+        chosenPair = 13;
+      } else if (inW2 || inW4) {
+        chosenPair = 24;
+      } else {
+        // Ninguno tiene la key fija: evaluar carga de pares
+        // Si una semana es fija y NO tiene la key, no puede recibir nuevas visitas
+        const pair13Blocked = (w1?.isFixed && !inW1) || (w3?.isFixed && !inW3) || !w1 || !w3;
+        const pair24Blocked = (w2?.isFixed && !inW2) || (w4?.isFixed && !inW4) || !w2 || !w4;
+
+        if (pair13Blocked && !pair24Blocked) {
+          chosenPair = 24;
+        } else if (!pair13Blocked && pair24Blocked) {
+          chosenPair = 13;
+        } else {
+          const load13 = (w1?.baseLoad || 0) + (w3?.baseLoad || 0);
+          const load24 = (w2?.baseLoad || 0) + (w4?.baseLoad || 0);
+
+          if (load13 <= load24) {
+            chosenPair = 13;
+          } else {
+            chosenPair = 24;
+          }
+        }
+      }
+
+      if (chosenPair === 13 && w1 && w3) {
+        allocationMap.get(w1.weekStartStr)?.push(item.template);
+        allocationMap.get(w3.weekStartStr)?.push(item.template);
+        if (item.countsCapacity) {
+          w1.baseLoad += item.theoreticalJr;
+          w3.baseLoad += item.theoreticalJr;
+        }
+      } else if (chosenPair === 24 && w2 && w4) {
+        allocationMap.get(w2.weekStartStr)?.push(item.template);
+        allocationMap.get(w4.weekStartStr)?.push(item.template);
+        if (item.countsCapacity) {
+          w2.baseLoad += item.theoreticalJr;
+          w4.baseLoad += item.theoreticalJr;
+        }
+      }
+    } else {
+      // Visitas ÚNICAS del mes (freq 1, 0.5, 0.33)
+      // Si ya está en una semana fija existente, cuenta como hecha en esa semana
+      const existingFixedWeek = weekStates.find((w) => w.isFixed && w.presentKeys.has(key));
+      if (existingFixedWeek) {
+        allocationMap.get(existingFixedWeek.weekStartStr)?.push(item.template);
+      } else {
+        // Buscar entre las semanas candidatas NO fijas la de menor carga
+        const availableWeeks = weekStates.filter((w) => !w.isFixed);
+        const candidates = availableWeeks.length > 0 ? availableWeeks : weekStates;
+
+        let bestWeek = candidates[0];
+        for (let i = 1; i < candidates.length; i++) {
+          if (candidates[i].baseLoad < bestWeek.baseLoad - 1e-6) {
+            bestWeek = candidates[i];
+          }
+        }
+
+        if (bestWeek) {
+          allocationMap.get(bestWeek.weekStartStr)?.push(item.template);
+          if (item.countsCapacity) {
+            bestWeek.baseLoad += item.theoreticalJr;
+          }
+        }
+      }
+    }
+  }
+
+  return allocationMap;
+}
+
+/**
+ * Core Routine Scheduler Engine (FREQ-OP-01 / FREQ-OP-02 / FREQ-OP-03 / FREQ-OP-04 / D19 / D26 / D27 / D28 / D29).
  * Generates deterministic daily schedule projections from operational frequency templates (visitas/mes).
  */
 export function generateRoutineScheduleForWeek(
@@ -190,19 +468,19 @@ export function generateRoutineScheduleForWeek(
   // Working days Monday..Saturday (excluding Sunday and holidays)
   const workingDays = weekDays.filter((d) => d.dayOfWeek >= 1 && d.dayOfWeek <= 6 && d.isWorking);
 
-  // Reglas de calendario mensual D19
+  // Reglas de calendario mensual D19 / D29
   const mondayDayOfMonth = weekStart.getUTCDate();
-  const mondayMonth = weekStart.getUTCMonth() + 1; // 1 = Enero .. 12 = Diciembre
   const weekOfMonth = Math.ceil(mondayDayOfMonth / 7);
 
-  // Clasificar actividades por tipo de programación D27:
+  // Clasificar actividades por tipo de programación D27 / D29:
   // a) Diarias (25)
   // b) Patrones repetidos (12, 8, 6 en semanas impares)
-  // c) Visitas únicas de la semana (4, 2, 1, 0.5, 0.33, 6 en semanas pares)
+  // c) Visitas únicas de la semana (4, 6 en semanas pares, y baja frecuencia asignadas a esta semana por D29)
   const dailyTemplates: RoutineBaseTemplate[] = [];
   const patternTemplates: Array<{ template: RoutineBaseTemplate; targetDows: number[] }> = [];
   const uniqueVisits: Array<{ template: RoutineBaseTemplate; theoreticalJr: number; countsCapacity: boolean }> = [];
 
+  // 1. Actividades recurrentes fijas (25, 12, 8, 6, 4)
   for (const template of templates) {
     const freq = template.frecuencia; // visitas/mes
     const theoreticalJr =
@@ -243,32 +521,25 @@ export function generateRoutineScheduleForWeek(
     else if (Math.abs(freq - 4) < 0.1) {
       uniqueVisits.push({ template, theoreticalJr, countsCapacity });
     }
-    // 6. Frecuencia 2 visitas/mes -> Semanas 1 y 3
-    else if (Math.abs(freq - 2) < 0.1) {
-      if (weekOfMonth === 1 || weekOfMonth === 3) {
-        uniqueVisits.push({ template, theoreticalJr, countsCapacity });
-      }
-    }
-    // 7. Frecuencia 1 visita/mes -> Semana 2
-    else if (Math.abs(freq - 1) < 0.1) {
-      if (weekOfMonth === 2) {
-        uniqueVisits.push({ template, theoreticalJr, countsCapacity });
-      }
-    }
-    // 8. Frecuencia 0.5 visitas/mes -> Semana 3 en meses pares
-    else if (Math.abs(freq - 0.5) < 0.05) {
-      if (weekOfMonth === 3 && mondayMonth % 2 === 0) {
-        uniqueVisits.push({ template, theoreticalJr, countsCapacity });
-      }
-    }
-    // 9. Frecuencia 0.33 visitas/mes -> Semana 4 en meses con (mes % 3 = 1)
-    else if (Math.abs(freq - 0.33) < 0.05 || Math.abs(freq - 1 / 3) < 0.05) {
-      if (weekOfMonth === 4 && mondayMonth % 3 === 1) {
-        uniqueVisits.push({ template, theoreticalJr, countsCapacity });
-      }
-    }
     // Fallback para otras frecuencias >= 4 -> 1 visita
     else if (freq >= 4) {
+      uniqueVisits.push({ template, theoreticalJr, countsCapacity });
+    }
+  }
+
+  // 2. Actividades de baja frecuencia repartidas por proyección mensual (D29: 2, 1, 0.5, 0.33)
+  if (weekOfMonth <= 4 && !options.skipMonthlyAllocation) {
+    const monthlyAllocations = projectMonthlyLowFrequencyAllocation(templates, weekStart, options);
+    const thisWeekAllocated = monthlyAllocations.get(weekStartStr) || [];
+
+    for (const template of thisWeekAllocated) {
+      const theoreticalJr =
+        template.rendimiento !== null &&
+        template.rendimiento !== undefined &&
+        template.rendimiento > 0
+          ? template.cantidad / template.rendimiento
+          : 0;
+      const countsCapacity = template.counts_capacity !== false;
       uniqueVisits.push({ template, theoreticalJr, countsCapacity });
     }
   }

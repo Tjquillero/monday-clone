@@ -52,6 +52,29 @@ export function useWeeklyPlans(boardId: string | undefined, groupId?: string | n
   });
 }
 
+export function useSiteDailyCapacity(boardId: string | undefined, groupId: string | undefined | null) {
+  return useQuery<number | null>({
+    queryKey: ['site_daily_capacity', boardId, groupId],
+    queryFn: async () => {
+      if (!boardId || !groupId) return null;
+      const { data, error } = await supabase
+        .from('site_daily_capacity')
+        .select('jornales_dia')
+        .eq('board_id', boardId)
+        .eq('group_id', groupId)
+        .maybeSingle();
+
+      if (error) return null;
+      return data?.jornales_dia !== null && data?.jornales_dia !== undefined
+        ? Number(data.jornales_dia)
+        : null;
+    },
+    enabled: !!boardId && !!groupId,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // useWeeklyPlanWithItems
 //
