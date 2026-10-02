@@ -121,7 +121,7 @@ describe('Gobernanza D19: Frecuencia Operativa y Despacho Semanal', () => {
       const weekStartSemana2 = '2026-09-14';
       const schedule2 = generateRoutineScheduleForWeek([tmpl], weekStartSemana2, []);
       const days2 = schedule2.assignments.map((a) => a.dateStr);
-      expect(days2).toEqual(['2026-09-16']); // Mié (1 día)
+      expect(days2).toEqual(['2026-09-14']); // 1 día (asignado por menor carga D27)
 
       // Semana 3: lunes 2026-09-21 -> ceil(21/7) = 3 (Semana 3)
       const weekStartSemana3 = '2026-09-21';
@@ -133,7 +133,7 @@ describe('Gobernanza D19: Frecuencia Operativa y Despacho Semanal', () => {
       const weekStartSemana4 = '2026-09-28';
       const schedule4 = generateRoutineScheduleForWeek([tmpl], weekStartSemana4, []);
       const days4 = schedule4.assignments.map((a) => a.dateStr);
-      expect(days4).toEqual(['2026-09-30']); // Mié (1 día)
+      expect(days4).toEqual(['2026-09-28']); // 1 día (asignado por menor carga D27)
     });
 
     // 4 visitas/mes → 1 día por semana (determinista)

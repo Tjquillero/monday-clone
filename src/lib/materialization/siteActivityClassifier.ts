@@ -60,6 +60,7 @@ export interface SiteOperationalFrequencyConfig {
   source: 'CRONOGRAMA' | 'POA';
   qty_mode?: 'FULL' | 'SPLIT';
   rendimiento?: number | null;
+  counts_capacity?: boolean;
 }
 
 export interface ActivityClassificationContext {
@@ -294,6 +295,7 @@ export function classifySiteActivities(
         frecuencia: opFreq.visits_per_month,
         cantidad: effectiveQty,
         priority: matchedStd.priority || 'must_execute',
+        counts_capacity: opFreq.counts_capacity !== false,
       });
 
       activitiesDetail.push({
@@ -337,6 +339,7 @@ export function classifySiteActivities(
       frecuencia: opFreq.visits_per_month,
       cantidad: effectiveQty,
       priority: matchedStd.priority || 'must_execute',
+      counts_capacity: opFreq.counts_capacity !== false,
     });
 
     const calculatedJr = effectiveRend > 0 ? Number((effectiveQty / effectiveRend).toFixed(4)) : 0;

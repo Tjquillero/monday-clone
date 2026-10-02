@@ -50,7 +50,7 @@ describe('Corrección Gobernada de Frecuencias Contractuales v1.0 — Test Suite
     // 3 actividades x 1 ocurrencia/semana = 3 ocurrencias totales por semana por sitio
     expect(projection.assignments.length).toBe(3);
     const days = projection.assignments.map((p) => p.dayOfWeek);
-    expect(days).toEqual([1, 1, 1]); // Todas asignadas al día 1 (Lunes)
+    expect(days).toEqual([1, 2, 3]); // Repartidas por carga de menor a mayor día (D27)
   });
 
   it('2. Comparativa Cuantitativa de Materialización: 18 slots/sitio (errónea) vs 3 slots/sitio (canónica)', () => {

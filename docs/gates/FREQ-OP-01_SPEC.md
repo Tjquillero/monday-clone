@@ -223,5 +223,50 @@ Fuente: `COSTOS GENERALES V3` (Tablero `3ea0326f-6ff7-409f-848a-1f296e6e3cc8`):
 | **MERCADO LA SAZÓN** | **0.98** | COSTOS GENERALES V3 |
 | **PLAYA PUNTA ASTILLEROS** | *0.00 (Sin Operación, D25)* | N/A |
 
+---
+
+## 8. Decisiones D27–D28: Reparto por Carga y Maquinaria fuera de Capacidad (GATE FREQ-OP-03)
+
+> **Aprobadas por Tomás (2026-10-02):** Gobernanza de balanceo determinista de carga en días hábiles y exclusión de actividades de maquinaria en el cómputo de capacidad.
+
+### 8.1. Definición de Decisiones
+
+- **D27 (Reparto de Días por Carga de Jornales):**
+  Los días de las visitas no recurrentes se asignan según la carga de jornales del sitio, no por un día fijo por actividad:
+  1. **Diarias (25):** Lunes a Sábado. Si cae en festivo, se omite.
+  2. **Patrones repetidos (12, 8, 6 en semanas impares):** Se mantienen (12: lun-mié-vie; 8: mar-jue; 6 en semanas de 2 visitas: mar-jue).
+  3. **Visitas ÚNICAS de la semana (4, 2, 1, 0.5, 0.33 en sus semanas; 6 en semanas de 1 visita):** Se ordenan por jornales de la visita (mayor primero; empate `activity_key` ascendente) y se asigna cada una al día hábil (lun–sáb, no festivo) con **menor carga acumulada de jornales que cuentan para capacidad**; empate: el día más temprano de la semana.
+  4. **División de Visita por Capacidad:** Si una visita no cabe en el mejor día sin pasar la capacidad del sitio (`site_daily_capacity`), se divide en partes en días hábiles consecutivos de la misma semana (cantidad proporcional, 2 decimales; la suma de partes = la visita total), cada parte $\le$ capacidad libre de su día. Lo que no quepa queda en el día de menor carga y el exceso se reporta en la telemetría.
+  5. **Sitio sin capacidad (null):** Asignación directa al día de menor carga sin división.
+  6. **Festivos (D26):** Se mantienen. Las partes de una visita dividida comparten `activity_key` y llevan `planned_sequence` distinto.
+
+- **D28 (Maquinaria Fuera de Capacidad):**
+  Las actividades con `counts_capacity = false` (equipos pesados / maquinaria: `1.11`, `1.14`, `1.15`, `2.17`) **NO cuentan contra la capacidad diaria de jornales del sitio** (`daily_journals`, `exceeded_capacity_days`).
+  El evento de resumen `SITE_MATERIALIZATION_SUMMARY` incluye por día: jornales que cuentan (`counting_journals`), jornales de máquina (`machine_journals`), capacidad y déficit.
+
+---
+
+## 9. Gobernanza UI-POA-01: Acceso a la Importación y Gestión del POA
+
+> **Autorización de Tomás (2026-10-02):** Se autoriza descongelar la navegación del tablero exclusivamente para habilitar el acceso administrativo a la gestión contractual del POA.
+
+### 9.1. Reglas de Acceso y Navegación
+
+1. **Entrada "POA" en el Ribbon del Tablero:**
+   Visible **ÚNICAMENTE** si `session.user.app_metadata.role === 'admin'` o `user.app_metadata.role === 'admin'`.
+   **Prohibición Estricta:** No usar `user_metadata.role` (editable por usuario en cliente), no usar listas de correos, ni el fallback `isAdmin` no auditado.
+
+2. **Pantalla `/poa` del Tablero Actual:**
+   - Resuelve el `poaId` del tablero mediante la tabla `public.poa` filtrando por `board_id`.
+   - Muestra la versión activa (número de versión, fecha de publicación y conteo exacto de actividades contractuales).
+   - Muestra el historial completo de versiones con su estado (`active`, `draft`, `archived`, `superseded`).
+   - Botones de acción:
+     - `"Importar nueva versión"` $\rightarrow$ `/poa/[poaId]/import`
+     - `"Asignar zonas"` $\rightarrow$ `/poa/[poaId]/zone-mappings`
+
+3. **Protección de Rutas `/poa/[poaId]/import` y `/poa/[poaId]/zone-mappings`:**
+   Si el usuario no cuenta con `app_metadata.role === 'admin'`, se muestra pantalla `"Acceso restringido"` y no se renderiza el formulario de carga/mapeo. Ambas páginas incluyen enlace de retorno `"Volver a POA"`.
+
+
 
 

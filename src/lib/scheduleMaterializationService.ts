@@ -363,10 +363,10 @@ export async function ensureWeeklyPlanMaterialized(
     }
   }
 
-  // 3. Obtener Frecuencias Operativas para el sitio (D19 / FREQ-OP-01 / FREQ-OP-02)
+  // 3. Obtener Frecuencias Operativas para el sitio (D19 / FREQ-OP-01 / FREQ-OP-02 / FREQ-OP-03)
   const { data: opFreqData, error: opFreqErr } = await supabase
     .from('operational_frequencies')
-    .select('activity_key, visits_per_month, source, qty_mode, rendimiento')
+    .select('activity_key, visits_per_month, source, qty_mode, rendimiento, counts_capacity')
     .eq('board_id', boardId)
     .eq('group_id', gId);
 
@@ -404,6 +404,7 @@ export async function ensureWeeklyPlanMaterialized(
         source: row.source || 'CRONOGRAMA',
         qty_mode: row.qty_mode || 'FULL',
         rendimiento: row.rendimiento !== null && row.rendimiento !== undefined ? Number(row.rendimiento) : null,
+        counts_capacity: row.counts_capacity !== false,
       });
     }
   }
@@ -540,12 +541,15 @@ export async function ensureWeeklyPlanMaterialized(
     throw new Error('NO_TEMPLATES: Cero plantillas operacionales viables generadas para el sitio con POA activo');
   }
 
-  // 7. Generar Ocurrencias Diarias con Calendario Laboral Colombiano (F3.1, D26)
+  // 7. Generar Ocurrencias Diarias con Calendario Laboral Colombiano (F3.1, D26, D27, D28)
   const projection = generateRoutineScheduleForWeek(
     templates,
     mondayDate,
     [],
-    { customNonWorkingDays: options.customNonWorkingDays }
+    {
+      customNonWorkingDays: options.customNonWorkingDays,
+      siteDailyCapacity,
+    }
   );
 
   // Ordenar assignments por (dateStr, activity_key) de forma determinista y estable ANTES de asignar planned_sequence
@@ -947,26 +951,52 @@ export async function ensureWeeklyPlanMaterialized(
     );
   }
 
-  // D24: Cálculo informativo de jornales por día y verificación de capacidad del sitio
+  // D24 / D28: Cálculo informativo de jornales por día y verificación de capacidad del sitio
+  // Solo las actividades con counts_capacity = true computan contra la capacidad diaria.
   const dailyJournalsMap: Record<string, number> = {};
+  const dailyMachineJournalsMap: Record<string, number> = {};
+
   for (const assign of sortedAssignments) {
     if (assign.dateStr) {
-      dailyJournalsMap[assign.dateStr] = Number(((dailyJournalsMap[assign.dateStr] || 0) + assign.theoretical_jr).toFixed(4));
+      const isCounting = assign.counts_capacity !== false;
+      if (isCounting) {
+        dailyJournalsMap[assign.dateStr] = Number(((dailyJournalsMap[assign.dateStr] || 0) + assign.theoretical_jr).toFixed(4));
+      } else {
+        dailyMachineJournalsMap[assign.dateStr] = Number(((dailyMachineJournalsMap[assign.dateStr] || 0) + assign.theoretical_jr).toFixed(4));
+      }
     }
   }
 
-  const exceededCapacityDays: Array<{ date: string; journals: number; capacity: number; deficit: number }> = [];
+  const exceededCapacityDays: Array<{ date: string; journals: number; machine_journals?: number; capacity: number; deficit: number }> = [];
   if (siteDailyCapacity !== null && siteDailyCapacity > 0) {
     for (const [dateStr, jrTotal] of Object.entries(dailyJournalsMap)) {
       if (jrTotal > siteDailyCapacity) {
+        const machineJr = dailyMachineJournalsMap[dateStr] || 0;
         exceededCapacityDays.push({
           date: dateStr,
           journals: jrTotal,
+          machine_journals: machineJr,
           capacity: siteDailyCapacity,
           deficit: Number((jrTotal - siteDailyCapacity).toFixed(4)),
         });
       }
     }
+  }
+
+  // Detalle por día para el evento de resumen (jornales que cuentan, jornales de máquina, capacidad y déficit)
+  const allDates = Array.from(new Set([...Object.keys(dailyJournalsMap), ...Object.keys(dailyMachineJournalsMap)])).sort();
+  const dailyCapacityDetail: Record<string, { counting_journals: number; machine_journals: number; capacity: number | null; deficit: number }> = {};
+  for (const d of allDates) {
+    const cJr = dailyJournalsMap[d] || 0;
+    const mJr = dailyMachineJournalsMap[d] || 0;
+    const cap = siteDailyCapacity;
+    const def = cap !== null && cap > 0 && cJr > cap ? Number((cJr - cap).toFixed(4)) : 0;
+    dailyCapacityDetail[d] = {
+      counting_journals: cJr,
+      machine_journals: mJr,
+      capacity: cap,
+      deficit: def,
+    };
   }
 
   // Regla M2: Si hubo GATEWAY_DROPPED, el resumen pasa a PARTIAL
@@ -979,6 +1009,8 @@ export async function ensureWeeklyPlanMaterialized(
     capacity_read_error: capacityReadError,
     capacity_error: capacityReadError,
     daily_journals: dailyJournalsMap,
+    daily_machine_journals: dailyMachineJournalsMap,
+    daily_capacity_detail: dailyCapacityDetail,
     exceeded_capacity_days: exceededCapacityDays,
     capacity_exceeded: exceededCapacityDays.length > 0,
   };

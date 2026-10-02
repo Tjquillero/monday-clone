@@ -113,11 +113,12 @@ describe('Test 33 — ADR-0007 Motor de Programación de Rutinas v1', () => {
     expect(lunes).toContain('riego_arbustos_grama');
     expect(lunes).not.toContain('limpieza_general_paisajismo');
 
-    // Martes 8: Limpieza zonas duras, Limpieza mármol, Limpieza paisajismo
+    // Martes 8: Limpieza zonas duras, Limpieza mármol, Limpieza paisajismo, Mtto Cama Siembra (D27: asignado a martes por menor carga)
     const martes = getAssignedKeys('2026-09-08');
     expect(martes).toContain('limpieza_zona_dura');
     expect(martes).toContain('limpieza_marmol');
     expect(martes).toContain('limpieza_general_paisajismo');
+    expect(martes).toContain('mtto_cama_siembra');
     expect(martes).not.toContain('riego_arbustos_grama');
 
     // Miércoles 9: Limpieza zonas duras, Limpieza mármol, Riego
@@ -132,11 +133,11 @@ describe('Test 33 — ADR-0007 Motor de Programación de Rutinas v1', () => {
     expect(jueves).toContain('limpieza_marmol');
     expect(jueves).toContain('poda_arbustos');
 
-    // Viernes 11: Limpieza zonas duras, Limpieza mármol, Mtto Cama Siembra
+    // Viernes 11: Limpieza zonas duras, Limpieza mármol, Riego
     const viernes = getAssignedKeys('2026-09-11');
     expect(viernes).toContain('limpieza_zona_dura');
     expect(viernes).toContain('limpieza_marmol');
-    expect(viernes).toContain('mtto_cama_siembra');
+    expect(viernes).toContain('riego_arbustos_grama');
 
     // Sábado 12: Limpieza zonas duras, Limpieza mármol, Plateo de árboles
     const sabado = getAssignedKeys('2026-09-12');

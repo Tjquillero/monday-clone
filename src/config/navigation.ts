@@ -123,3 +123,12 @@ export const SIDEBAR_ITEMS: readonly SidebarItem[] = [
   // 2026-07-01 documentada arriba en este archivo.
   { icon: FileText, label: 'Documentos', path: '/documentos' },
 ] as const;
+
+/**
+ * Validador estricto de rol administrador por app_metadata (UI-POA-01 / SECURITY-AUDIT-01 / S1).
+ * NO usa user_metadata (editable por usuario) ni lista de correos.
+ */
+export function isAppAdminUser(user: { app_metadata?: Record<string, any> } | null | undefined): boolean {
+  return (user?.app_metadata as any)?.role === 'admin';
+}
+

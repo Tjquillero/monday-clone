@@ -11,7 +11,8 @@ import {
   Star, ChevronDown, FileText, FileSpreadsheet,
   Sun, Moon
 } from 'lucide-react';
-import { BOARD_TABS, VALID_VIEW_PARAMS, type BoardViewId } from '@/config/navigation';
+import { BOARD_TABS, VALID_VIEW_PARAMS, type BoardViewId, isAppAdminUser } from '@/config/navigation';
+import Link from 'next/link';
 import { useState, useMemo, useEffect, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useBoard, useBoardColumns, useBoardGroups } from '@/hooks/useBoardData';
@@ -46,7 +47,7 @@ function DashboardContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { can } = usePermissions();
   
   const rawBoardId = (params as any)?.boardId || (searchParams ? searchParams.get('boardId') : null);
@@ -256,7 +257,7 @@ function DashboardContent() {
         </div>
 
         {/* Center-Left: Tabs Nav */}
-        <nav className="flex bg-black/40 rounded-lg p-0.5 border border-[var(--border-color)] shadow-inner min-w-max">
+        <nav className="flex bg-black/40 rounded-lg p-0.5 border border-[var(--border-color)] shadow-inner min-w-max items-center">
           {BOARD_TABS.map((tab) => {
             const isActive = currentView === tab.id;
             return (
@@ -273,6 +274,15 @@ function DashboardContent() {
               </button>
             );
           })}
+          {isAppAdminUser(session?.user || user) && board?.id && (
+            <Link
+              href={`/poa?boardId=${board.id}`}
+              className="relative flex items-center gap-2 px-3 py-1.5 rounded-md text-[9px] font-black transition-all uppercase tracking-wider text-slate-400 hover:text-white"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 relative z-10" />
+              <span className="relative z-10 hidden xl:inline">POA</span>
+            </Link>
+          )}
         </nav>
 
         <div className="h-4 w-px bg-slate-500/5 hidden lg:block" />
