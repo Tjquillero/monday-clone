@@ -822,10 +822,11 @@ describe('GATE FREQ-OP-05 — Decisión D30', () => {
       existingMonthPlans,
     });
 
+    const w5 = allocation.get('2026-10-05') || [];
     const w12 = allocation.get('2026-10-12') || [];
     const w19 = allocation.get('2026-10-19') || [];
     const w26 = allocation.get('2026-10-26') || [];
-    const allAlloc = [...w12, ...w19, ...w26];
+    const allAlloc = [...w5, ...w12, ...w19, ...w26];
 
     const found = allAlloc.find((i) => i.activity_key === '1.13');
     expect(found).toBeDefined();
@@ -1243,6 +1244,183 @@ describe('GATE FREQ-OP-05 — Decisión D30', () => {
       expect(matchNov).toBeDefined();
       expect(Math.abs((matchNov?.qty || 0) - proj.qty)).toBeLessThanOrEqual(0.05);
     }
+  });
+
+  // 19. FREQ-OP-05e (Obligatoria 1): Mes con semana 1 fija con ítems y semana 2 con plan existente de 0 ítems
+  // al materializar semana 2 produce resultado idéntico a semana 2 sin plan
+  test('19. FREQ-OP-05e: Semana 2 con plan existente de 0 ítems no es tratada como fija y recibe las actividades completas idéntico a sin plan', async () => {
+    const siteDailyCapacity = 7;
+    const templates: RoutineBaseTemplate[] = [
+      {
+        id: 't-e5-1',
+        activity_key: '1.01',
+        name: 'ACTIVIDAD DIARIA',
+        zone: 'ZONA 1',
+        unit: 'M2',
+        cantidad: 60,
+        rendimiento: 10, // 6 JR/día
+        frecuencia: 25,
+        counts_capacity: true,
+      },
+      {
+        id: 't-e5-2',
+        activity_key: '1.14',
+        name: 'CORTE DE GRAMA MENSUAL',
+        zone: 'ZONA 1',
+        unit: 'M2',
+        cantidad: 50,
+        rendimiento: 10, // 5 JR
+        frecuencia: 1,
+        counts_capacity: true,
+      },
+      {
+        id: 't-e5-3',
+        activity_key: '2.02',
+        name: 'ACTIVIDAD QUINCENAL',
+        zone: 'ZONA 1',
+        unit: 'M2',
+        cantidad: 30,
+        rendimiento: 10, // 3 JR por visita, 2 visitas
+        frecuencia: 2,
+        counts_capacity: true,
+      },
+    ];
+
+    const existingW1 = [
+      {
+        week_start: '2026-10-05',
+        status: 'published',
+        items: [
+          { activity_key: '1.01', planned_jr: 36, planned_qty: 360, counts_capacity: true },
+        ],
+      },
+    ];
+
+    // Baseline: semana 2 sin plan existente
+    const projBaseline = generateRoutineScheduleForWeek(templates, '2026-10-12', [], {
+      siteDailyCapacity,
+      existingMonthPlans: existingW1,
+    });
+
+    // Caso con semana 2 teniendo plan con 0 ítems
+    const existingWithEmptyW2 = [
+      ...existingW1,
+      {
+        week_start: '2026-10-12',
+        status: 'published',
+        items: [],
+      },
+    ];
+
+    const projWithEmptyPlan = generateRoutineScheduleForWeek(templates, '2026-10-12', [], {
+      siteDailyCapacity,
+      existingMonthPlans: existingWithEmptyW2,
+    });
+
+    // Validar que ambas proyecciones son exactamente idénticas
+    expect(projWithEmptyPlan.assignments.length).toBe(projBaseline.assignments.length);
+    expect(projWithEmptyPlan.assignments).toEqual(projBaseline.assignments);
+
+    // Las visitas mensuales o quincenales (2.02 en par 2-4) deben estar presentes en semana 2
+    const lowFreqAssigned = projWithEmptyPlan.assignments.filter(
+      (a) => a.activity_key === '1.14' || a.activity_key === '2.02'
+    );
+    expect(lowFreqAssigned.length).toBeGreaterThan(0);
+  });
+
+  // 20. FREQ-OP-05e (Obligatoria 2): Semana 3 materializada tras la semana 2 con plan previo de 0 ítems
+  // es idéntica a la cadena secuencial sin el plan vacío
+  test('20. FREQ-OP-05e: Semana 3 materializada tras semana 2 llena es idéntica a la cadena secuencial estándar', () => {
+    const siteDailyCapacity = 7;
+    const templates: RoutineBaseTemplate[] = [
+      {
+        id: 't-e5-1',
+        activity_key: '1.01',
+        name: 'ACTIVIDAD DIARIA',
+        zone: 'ZONA 1',
+        unit: 'M2',
+        cantidad: 60,
+        rendimiento: 10,
+        frecuencia: 25,
+        counts_capacity: true,
+      },
+      {
+        id: 't-e5-2',
+        activity_key: '1.14',
+        name: 'CORTE DE GRAMA MENSUAL',
+        zone: 'ZONA 1',
+        unit: 'M2',
+        cantidad: 50,
+        rendimiento: 10,
+        frecuencia: 1,
+        counts_capacity: true,
+      },
+      {
+        id: 't-e5-3',
+        activity_key: '2.02',
+        name: 'ACTIVIDAD QUINCENAL',
+        zone: 'ZONA 1',
+        unit: 'M2',
+        cantidad: 30,
+        rendimiento: 10,
+        frecuencia: 2,
+        counts_capacity: true,
+      },
+    ];
+
+    const existingW1 = [
+      {
+        week_start: '2026-10-05',
+        status: 'published',
+        items: [
+          { activity_key: '1.01', planned_jr: 36, planned_qty: 360, counts_capacity: true },
+          { activity_key: '2.02', planned_jr: 3, planned_qty: 30, counts_capacity: true },
+        ],
+      },
+    ];
+
+    // Cadena 1: Normal (W2 se proyecta sin plan vacío y se guarda)
+    const projW12Normal = generateRoutineScheduleForWeek(templates, '2026-10-12', [], {
+      siteDailyCapacity,
+      existingMonthPlans: existingW1,
+    });
+    const w12ItemsNormal = projW12Normal.assignments.map((a) => ({
+      activity_key: a.activity_key,
+      planned_qty: a.cantidad,
+      planned_jr: a.theoretical_jr,
+      counts_capacity: a.counts_capacity,
+    }));
+    const existingChainNormal = [
+      ...existingW1,
+      { week_start: '2026-10-12', status: 'published', items: w12ItemsNormal },
+    ];
+    const projW19Normal = generateRoutineScheduleForWeek(templates, '2026-10-19', [], {
+      siteDailyCapacity,
+      existingMonthPlans: existingChainNormal,
+    });
+
+    // Cadena 2: Con plan vacío en W2 al inicio, luego W2 llenada
+    const projW12FromEmpty = generateRoutineScheduleForWeek(templates, '2026-10-12', [], {
+      siteDailyCapacity,
+      existingMonthPlans: [...existingW1, { week_start: '2026-10-12', status: 'published', items: [] }],
+    });
+    const w12ItemsFromEmpty = projW12FromEmpty.assignments.map((a) => ({
+      activity_key: a.activity_key,
+      planned_qty: a.cantidad,
+      planned_jr: a.theoretical_jr,
+      counts_capacity: a.counts_capacity,
+    }));
+    const existingChainFromEmpty = [
+      ...existingW1,
+      { week_start: '2026-10-12', status: 'published', items: w12ItemsFromEmpty },
+    ];
+    const projW19FromEmpty = generateRoutineScheduleForWeek(templates, '2026-10-19', [], {
+      siteDailyCapacity,
+      existingMonthPlans: existingChainFromEmpty,
+    });
+
+    // Validar que semana 3 es 100% idéntica en ambas cadenas
+    expect(projW19FromEmpty.assignments).toEqual(projW19Normal.assignments);
   });
 });
 

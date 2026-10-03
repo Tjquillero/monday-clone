@@ -401,6 +401,10 @@ Fuente: `COSTOS GENERALES V3` (Tablero `3ea0326f-6ff7-409f-848a-1f296e6e3cc8`):
 - **E2: Fragmentos mínimos aplicables solo a restos:** El límite mínimo de $0.05\text{ JR}$ aplica exclusivamente a fragmentos parciales cuando una actividad no cabe completa ($\text{allocJr} < \text{remJr}$). Si una visita completa mide menos de $0.05\text{ JR}$ y cabe en la semana disponible, se asigna íntegramente.
 - **E4: Inmutabilidad estricta de planes existentes con ítems:** Si la semana objetivo ya cuenta con un plan existente no cancelado que contiene ítems ($\text{items.length} > 0$), la materialización es completamente inmutable: no recalcula, no compara secuencias (evitando falsos `SEQUENCE_IDENTITY_CONFLICT`) y devuelve de inmediato el resultado NOOP con 0 llamadas a RPCs de escritura (`ensure_weekly_plan_header` y `sync_weekly_plan_items_rpc`), registrando el evento resumen de telemetría.
 
+### 12.10. D30.10 — Gobernanza de Planes sin Ítems y Semana Objetivo en la Proyección (GATE FREQ-OP-05e)
+- **Un plan sin ítems no es una semana fija:** Si una semana candidata del mes cuenta con un registro en `weekly_plans` (no cancelado) pero tiene $0\text{ ítems}$ (`items.length === 0`), dicha semana **NO** se considera fija (`isFixed = false`). Se evalúa con su carga base recurrente (`calculateBaseWeekCountingLoad`) y su holgura disponible participa plenamente como candidata para recibir visitas de baja frecuencia.
+- **La semana objetivo nunca es fija en su propia proyección:** Durante la materialización o proyección de una semana $W$, $W$ se evalúa con `isFixed = false` dentro de `projectMonthlyLowFrequencyAllocation`. Si $W$ ya tenía un plan previo con ítems, la regla E4 devuelve `NOOP` antes de la escritura; si $W$ no tenía plan o tenía un plan con $0\text{ ítems}$, recibe la totalidad de las actividades proyectadas para esa semana como nueva materialización.
+
 
 
 

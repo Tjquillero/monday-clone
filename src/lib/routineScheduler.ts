@@ -286,6 +286,8 @@ export function projectMonthlyLowFrequencyAllocation(
   // Mapear ya planificado en semanas fijas del mes por actividad (excluyendo items cancelados, B1/B2)
   const alreadyPlannedQtyMap = new Map<string, number>();
 
+  const targetWeekStartStr = formatDateISO(targetMonday);
+
   const weekStates: WeekLoadState[] = eligibleWeeks.map((ew) => {
     let workingDaysCount = 0;
     for (let i = 0; i < 7; i++) {
@@ -299,14 +301,15 @@ export function projectMonthlyLowFrequencyAllocation(
 
     const weekCapacity = siteDailyCapacity !== null ? siteDailyCapacity * workingDaysCount : Infinity;
     const existing = existingPlans.find((p) => p.week_start === ew.weekStartStr);
+    const hasItems = Boolean(existing && (existing.items || []).length > 0);
 
-    if (existing) {
-      const fixedLoad = (existing.items || [])
+    if (hasItems) {
+      const fixedLoad = (existing!.items || [])
         .filter((i) => i.counts_capacity !== false)
         .reduce((sum, i) => sum + (i.planned_jr || 0), 0);
-      const keys = new Set<string>((existing.items || []).map((i) => i.activity_key));
+      const keys = new Set<string>((existing!.items || []).map((i) => i.activity_key));
 
-      for (const it of existing.items || []) {
+      for (const it of existing!.items || []) {
         const matched = templates.find((t) => t.activity_key === it.activity_key);
         let q = 0;
         if (it.planned_qty !== undefined) {
