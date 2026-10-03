@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import puppeteer from 'puppeteer';
+import { launchReportBrowser } from '@/lib/reportBrowser';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { buildActivityExecutionReportDTO } from '@/lib/activityReportReadModelService';
 import { resolveReportAssetUrls } from '@/lib/activityReportAssetResolver';
 import { renderActivityExecutionReportHTML } from './ActivityExecutionReportTemplate';
 
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+
 export async function GET(req: NextRequest) {
+  let browser: any = null;
   try {
     const url = new URL(req.url);
     const actaId = url.searchParams.get('acta_id');
@@ -57,11 +61,8 @@ export async function GET(req: NextRequest) {
     // 3. Render HTML
     const htmlContent = renderActivityExecutionReportHTML(resolvedDTO);
 
-    // 4. Puppeteer PDF Generation
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+    // 4. Browser PDF Generation
+    browser = await launchReportBrowser();
     const page = await browser.newPage();
 
     await page.setContent(htmlContent, {
@@ -77,8 +78,6 @@ export async function GET(req: NextRequest) {
       margin: { top: '10mm', bottom: '10mm', left: '10mm', right: '10mm' },
     });
 
-    await browser.close();
-
     const filename = actaId
       ? `Informe_Ejecucion_Acta_${reportDTO.header.acta_number || 'Borrador'}.pdf`
       : `Informe_Ejecucion_${periodStart}_${periodEnd}.pdf`;
@@ -91,9 +90,18 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error generating activity execution report PDF:', error);
+    const isLaunchError = error?.code === 'PDF_BROWSER_LAUNCH_FAILED' || error?.message?.includes('PDF_BROWSER_LAUNCH_FAILED');
     return NextResponse.json(
-      { error: error.message || 'Error al generar el informe en PDF' },
+      {
+        error: error.message || 'Error al generar el informe en PDF',
+        code: isLaunchError ? 'PDF_BROWSER_LAUNCH_FAILED' : 'PDF_GENERATION_FAILED',
+        details: error.message || String(error),
+      },
       { status: 500 }
     );
+  } finally {
+    if (browser) {
+      await browser.close().catch(() => {});
+    }
   }
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import puppeteer from 'puppeteer';
+import { launchReportBrowser } from '@/lib/reportBrowser';
 import { generateCertifiedActaReportHtml } from '@/components/reports/CertifiedActaReportTemplate';
 import { wrapReportHtml } from '@/lib/reportFontHelper';
 import { CertifiedActa, CertifiedActaTotals } from '@/types/monday';
@@ -8,7 +8,11 @@ import { CertifiedActa, CertifiedActaTotals } from '@/types/monday';
 // acta/totals llegan resueltos por el cliente (que ya los tiene vía RLS/RPC,
 // mismo patrón que /api/reports/acta). Esta ruta solo formatea + Puppeteer.
 
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
+  let browser: any = null;
   try {
     const { acta, totals } = (await req.json()) as { acta: CertifiedActa; totals: CertifiedActaTotals };
 
@@ -33,10 +37,7 @@ export async function POST(req: NextRequest) {
       `,
     });
 
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+    browser = await launchReportBrowser();
     const page = await browser.newPage();
 
     await page.setContent(fullHtml, {
@@ -52,8 +53,6 @@ export async function POST(req: NextRequest) {
       margin: { top: '10mm', bottom: '10mm', left: '10mm', right: '10mm' },
     });
 
-    await browser.close();
-
     return new NextResponse(pdfBuffer as any, {
       headers: {
         'Content-Type': 'application/pdf',
@@ -62,6 +61,18 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error generating certified acta PDF:', error);
-    return NextResponse.json({ error: 'Failed to generate PDF', details: error.message }, { status: 500 });
+    const isLaunchError = error?.code === 'PDF_BROWSER_LAUNCH_FAILED' || error?.message?.includes('PDF_BROWSER_LAUNCH_FAILED');
+    return NextResponse.json(
+      {
+        error: 'Failed to generate PDF',
+        code: isLaunchError ? 'PDF_BROWSER_LAUNCH_FAILED' : 'PDF_GENERATION_FAILED',
+        details: error?.message || String(error),
+      },
+      { status: 500 }
+    );
+  } finally {
+    if (browser) {
+      await browser.close().catch(() => {});
+    }
   }
 }

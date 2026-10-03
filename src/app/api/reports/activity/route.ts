@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import puppeteer from 'puppeteer';
+import { launchReportBrowser } from '@/lib/reportBrowser';
 import { generateReportHtml } from '@/components/reports/ActivityReportTemplate';
 import { wrapReportHtml } from '@/lib/reportFontHelper';
 
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   console.log('Received request for Activity Report');
+  let browser: any = null;
   try {
     const { item, columns, evidence } = await req.json();
     console.log('Payload parsed:', { itemName: item?.name, evidenceCount: evidence?.length });
@@ -28,11 +32,8 @@ export async function POST(req: NextRequest) {
       `,
     });
 
-    // Launch puppeteer
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+    // Launch browser
+    browser = await launchReportBrowser();
 
     const page = await browser.newPage();
     
@@ -52,8 +53,6 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    await browser.close();
-
     // Return PDF response
     return new NextResponse(pdfBuffer as any, {
       headers: {
@@ -64,6 +63,18 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error('PDF Generation Error:', error);
-    return NextResponse.json({ error: 'Failed to generate PDF', details: error.message }, { status: 500 });
+    const isLaunchError = error?.code === 'PDF_BROWSER_LAUNCH_FAILED' || error?.message?.includes('PDF_BROWSER_LAUNCH_FAILED');
+    return NextResponse.json(
+      {
+        error: 'Failed to generate PDF',
+        code: isLaunchError ? 'PDF_BROWSER_LAUNCH_FAILED' : 'PDF_GENERATION_FAILED',
+        details: error?.message || String(error),
+      },
+      { status: 500 }
+    );
+  } finally {
+    if (browser) {
+      await browser.close().catch(() => {});
+    }
   }
 }
