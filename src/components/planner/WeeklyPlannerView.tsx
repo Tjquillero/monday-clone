@@ -1,8 +1,6 @@
-'use client';
-
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Save, CheckCircle, DollarSign, FileDown } from 'lucide-react';
+import { AlertTriangle, Save, CheckCircle, DollarSign, FileDown, RotateCcw } from 'lucide-react';
 import {
   WeeklyPlanningContext,
   WeeklyPlan,
@@ -14,12 +12,16 @@ import {
 } from '@/types/scheduler';
 import { isColombianHoliday, getColombianHolidayName } from '@/lib/colombianHolidays';
 import { isOperationalWorkingDay } from '@/lib/routineScheduler';
+import { getBogotaToday } from '@/lib/weeklyPlanner';
+import { supabase } from '@/lib/supabaseClient';
+import { resetWeeklyPlan } from '@/lib/weeklyPlanResetService';
 import WeekSelector from './WeekSelector';
 import PlanningTable, { PlanningTableActivityItem } from './PlanningTable';
 import CapacitySummary, { DailyCapacityDetailItem, CarryoverItemDisplay, RecurrentExceedsDisplay } from './CapacitySummary';
 import PlanningWarnings from './PlanningWarnings';
 import PlanLifecyclePanel from './PlanLifecyclePanel';
 import DownloadScheduleModal from './DownloadScheduleModal';
+import ResetWeeklyPlanModal from './ResetWeeklyPlanModal';
 
 const STATUS_LABEL: Record<PlanStatus, string> = {
   draft:       'Borrador',
@@ -72,6 +74,7 @@ interface Props {
   onPrevWeek: () => void;
   onNextWeek: () => void;
   onChangeSite?: () => void;
+  onResetPlan?: (reason: string) => Promise<void>;
   carryoverNextMonth?: CarryoverItemDisplay[];
   carryoverNextMonthProjection?: CarryoverItemDisplay[];
   carryoverFromThisWeek?: CarryoverItemDisplay[];
@@ -108,6 +111,7 @@ export default function WeeklyPlannerView({
   onPrevWeek,
   onNextWeek,
   onChangeSite,
+  onResetPlan,
   carryoverNextMonth,
   carryoverNextMonthProjection,
   carryoverFromThisWeek,
@@ -115,6 +119,7 @@ export default function WeeklyPlannerView({
   availableGroups,
 }: Props) {
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const noGroupSelected = !group;
   const hasMissingStandards = missingStandards.length > 0;
 
@@ -201,6 +206,22 @@ export default function WeeklyPlannerView({
   const canSave = showTable && !savedPlan;
   const canPublish = Boolean(savedPlan && savedPlan.status === 'draft');
   const showActionBar = showTable || Boolean(savedPlan);
+
+  // PLAN-REDO-01: Reprogramar semana
+  // Solo se muestra cuando el plan visible está en draft o published, su week_start es posterior a hoy (hora Bogotá) y no tiene ejecuciones.
+  const todayBogotaISO = useMemo(() => getBogotaToday().toISOString().split('T')[0], []);
+  const planWeekStartStr = savedPlan?.week_start || selectorProps.weekStart;
+  const isFutureWeek = planWeekStartStr > todayBogotaISO;
+  const hasExecutions = Boolean(
+    savedPlanItems &&
+      savedPlanItems.some((i) => (i.executed_qty || 0) > 0 || (i.executed_jr || 0) > 0)
+  );
+  const canResetPlan = Boolean(
+    savedPlan &&
+      (savedPlan.status === 'draft' || savedPlan.status === 'published') &&
+      isFutureWeek &&
+      !hasExecutions
+  );
 
   // Desglose diario para CapacitySummary (B3 / B4)
   const dailyDetails = useMemo<DailyCapacityDetailItem[]>(() => {
@@ -347,6 +368,16 @@ export default function WeeklyPlannerView({
                 {isPublishing ? 'Publicando…' : 'Publicar'}
               </button>
             )}
+            {canResetPlan && (
+              <button
+                onClick={() => setIsResetModalOpen(true)}
+                className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-[var(--radius-control)] border border-amber-500/50 text-amber-400 hover:bg-amber-500/10 transition-colors"
+                title="Volver a generar el plan con la configuración vigente"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Reprogramar semana
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -449,6 +480,19 @@ export default function WeeklyPlannerView({
         currentGroupTitle={group?.title}
         defaultMonth={defaultMonthStr}
         availableGroups={availableGroups}
+      />
+
+      <ResetWeeklyPlanModal
+        isOpen={isResetModalOpen}
+        onClose={() => setIsResetModalOpen(false)}
+        onConfirm={async (reason) => {
+          if (onResetPlan) {
+            await onResetPlan(reason);
+          } else if (savedPlan) {
+            await resetWeeklyPlan(supabase, savedPlan.id, reason);
+          }
+        }}
+        itemCount={savedPlanItems?.length || displayActivities.length || 0}
       />
     </div>
   );

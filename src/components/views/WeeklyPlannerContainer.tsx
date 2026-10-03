@@ -1,15 +1,17 @@
-'use client';
-
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { Group } from '@/types/monday';
 import { useWeeklyPlan } from '@/hooks/useWeeklyPlan';
-import { useWeeklyPlans, useWeeklyPlanWithItems, useSiteDailyCapacity } from '@/hooks/useWeeklyPlans';
+import { useWeeklyPlans, useWeeklyPlanWithItems, useSiteDailyCapacity, weeklyPlanKeys } from '@/hooks/useWeeklyPlans';
 import { useContractStandards } from '@/hooks/useActivityStandards';
 import { useWeeklyPlanMutations, PlanItemInput } from '@/hooks/useWeeklyPlanMutations';
 import { usePoaActiveCatalog } from '@/hooks/usePoaActivities';
 import { WeeklyPlan } from '@/types/scheduler';
 import { getMonday, getBogotaToday } from '@/lib/weeklyPlanner';
+import { supabase } from '@/lib/supabaseClient';
+import { resetWeeklyPlan } from '@/lib/weeklyPlanResetService';
+import { ensureWeeklyPlanMaterialized } from '@/lib/scheduleMaterializationService';
 import WeeklyPlannerView from '@/components/planner/WeeklyPlannerView';
 import PlanningSiteSelector from '@/components/planner/PlanningSiteSelector';
 
@@ -30,6 +32,7 @@ function shiftWeek(date: Date, direction: -1 | 1): Date {
 
 export default function WeeklyPlannerContainer({ boardId, selectedGroupId, groups, onSelectGroup }: Props) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [weekStart, setWeekStart] = useState<Date>(() => getMonday(getBogotaToday()));
   const [saveError, setSaveError] = useState<string | null>(null);
   const [confirmError, setConfirmError] = useState<Error | null>(null);
@@ -195,6 +198,21 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
     }
   }, [savedPlan, closePlan, group]);
 
+  // PLAN-REDO-01: Reprogramar semana (resetea ítems y vuelve a materializar con el flujo estándar)
+  const handleResetPlan = useCallback(async (reason: string) => {
+    if (!boardId || !group || !savedPlan) return;
+    // 1. Reset transaccional en Postgres
+    await resetWeeklyPlan(supabase, savedPlan.id, reason);
+    // 2. Re-disparar materialización con el mismo flujo que al abrir la semana
+    await ensureWeeklyPlanMaterialized(supabase, boardId, group.id, weekStart);
+    // 3. Invalidar queries de React Query para refrescar la interfaz
+    queryClient.invalidateQueries({ queryKey: ['materialize_weekly_plan', boardId, group.id, weekStartISO] });
+    queryClient.invalidateQueries({ queryKey: weeklyPlanKeys.byGroup(boardId, group.id) });
+    queryClient.invalidateQueries({ queryKey: weeklyPlanKeys.all(boardId) });
+    queryClient.invalidateQueries({ queryKey: weeklyPlanKeys.plan(savedPlan.id) });
+    queryClient.invalidateQueries({ queryKey: weeklyPlanKeys.items(savedPlan.id) });
+  }, [boardId, group, savedPlan, weekStart, weekStartISO, queryClient]);
+
   // Navega a Costos sin generar el acta automáticamente — cerrar un plan no
   // implica que el usuario quiera emitirla de inmediato (puede cerrar varios
   // planes antes de ir a esa pestaña).
@@ -243,6 +261,7 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
       onPrevWeek={() => setWeekStart(d => shiftWeek(d, -1))}
       onNextWeek={() => setWeekStart(d => shiftWeek(d, 1))}
       onChangeSite={() => onSelectGroup?.(null)}
+      onResetPlan={handleResetPlan}
       carryoverNextMonth={carryoverNextMonth}
       carryoverNextMonthProjection={carryoverNextMonthProjection}
       carryoverFromThisWeek={carryoverFromThisWeek}
