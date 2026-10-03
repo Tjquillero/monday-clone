@@ -5,7 +5,6 @@ import {
 } from '../domainTools/operationalActivities';
 
 export interface GetOperationalActivitiesParams {
-  board_id: string;
   group_id?: string;
   search?: string;
   include_inactive?: boolean;
@@ -23,10 +22,6 @@ export const getOperationalActivitiesTool: AiToolDefinition<
   parametersJsonSchema: {
     type: 'object',
     properties: {
-      board_id: {
-        type: 'string',
-        description: 'UUID del board o proyecto.',
-      },
       group_id: {
         type: 'string',
         description: 'UUID opcional de la zona o sitio para filtrar exclusivamente sus actividades.',
@@ -40,14 +35,17 @@ export const getOperationalActivitiesTool: AiToolDefinition<
         description: 'Si es true, incluye actividades del catálogo o slots con demanda cero (contractual_qty = 0). Por defecto es false (solo actividades operativas activas con demanda contractual > 0).',
       },
     },
-    required: ['board_id'],
   },
   sideEffects: false,
   requiresConfirmation: false,
-  execute: (supabase, params) =>
-    getOperationalActivities(supabase, params.board_id, {
-      groupId: params.group_id,
+  execute: (supabase, params, ctx) => {
+    if (!ctx.boardId) {
+      throw new Error('Abre un tablero para hacer esta consulta.');
+    }
+    return getOperationalActivities(supabase, ctx.boardId, {
+      groupId: params.group_id || ctx.groupId || undefined,
       search: params.search,
       includeInactive: params.include_inactive,
-    }),
+    });
+  },
 };

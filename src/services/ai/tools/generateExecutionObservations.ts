@@ -2,7 +2,7 @@ import type { AiToolDefinition } from './types';
 import { generateExecutionObservations, type ExecutionObservationsResult } from '../generateExecutionObservations';
 
 export const generateExecutionObservationsTool: AiToolDefinition<
-  { execution_id: string; board_id: string },
+  { execution_id: string },
   ExecutionObservationsResult
 > = {
   name: 'generate_execution_observations',
@@ -18,11 +18,15 @@ export const generateExecutionObservationsTool: AiToolDefinition<
     type: 'object',
     properties: {
       execution_id: { type: 'string', description: 'UUID de la ejecución (weekly_plan_item_executions).' },
-      board_id: { type: 'string', description: 'UUID del board al que pertenece la ejecución.' },
     },
-    required: ['execution_id', 'board_id'],
+    required: ['execution_id'],
   },
   sideEffects: false,
   requiresConfirmation: false,
-  execute: (supabase, params) => generateExecutionObservations(supabase, params.execution_id, params.board_id),
+  execute: (supabase, params, ctx) => {
+    if (!ctx.boardId) {
+      throw new Error('Abre un tablero para hacer esta consulta.');
+    }
+    return generateExecutionObservations(supabase, params.execution_id, ctx.boardId);
+  },
 };

@@ -19,5 +19,5 @@ export const findPossibleVisualDuplicatesTool: AiToolDefinition<{ execution_id: 
   },
   sideEffects: false,
   requiresConfirmation: false,
-  execute: (supabase, params) => findPossibleVisualDuplicates(supabase, params.execution_id),
+  execute: (supabase, params, _ctx) => findPossibleVisualDuplicates(supabase, params.execution_id),
 };

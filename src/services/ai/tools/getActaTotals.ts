@@ -14,5 +14,5 @@ export const getActaTotalsTool: AiToolDefinition<{ acta_id: string }, ActaTotals
   },
   sideEffects: false,
   requiresConfirmation: false,
-  execute: (supabase, params) => getActaTotals(supabase, params.acta_id),
+  execute: (supabase, params, _ctx) => getActaTotals(supabase, params.acta_id),
 };

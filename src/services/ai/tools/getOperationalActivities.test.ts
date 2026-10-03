@@ -126,8 +126,7 @@ describe('get_operational_activities (B1 Tool Contract & Implementation)', () =>
     expect(getOperationalActivitiesTool.name).toBe('get_operational_activities');
     expect(getOperationalActivitiesTool.sideEffects).toBe(false);
     expect(getOperationalActivitiesTool.requiresConfirmation).toBe(false);
-    expect(getOperationalActivitiesTool.parametersJsonSchema.required).toContain('board_id');
-    expect(getOperationalActivitiesTool.parametersJsonSchema.properties.board_id).toBeDefined();
+    expect(getOperationalActivitiesTool.parametersJsonSchema.properties.board_id).toBeUndefined();
     expect(getOperationalActivitiesTool.parametersJsonSchema.properties.group_id).toBeDefined();
     expect(getOperationalActivitiesTool.parametersJsonSchema.properties.search).toBeDefined();
     expect(getOperationalActivitiesTool.parametersJsonSchema.properties.include_inactive).toBeDefined();
@@ -254,10 +253,16 @@ describe('get_operational_activities (B1 Tool Contract & Implementation)', () =>
   // B1-G10: Ejecución desde el wrapper getOperationalActivitiesTool
   it('B1-G10: Ejecuta exitosamente a través del wrapper getOperationalActivitiesTool.execute', async () => {
     const supabase = createStandardMockSupabase();
-    const res = await getOperationalActivitiesTool.execute(supabase, {
-      board_id: BOARD_ID,
-      search: 'muro',
-    });
+    const res = await getOperationalActivitiesTool.execute(
+      supabase,
+      { search: 'muro' },
+      {
+        boardId: BOARD_ID,
+        groupId: null,
+        weekStart: null,
+        todayBogota: '2026-10-03',
+      }
+    );
 
     // Muro vertical en Centro Gastronómico tiene 2.19, 2.21, 2.22
     expect(res).toHaveLength(3);

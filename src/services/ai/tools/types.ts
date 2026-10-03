@@ -1,5 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+export interface AiToolContext {
+  boardId: string | null;
+  groupId: string | null;
+  weekStart: string | null;
+  todayBogota: string;
+}
+
 // Contrato de un tool de IA. Un tool representa una intención de negocio
 // ("¿cuánto vale el borrador del Acta?"), nunca una tabla ni una consulta
 // técnica ("dame las filas de acta_items"). Regla congelada: los tools
@@ -25,5 +32,5 @@ export interface AiToolDefinition<TParams = any, TResult = any> {
   /** Implícito en sideEffects=true hoy; campo propio para el día en que
    *  una acción de solo lectura sensible también requiera confirmación. */
   requiresConfirmation: boolean;
-  execute: (supabase: SupabaseClient, params: TParams) => Promise<TResult>;
+  execute: (supabase: SupabaseClient, params: TParams, ctx: AiToolContext) => Promise<TResult>;
 }

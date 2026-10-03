@@ -8,21 +8,21 @@ import { DecisionRecord } from '@/types/decisionGovernance';
 import { WeeklyPlanItem } from '@/types/weeklyPlan';
 import { ExecutionRecord } from '@/types/execution';
 
-export const getProactiveAdvisoriesTool: AiToolDefinition<{ board_id: string }, OperationalRecommendation[]> = {
+export const getProactiveAdvisoriesTool: AiToolDefinition<Record<string, never>, OperationalRecommendation[]> = {
   name: 'get_proactive_advisories',
   description:
     'Obtiene las recomendaciones operacionales proactivas y discrepancias tridimensionales detectadas por el observador de MantenixAgent (POA ↔ WeeklyPlan ↔ Execution). Retorna la lista de recomendaciones en estado PROPOSED con su justificación cuantitativa e impacto proyectado sin realizar mutaciones.',
   parametersJsonSchema: {
     type: 'object',
-    properties: {
-      board_id: { type: 'string', description: 'UUID del board o tablero principal.' },
-    },
-    required: ['board_id'],
+    properties: {},
   },
   sideEffects: false,
   requiresConfirmation: false,
-  execute: async (supabase, params) => {
-    const { board_id } = params;
+  execute: async (supabase, _params, ctx) => {
+    if (!ctx.boardId) {
+      throw new Error('Abre un tablero para hacer esta consulta.');
+    }
+    const board_id = ctx.boardId;
 
     // 1. Cargar weekly plan items
     const { data: planData } = await supabase

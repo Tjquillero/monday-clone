@@ -3,11 +3,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bot, X, Send, Zap, Cpu, Activity, Wrench } from 'lucide-react';
+import { Bot, X, Send, Zap, Cpu, Activity, Wrench, RotateCcw } from 'lucide-react';
 import { EMPTY_CONVERSATION, trimConversationState, type ConversationState } from '@/services/ai/conversationState';
 import type { ToolCitation } from '@/services/ai/orchestrator';
 import { getToolDisplayName } from '@/services/ai/tools/displayNames';
 import { useAiProactiveSummary } from '@/hooks/useAiProactiveSummary';
+import { useCopilotPlannerContext } from '@/lib/copilotContext';
 
 // Copiloto del dominio (Incremento 5 en adelante). Cliente muy fino: nunca
 // calcula, nunca conoce tablas — solo envía el mensaje del usuario a
@@ -20,6 +21,8 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   citations?: ToolCitation[];
+  errorCode?: string;
+  retryMessage?: string;
 }
 
 // La cita se arma con los mismos datos que ya devolvió el Orchestrator
@@ -38,6 +41,17 @@ function formatCitation(c: ToolCitation): string {
   return `${base} — ${c.durationMs} ms`;
 }
 
+function formatWeekHeader(weekStartStr: string | null | undefined): string | null {
+  if (!weekStartStr) return null;
+  const parts = weekStartStr.split('-').map(Number);
+  if (parts.length !== 3) return null;
+  const [y, m, d] = parts;
+  const monthNames = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const dayStr = String(d).padStart(2, '0');
+  const monthStr = monthNames[m - 1] || '';
+  return `semana del ${dayStr}-${monthStr}`;
+}
+
 // Sin board seleccionado (vistas globales) usa su propio balde de memoria —
 // nunca comparte historial con un board real.
 const NO_BOARD_KEY = '__no_board__';
@@ -51,6 +65,7 @@ export default function AgentControlCenter() {
   const searchParams = useSearchParams();
   const boardId = searchParams?.get('boardId') ?? null;
   const boardKey = boardId ?? NO_BOARD_KEY;
+  const plannerContext = useCopilotPlannerContext();
 
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -91,11 +106,13 @@ export default function AgentControlCenter() {
     }
   }, [messages]);
 
-  const handleSendMessage = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleSendMessage = async (overrideMsg?: string) => {
+    const textToSend = (overrideMsg !== undefined ? overrideMsg : input).trim();
+    if (!textToSend || isLoading) return;
 
-    const userMsg = input.trim();
-    setInput('');
+    if (overrideMsg === undefined) {
+      setInput('');
+    }
 
     // El board de destino se fija al momento de enviar: si el usuario
     // cambia de board mientras la respuesta está en vuelo, esta respuesta
@@ -103,7 +120,7 @@ export default function AgentControlCenter() {
     // activo en pantalla en ese momento.
     const targetBoardKey = boardKeyRef.current;
     const before = chatStoreRef.current.get(targetBoardKey) ?? { messages: [], conversation: EMPTY_CONVERSATION };
-    const withUserMsg: Message[] = [...before.messages, { role: 'user', content: userMsg }];
+    const withUserMsg: Message[] = [...before.messages, { role: 'user', content: textToSend }];
     chatStoreRef.current.set(targetBoardKey, { messages: withUserMsg, conversation: before.conversation });
     if (boardKeyRef.current === targetBoardKey) setMessages(withUserMsg);
     setLoadingBoards((prev) => new Set(prev).add(targetBoardKey));
@@ -118,8 +135,10 @@ export default function AgentControlCenter() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: userMsg,
+          message: textToSend,
           boardId: targetBoardKey === NO_BOARD_KEY ? null : targetBoardKey,
+          groupId: plannerContext.groupId,
+          weekStart: plannerContext.weekStart,
           history: historyToSend,
         }),
       });
@@ -128,14 +147,30 @@ export default function AgentControlCenter() {
       const latest = chatStoreRef.current.get(targetBoardKey) ?? { messages: withUserMsg, conversation: before.conversation };
       const newMessages: Message[] = res.ok
         ? [...latest.messages, { role: 'assistant', content: data.text, citations: data.citations }]
-        : [...latest.messages, { role: 'assistant', content: `Error: ${data.error || 'algo salió mal.'}` }];
+        : [
+            ...latest.messages,
+            {
+              role: 'assistant',
+              content: data.error || 'Algo salió mal.',
+              errorCode: data.code,
+              retryMessage: textToSend,
+            },
+          ];
       const newConversation: ConversationState = res.ok && data.history ? data.history : latest.conversation;
 
       chatStoreRef.current.set(targetBoardKey, { messages: newMessages, conversation: newConversation });
       if (boardKeyRef.current === targetBoardKey) setMessages(newMessages);
     } catch {
       const latest = chatStoreRef.current.get(targetBoardKey) ?? { messages: withUserMsg, conversation: before.conversation };
-      const newMessages: Message[] = [...latest.messages, { role: 'assistant', content: 'No pude conectar con el copiloto. Intenta de nuevo.' }];
+      const newMessages: Message[] = [
+        ...latest.messages,
+        {
+          role: 'assistant',
+          content: 'No pude conectar con el copiloto. Intenta de nuevo.',
+          errorCode: 'AI_UNAVAILABLE',
+          retryMessage: textToSend,
+        },
+      ];
       chatStoreRef.current.set(targetBoardKey, { ...latest, messages: newMessages });
       if (boardKeyRef.current === targetBoardKey) setMessages(newMessages);
     } finally {
@@ -150,6 +185,19 @@ export default function AgentControlCenter() {
       });
     }
   };
+
+  let headerSubtitle = boardId ? 'Tablero activo' : 'Sin board seleccionado';
+  if (boardId) {
+    const parts = ['Tablero activo'];
+    if (plannerContext.groupTitle) {
+      parts.push(plannerContext.groupTitle);
+    }
+    const formattedWeek = formatWeekHeader(plannerContext.weekStart);
+    if (formattedWeek) {
+      parts.push(formattedWeek);
+    }
+    headerSubtitle = parts.join(' · ');
+  }
 
   return (
     <div className="fixed bottom-8 right-8 z-[200]">
@@ -195,7 +243,7 @@ export default function AgentControlCenter() {
                     <div className="flex items-center space-x-2 mt-0.5">
                       <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]" />
                       <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
-                        {boardId ? 'Board activo' : 'Sin board seleccionado'}
+                        {headerSubtitle}
                       </span>
                     </div>
                   </div>
@@ -241,6 +289,17 @@ export default function AgentControlCenter() {
                         <div className="h-[1px] flex-1 bg-current opacity-20" />
                       </div>
                       <div className="whitespace-pre-wrap">{m.content}</div>
+                      {m.role === 'assistant' && m.errorCode === 'AI_UNAVAILABLE' && m.retryMessage && (
+                        <button
+                          type="button"
+                          onClick={() => handleSendMessage(m.retryMessage)}
+                          disabled={isLoading}
+                          className="mt-2.5 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-[var(--radius-control)] bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-40"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          Reintentar
+                        </button>
+                      )}
                       {m.citations && m.citations.length > 0 && (
                         <div className="flex items-start gap-1.5 mt-2.5 pt-2 border-t border-current/15 opacity-70">
                           <Wrench className="w-3.5 h-3.5 mt-[1px] shrink-0" />
@@ -273,7 +332,7 @@ export default function AgentControlCenter() {
                   className="flex-1 bg-transparent border-none focus:outline-none focus:ring-0 text-[13px] font-medium text-[var(--text-primary)] placeholder:text-[var(--text-muted)] px-3 h-11"
                 />
                 <button
-                  onClick={handleSendMessage}
+                  onClick={() => handleSendMessage()}
                   disabled={!input.trim() || isLoading}
                   className="w-11 h-11 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white rounded-[var(--radius-control)] flex items-center justify-center shadow-md disabled:opacity-30 transition-all active:scale-95 shrink-0"
                   aria-label="Enviar pregunta"

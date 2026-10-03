@@ -19,5 +19,5 @@ export const evaluateExecutionEvidenceTool: AiToolDefinition<{ execution_id: str
   },
   sideEffects: false,
   requiresConfirmation: false,
-  execute: (supabase, params) => evaluateExecutionEvidence(supabase, params.execution_id),
+  execute: (supabase, params, _ctx) => evaluateExecutionEvidence(supabase, params.execution_id),
 };

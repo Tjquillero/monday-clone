@@ -1,7 +1,7 @@
 import type { AiToolDefinition } from './types';
 import { getDuplicateAttachments, type DuplicateAttachmentGroup } from '../domainTools/evidence';
 
-export const getDuplicateAttachmentsTool: AiToolDefinition<{ board_id: string }, DuplicateAttachmentGroup[]> = {
+export const getDuplicateAttachmentsTool: AiToolDefinition<Record<string, never>, DuplicateAttachmentGroup[]> = {
   name: 'get_duplicate_attachments',
   description:
     'Obtiene fotos de evidencia que son EXACTAMENTE el mismo archivo (mismo hash, byte a byte) subido más ' +
@@ -10,12 +10,14 @@ export const getDuplicateAttachmentsTool: AiToolDefinition<{ board_id: string },
     'esto para responder "¿hay fotos de evidencia duplicadas?" o "¿algún archivo se subió dos veces?".',
   parametersJsonSchema: {
     type: 'object',
-    properties: {
-      board_id: { type: 'string', description: 'UUID del board.' },
-    },
-    required: ['board_id'],
+    properties: {},
   },
   sideEffects: false,
   requiresConfirmation: false,
-  execute: (supabase, params) => getDuplicateAttachments(supabase, params.board_id),
+  execute: (supabase, _params, ctx) => {
+    if (!ctx.boardId) {
+      throw new Error('Abre un tablero para hacer esta consulta.');
+    }
+    return getDuplicateAttachments(supabase, ctx.boardId);
+  },
 };

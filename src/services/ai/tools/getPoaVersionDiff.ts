@@ -24,6 +24,6 @@ export const getPoaVersionDiffTool: AiToolDefinition<
   },
   sideEffects: false,
   requiresConfirmation: false,
-  execute: (supabase, params) =>
+  execute: (supabase, params, _ctx) =>
     getPoaVersionDiff(supabase, params.poa_id, params.from_version, params.to_version),
 };

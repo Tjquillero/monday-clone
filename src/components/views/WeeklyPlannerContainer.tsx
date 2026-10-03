@@ -12,6 +12,7 @@ import { getMonday, getBogotaToday } from '@/lib/weeklyPlanner';
 import { supabase } from '@/lib/supabaseClient';
 import { resetWeeklyPlan } from '@/lib/weeklyPlanResetService';
 import { ensureWeeklyPlanMaterialized } from '@/lib/scheduleMaterializationService';
+import { setCopilotPlannerContext, clearCopilotPlannerContext } from '@/lib/copilotContext';
 import WeeklyPlannerView from '@/components/planner/WeeklyPlannerView';
 import PlanningSiteSelector from '@/components/planner/PlanningSiteSelector';
 
@@ -72,6 +73,18 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
     () => weekStart.toISOString().split('T')[0],
     [weekStart],
   );
+
+  // Sincronizar contexto de Copiloto (sitio activo y semana)
+  useEffect(() => {
+    setCopilotPlannerContext({
+      groupId: validSelectedGroup?.id || null,
+      groupTitle: validSelectedGroup?.title || null,
+      weekStart: weekStartISO,
+    });
+    return () => {
+      clearCopilotPlannerContext();
+    };
+  }, [validSelectedGroup?.id, validSelectedGroup?.title, weekStartISO]);
 
   // Motor de cálculo — produce WeeklyPlanningContext determinista
   const {

@@ -2,7 +2,8 @@ import { GoogleGenAI } from '@google/genai';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getToolDefinition, listToolDeclarations } from './tools/registry';
 import { EMPTY_CONVERSATION, trimConversationState, type ConversationState } from './conversationState';
-import { generateWithModelFallback } from './geminiFallback';
+import { generateWithModelFallback, AiServiceError } from './geminiFallback';
+import type { AiToolContext } from './tools/types';
 
 // El Orchestrator es la ÚNICA pieza que habla con Gemini. El modelo nunca
 // toca Supabase directamente — solo "pide" tools, y este código decide si
@@ -26,13 +27,6 @@ const SYSTEM_INSTRUCTION_BASE =
 
 export const MAX_TOOL_TURNS = 4;
 
-// Fuente de un dato citado en la respuesta: qué tool se invocó, con qué
-// argumentos y cuánto tardó, tal cual se ejecutó — nunca lo que el modelo
-// "diga" que usó. Igual que las cifras (nunca las calcula el modelo), la
-// cita tampoco se le confía al modelo: se construye en código a partir de
-// la llamada real (Date.now() alrededor de tool.execute), o no se muestra
-// ninguna. durationMs mide solo la ejecución del tool (RPC incluida) — no
-// el round-trip completo a Gemini, que es otro costo aparte.
 export interface ToolCitation {
   tool: string;
   args: Record<string, unknown>;
@@ -45,23 +39,55 @@ export interface AiOrchestratorResult {
   history: ConversationState;
 }
 
-export async function runAiOrchestrator(args: {
+export interface AiOrchestratorArgs {
   supabase: SupabaseClient;
   message: string;
   boardId: string | null;
+  groupId?: string | null;
+  weekStart?: string | null;
+  todayBogota?: string;
+  boardName?: string | null;
+  groupName?: string | null;
   history?: ConversationState;
-}): Promise<AiOrchestratorResult> {
+  deadlineMs?: number;
+}
+
+export async function runAiOrchestrator(args: AiOrchestratorArgs): Promise<AiOrchestratorResult> {
+  const startedAt = Date.now();
+  const deadlineMs = args.deadlineMs ?? (startedAt + 45_000);
   const { supabase, message, boardId } = args;
 
   const apiKey = (process.env.GEMINI_API_KEY || '').trim();
-  if (!apiKey) throw new Error('GEMINI_API_KEY no configurada.');
+  if (!apiKey) {
+    throw new AiServiceError('AI_CONFIG', 'GEMINI_API_KEY no configurada.');
+  }
 
   const client = new GoogleGenAI({ apiKey });
   const toolDeclarations = listToolDeclarations();
 
-  const systemInstruction =
-    SYSTEM_INSTRUCTION_BASE +
-    (boardId ? `\nEl board_id actual de esta conversación es: ${boardId}.` : '');
+  const todayBogota =
+    args.todayBogota ||
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
+
+  const ctx: AiToolContext = {
+    boardId: boardId ?? null,
+    groupId: args.groupId ?? null,
+    weekStart: args.weekStart ?? null,
+    todayBogota,
+  };
+
+  let contextDetails = `\nFecha de hoy en Bogotá: ${todayBogota}.`;
+  if (args.boardName) {
+    contextDetails += `\nTablero activo: ${args.boardName}.`;
+  }
+  if (args.groupName) {
+    contextDetails += `\nSitio activo: ${args.groupName}.`;
+  }
+  if (args.weekStart) {
+    contextDetails += `\nSemana activa (inicio): ${args.weekStart}.`;
+  }
+
+  const systemInstruction = SYSTEM_INSTRUCTION_BASE + contextDetails;
 
   // El historial recibido es opaco: se recorta por longitud cruda (nunca se
   // inspecciona su contenido) y se le agrega el mensaje nuevo del usuario.
@@ -69,8 +95,10 @@ export async function runAiOrchestrator(args: {
   const contents: any[] = [...trimmedHistory.contents, { role: 'user', parts: [{ text: message }] }];
   const config = { systemInstruction, tools: [{ functionDeclarations: toolDeclarations }] };
 
-  const { response: firstResponse } = await generateWithModelFallback(client, (model) =>
-    client.models.generateContent({ model, contents, config })
+  const { response: firstResponse } = await generateWithModelFallback(
+    client,
+    (model) => client.models.generateContent({ model, contents, config }),
+    deadlineMs
   );
   let response: any = firstResponse;
 
@@ -121,7 +149,7 @@ export async function runAiOrchestrator(args: {
       } else {
         const startedAt = Date.now();
         try {
-          output = await tool.execute(supabase, call.args || {});
+          output = await tool.execute(supabase, call.args || {}, ctx);
         } catch (err: any) {
           errorMsg = err?.message || String(err);
         } finally {
@@ -157,8 +185,10 @@ export async function runAiOrchestrator(args: {
     contents.push({ role: 'user', parts: responseParts });
 
     // Protección de cuota y fallback de modelo en cada vuelta de herramientas
-    ({ response } = await generateWithModelFallback(client, (model) =>
-      client.models.generateContent({ model, contents, config })
+    ({ response } = await generateWithModelFallback(
+      client,
+      (model) => client.models.generateContent({ model, contents, config }),
+      deadlineMs
     ));
   }
 

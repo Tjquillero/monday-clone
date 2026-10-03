@@ -2,7 +2,7 @@ import type { AiToolDefinition } from './types';
 import { getExecutionsWithoutEvidence, type ExecutionWithoutEvidenceDto } from '../domainTools/evidence';
 
 export const getExecutionsWithoutEvidenceTool: AiToolDefinition<
-  { board_id: string },
+  Record<string, never>,
   ExecutionWithoutEvidenceDto[]
 > = {
   name: 'get_executions_without_evidence',
@@ -14,12 +14,14 @@ export const getExecutionsWithoutEvidenceTool: AiToolDefinition<
     'ausencia total.',
   parametersJsonSchema: {
     type: 'object',
-    properties: {
-      board_id: { type: 'string', description: 'UUID del board.' },
-    },
-    required: ['board_id'],
+    properties: {},
   },
   sideEffects: false,
   requiresConfirmation: false,
-  execute: (supabase, params) => getExecutionsWithoutEvidence(supabase, params.board_id),
+  execute: (supabase, _params, ctx) => {
+    if (!ctx.boardId) {
+      throw new Error('Abre un tablero para hacer esta consulta.');
+    }
+    return getExecutionsWithoutEvidence(supabase, ctx.boardId);
+  },
 };

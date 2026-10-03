@@ -18,5 +18,5 @@ export const compareBeforeAfterEvidenceTool: AiToolDefinition<{ execution_id: st
   },
   sideEffects: false,
   requiresConfirmation: false,
-  execute: (supabase, params) => compareBeforeAfterEvidence(supabase, params.execution_id),
+  execute: (supabase, params, _ctx) => compareBeforeAfterEvidence(supabase, params.execution_id),
 };
