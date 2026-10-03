@@ -247,6 +247,7 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
       carryoverNextMonthProjection={carryoverNextMonthProjection}
       carryoverFromThisWeek={carryoverFromThisWeek}
       recurrentExceedsCapacity={recurrentExceedsCapacity}
+      availableGroups={operationalSites}
     />
   );
 }

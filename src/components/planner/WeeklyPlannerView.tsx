@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Save, CheckCircle, DollarSign } from 'lucide-react';
+import { AlertTriangle, Save, CheckCircle, DollarSign, FileDown } from 'lucide-react';
 import {
   WeeklyPlanningContext,
   WeeklyPlan,
@@ -19,6 +19,7 @@ import PlanningTable, { PlanningTableActivityItem } from './PlanningTable';
 import CapacitySummary, { DailyCapacityDetailItem, CarryoverItemDisplay, RecurrentExceedsDisplay } from './CapacitySummary';
 import PlanningWarnings from './PlanningWarnings';
 import PlanLifecyclePanel from './PlanLifecyclePanel';
+import DownloadScheduleModal from './DownloadScheduleModal';
 
 const STATUS_LABEL: Record<PlanStatus, string> = {
   draft:       'Borrador',
@@ -75,6 +76,7 @@ interface Props {
   carryoverNextMonthProjection?: CarryoverItemDisplay[];
   carryoverFromThisWeek?: CarryoverItemDisplay[];
   recurrentExceedsCapacity?: RecurrentExceedsDisplay[];
+  availableGroups?: Array<{ id: string; title: string }>;
 }
 
 export default function WeeklyPlannerView({
@@ -110,12 +112,20 @@ export default function WeeklyPlannerView({
   carryoverNextMonthProjection,
   carryoverFromThisWeek,
   recurrentExceedsCapacity,
+  availableGroups,
 }: Props) {
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const noGroupSelected = !group;
   const hasMissingStandards = missingStandards.length > 0;
 
   const safeWeekStart = weekStart instanceof Date && !isNaN(weekStart.getTime()) ? weekStart : new Date();
   const safeWeekStartISO = safeWeekStart.toISOString().split('T')[0];
+
+  const defaultMonthStr = useMemo(() => {
+    const y = safeWeekStart.getUTCFullYear();
+    const m = String(safeWeekStart.getUTCMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  }, [safeWeekStart]);
 
   const selectorProps = plan
     ? { weekStart: plan.week.start, weekEnd: plan.week.end, periodNumber: plan.week.number }
@@ -270,6 +280,15 @@ export default function WeeklyPlannerView({
           )}
         </div>
         <div className="flex items-center gap-3">
+          {boardId && (
+            <button
+              onClick={() => setIsDownloadModalOpen(true)}
+              className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest px-2.5 py-1.5 rounded-[var(--radius-control)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--color-primary)]/40 transition-colors"
+              title="Descargar cronograma mensual en PDF"
+            >
+              <FileDown className="w-3 h-3" /> Descargar cronograma (PDF)
+            </button>
+          )}
           {boardId && group && (
             <Link
               href={`/dashboard?boardId=${boardId}&view=costos-operativos&groupId=${group.id}`}
@@ -421,6 +440,16 @@ export default function WeeklyPlannerView({
           )}
         </div>
       )}
+
+      <DownloadScheduleModal
+        isOpen={isDownloadModalOpen}
+        onClose={() => setIsDownloadModalOpen(false)}
+        boardId={boardId}
+        currentGroupId={group?.id}
+        currentGroupTitle={group?.title}
+        defaultMonth={defaultMonthStr}
+        availableGroups={availableGroups}
+      />
     </div>
   );
 }
