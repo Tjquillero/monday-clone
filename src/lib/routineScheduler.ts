@@ -81,7 +81,6 @@ export interface MonthlyPlanInput {
     planned_qty?: number;
     planned_jr?: number;
     counts_capacity?: boolean;
-    status?: string;
   }>;
 }
 
@@ -302,13 +301,12 @@ export function projectMonthlyLowFrequencyAllocation(
     const existing = existingPlans.find((p) => p.week_start === ew.weekStartStr);
 
     if (existing) {
-      const nonCancelledItems = (existing.items || []).filter((i) => i.status !== 'cancelled');
-      const fixedLoad = nonCancelledItems
+      const fixedLoad = (existing.items || [])
         .filter((i) => i.counts_capacity !== false)
         .reduce((sum, i) => sum + (i.planned_jr || 0), 0);
-      const keys = new Set<string>(nonCancelledItems.map((i) => i.activity_key));
+      const keys = new Set<string>((existing.items || []).map((i) => i.activity_key));
 
-      for (const it of nonCancelledItems) {
+      for (const it of existing.items || []) {
         const matched = templates.find((t) => t.activity_key === it.activity_key);
         let q = 0;
         if (it.planned_qty !== undefined) {

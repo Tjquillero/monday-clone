@@ -594,7 +594,7 @@ export async function ensureWeeklyPlanMaterialized(
       const planIds = monthPlans.map((p: any) => p.id);
       let itemsQuery: any = supabase
         .from('weekly_plan_items')
-        .select('plan_id, activity_key, planned_qty, planned_jr, planned_rendimiento, status');
+        .select('plan_id, activity_key, planned_qty, planned_jr, planned_rendimiento');
 
       if (typeof itemsQuery?.in === 'function') {
         itemsQuery = itemsQuery.in('plan_id', planIds);
@@ -629,7 +629,7 @@ export async function ensureWeeklyPlanMaterialized(
       const nonCancelledMonthPlans = (monthPlans || []).filter((p: any) => p.status !== 'cancelled');
       for (const p of nonCancelledMonthPlans) {
         const pItems = (monthItems || [])
-          .filter((i: any) => i.plan_id === p.id && i.status !== 'cancelled')
+          .filter((i: any) => i.plan_id === p.id)
           .map((i: any) => {
             const opFreq = operationalFreqMap.get(i.activity_key);
             const countsCap = opFreq?.counts_capacity !== false;
@@ -638,7 +638,6 @@ export async function ensureWeeklyPlanMaterialized(
               planned_qty: Number(i.planned_qty || 0),
               planned_jr: Number(i.planned_jr || 0),
               counts_capacity: countsCap,
-              status: i.status,
             };
           });
 
@@ -763,7 +762,7 @@ export async function ensureWeeklyPlanMaterialized(
     const prevPlanIds = nonCancelledPrevPlans.map((p: any) => p.id);
     let prevItemsQuery: any = supabase
       .from('weekly_plan_items')
-      .select('plan_id, activity_key, planned_qty, status');
+      .select('plan_id, activity_key, planned_qty');
 
     if (typeof prevItemsQuery?.in === 'function') {
       prevItemsQuery = prevItemsQuery.in('plan_id', prevPlanIds);
@@ -796,7 +795,7 @@ export async function ensureWeeklyPlanMaterialized(
     }
 
     const plannedQtyM1Map = new Map<string, number>();
-    for (const item of (prevItems || []).filter((i: any) => i.status !== 'cancelled')) {
+    for (const item of prevItems || []) {
       plannedQtyM1Map.set(
         item.activity_key,
         Number(((plannedQtyM1Map.get(item.activity_key) || 0) + Number(item.planned_qty || 0)).toFixed(2))

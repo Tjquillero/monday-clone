@@ -379,7 +379,7 @@ Fuente: `COSTOS GENERALES V3` (Tablero `3ea0326f-6ff7-409f-848a-1f296e6e3cc8`):
 - El panel `CapacitySummary` incluye la sección **"Pasa al próximo mes (proyección del mes)"** con `carryover_next_month_projection` (o alias `carryover_next_month`), y debajo, si existe sobrante intra-semana, la sección **"De esta semana"** con `carryover_from_this_week`.
 - Si existe `recurrent_exceeds_capacity`, muestra el aviso: *"Recurrentes exceden el límite: revisar límite o rendimientos"*.
 
-### 12.7. D30.7 — Contabilidad Mensual por Cantidad Física y Manejo de Ítems Cancelados (B1 / B2)
+### 12.7. D30.7 — Contabilidad Mensual por Cantidad Física y Manejo de Planes Cancelados (B1 / B2 / FREQ-OP-05c)
 - **Contabilidad por cantidad:** La asignación no decide presencia por llave única, sino por balance de cantidades:
   $$\text{requerido} = \text{arrastre\_in.qty} + \text{visitas\_del\_mes} \times \text{cantidad\_por\_visita}$$
   $$\text{ya\_planificado} = \sum \text{planned\_qty (semanas fijas no canceladas)}$$
@@ -387,7 +387,7 @@ Fuente: `COSTOS GENERALES V3` (Tablero `3ea0326f-6ff7-409f-848a-1f296e6e3cc8`):
 - Solo $\text{pendiente} > 0.005$ se distribuye entre las semanas no fijas disponibles mediante D30.1 y D30.2. Lo que no quepa pasa a `carryover_next_month`.
 - **Prioridad de consumo:** El `ya_planificado` de semanas fijas consume primero la cuota de `carryover_in` y luego la cuota de visitas regulares.
 - **Frecuencia 2:** $\text{pendiente\_visitas} = 2 - \text{visitas presentes en semanas fijas}$. Si el par elegido (1-3 o 2-4) tiene una semana fija que no contiene la llave, esa visita no se descarta: pasa a `carryover_next_month`.
-- **Exclusión de ítems cancelados (B2 / B3):** Tanto en la lectura de planes del mes como en el cálculo de arrastre de $M-1$, se excluyen estrictamente los registros con `status = 'cancelled'` (definido en las restricciones CHECK de `weekly_plans` y `weekly_plan_items`).
+- **Exclusión de planes cancelados (B2 / FREQ-OP-05c):** En el esquema físico vivo, la tabla `weekly_plan_items` **no** tiene columna `status`. La exclusión de planes cancelados se realiza **únicamente a nivel de cabecera de plan** (`weekly_plans.status !== 'cancelled'`). Tanto en la lectura de planes del mes como en el cálculo de arrastre de $M-1$, los ítems pertenecen a planes activos.
 
 ### 12.8. D30.8 — Separación de Arrastre de Proyección Mensual vs Intra-Semana (B4)
 - **Separación en el evento `SITE_MATERIALIZATION_SUMMARY`:**

@@ -14,6 +14,49 @@ import {
   CARRYOVER_START_MONTH,
 } from '../scheduleMaterializationService';
 
+/**
+ * Columnas físicas vivas de public.weekly_plan_items según las migraciones:
+ * - 20260709_weekly_plans_nucleus.sql (creación de tabla)
+ * - 20260714_poa_domain_schema.sql (poa_activity_zone_id)
+ * - 2026091401_restore_weekly_plan_items_schema.sql (planned_date, occurrence_key, is_manual_override, override_reason)
+ * - 2026100102_sync_gateway_rendimiento_optional.sql
+ *
+ * NOTA: La tabla NO posee columna 'status' ni 'theoretical_jr'.
+ */
+export const PHYSICAL_WEEKLY_PLAN_ITEMS_COLUMNS = [
+  'id',
+  'plan_id',
+  'activity_standard_id',
+  'planned_sequence',
+  'activity_key',
+  'planned_rendimiento',
+  'planned_frecuencia',
+  'priority',
+  'planned_qty',
+  'unit',
+  'planned_jr',
+  'executed_qty',
+  'executed_jr',
+  'created_at',
+  'updated_at',
+  'poa_activity_zone_id',
+  'planned_date',
+  'occurrence_key',
+  'is_manual_override',
+  'override_reason',
+];
+
+export function validateWeeklyPlanItemsSelect(cols: string) {
+  if (cols === '*') return null;
+  const requested = cols.split(',').map((c) => c.trim()).filter(Boolean);
+  for (const col of requested) {
+    if (!PHYSICAL_WEEKLY_PLAN_ITEMS_COLUMNS.includes(col)) {
+      return { message: `column "${col}" does not exist` };
+    }
+  }
+  return null;
+}
+
 describe('GATE FREQ-OP-05 — Decisión D30', () => {
   // 1. Una semana de 5 días con festivo y otra de 6 días con la misma carga diaria:
   // la visita grande va a la semana de mayor holgura, no a la de menor total.
@@ -476,7 +519,8 @@ describe('GATE FREQ-OP-05 — Decisión D30', () => {
     const existingInitial = [
       {
         week_start: '2026-10-05',
-        items: [{ activity_key: '1.01', planned_jr: 36, planned_qty: 360, counts_capacity: true, status: 'published' }],
+        status: 'published',
+        items: [{ activity_key: '1.01', planned_jr: 36, planned_qty: 360, counts_capacity: true }],
       },
     ];
 
@@ -512,13 +556,13 @@ describe('GATE FREQ-OP-05 — Decisión D30', () => {
       planned_qty: a.cantidad,
       planned_jr: a.theoretical_jr,
       counts_capacity: a.counts_capacity,
-      status: 'published',
     }));
 
     const existingWithW12 = [
       ...existingInitial,
       {
         week_start: '2026-10-12',
+        status: 'published',
         items: w12Items,
       },
     ];
@@ -573,8 +617,9 @@ describe('GATE FREQ-OP-05 — Decisión D30', () => {
     const existingMonthPlans = [
       {
         week_start: '2026-11-02',
+        status: 'published',
         items: [
-          { activity_key: '3.02', planned_qty: 20, planned_jr: 2, counts_capacity: true, status: 'published' },
+          { activity_key: '3.02', planned_qty: 20, planned_jr: 2, counts_capacity: true },
         ],
       },
     ];
@@ -607,8 +652,8 @@ describe('GATE FREQ-OP-05 — Decisión D30', () => {
     expect(fixedQty + nonFixedQty + carryover).toBe(80); // Total mes = 80
   });
 
-  // 11. B2: Exclusión de ítems con status = 'cancelled'
-  test('11. B2: Ítems cancelados en weekly_plans o weekly_plan_items no se cuentan como planificados', () => {
+  // 11. B2 / FREQ-OP-05c: Exclusión de planes con status = 'cancelled'
+  test('11. B2 / FREQ-OP-05c: Planes cancelados (weekly_plans.status = "cancelled") no se cuentan como planificados', () => {
     const siteDailyCapacity = 8;
     const templates: RoutineBaseTemplate[] = [
       {
@@ -624,12 +669,13 @@ describe('GATE FREQ-OP-05 — Decisión D30', () => {
       },
     ];
 
-    // Semana 1 tiene un ítem cancelado de 100 M2
+    // Semana 1 tiene un plan cancelado de 100 M2
     const existingMonthPlans = [
       {
         week_start: '2026-10-05',
+        status: 'cancelled',
         items: [
-          { activity_key: '3.02', planned_qty: 100, planned_jr: 10, counts_capacity: true, status: 'cancelled' },
+          { activity_key: '3.02', planned_qty: 100, planned_jr: 10, counts_capacity: true },
         ],
       },
     ];
@@ -639,7 +685,7 @@ describe('GATE FREQ-OP-05 — Decisión D30', () => {
       existingMonthPlans,
     });
 
-    // Como el ítem estaba cancelado, la actividad sigue pendiente al 100% (100 M2) y se reparte en las semanas no fijas
+    // Como el plan estaba cancelado, la actividad sigue pendiente al 100% (100 M2) y se reparte en las semanas no fijas
     let allocatedTotal = 0;
     for (const [, items] of allocation.entries()) {
       for (const it of items) {
@@ -650,6 +696,100 @@ describe('GATE FREQ-OP-05 — Decisión D30', () => {
     }
     const carryover = allocation.carryoverNextMonth?.find((c) => c.activity_key === '3.02')?.qty || 0;
     expect(allocatedTotal + carryover).toBe(100);
+  });
+
+  // 12. FREQ-OP-05c: Rechazar selects en weekly_plan_items con columnas inexistentes en esquema físico vivo
+  test('12. FREQ-OP-05c: Mock de Supabase rechaza columnas inexistentes en weekly_plan_items (ej: status, theoretical_jr)', async () => {
+    const createStrictMockSupabase = (customItemSelect?: string) => ({
+      from: (table: string) => {
+        if (table === 'poa') {
+          return { select: () => ({ eq: () => ({ data: [{ id: 'poa-1' }], error: null }) }) };
+        }
+        if (table === 'poa_versions') {
+          return { select: () => ({ in: () => ({ eq: () => ({ data: [{ id: 'v-1', poa_id: 'poa-1' }], error: null }) }) }) };
+        }
+        if (table === 'poa_activities') {
+          return { select: () => ({ eq: () => ({ order: () => ({ data: [{ id: 'pa-1', activity_key: '3.02' }], error: null }) }) }) };
+        }
+        if (table === 'board_activity_standards') {
+          return { select: () => ({ eq: () => ({ data: [{ id: 'std-1', activity_key: '3.02', name: 'MARMOL', category: 'PISOS', rendimiento: 10, unit: 'M2', requiere_rendimiento: true }], error: null }) }) };
+        }
+        if (table === 'poa_activity_zones') {
+          return { select: () => ({ eq: () => ({ in: () => ({ order: () => ({ data: [{ id: 'paz-1', poa_activity_id: 'pa-1', zone_id: 'group-1', cantidad_contratada: 100 }], error: null }) }) }) }) };
+        }
+        if (table === 'operational_frequencies') {
+          return { select: () => ({ eq: () => ({ eq: () => ({ data: [{ activity_key: '3.02', visits_per_month: 1, counts_capacity: true }], error: null }) }) }) };
+        }
+        if (table === 'site_daily_capacity') {
+          return { select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => ({ data: { jornales_dia: 8 }, error: null }) }) }) }) };
+        }
+        if (table === 'weekly_plans') {
+          return {
+            select: () => ({
+              eq: () => ({
+                eq: () => ({
+                  in: () => ({
+                    data: [
+                      { id: 'plan-1', week_start: '2026-10-05', status: 'published' },
+                      { id: 'plan-2', week_start: '2026-10-12', status: 'published' },
+                      { id: 'plan-3', week_start: '2026-10-19', status: 'published' },
+                      { id: 'plan-4', week_start: '2026-10-26', status: 'published' },
+                    ],
+                    error: null,
+                  }),
+                  maybeSingle: () => ({ data: null, error: null }),
+                }),
+              }),
+            }),
+          };
+        }
+        if (table === 'weekly_plan_items') {
+          return {
+            select: (cols: string) => {
+              const err = validateWeeklyPlanItemsSelect(customItemSelect ?? cols);
+              if (err) {
+                return {
+                  in: () => Promise.resolve({ data: null, error: err }),
+                };
+              }
+              return {
+                in: () => Promise.resolve({
+                  data: [
+                    { plan_id: 'plan-1', activity_key: '3.02', planned_qty: 100, planned_jr: 10, planned_rendimiento: 10 },
+                  ],
+                  error: null,
+                }),
+              };
+            },
+          };
+        }
+        if (table === 'materialization_events') {
+          return { insert: () => ({ error: null }) };
+        }
+        return { select: () => ({ eq: () => ({ data: [], error: null }) }) };
+      },
+      rpc: () => Promise.resolve({ data: 'ok', error: null }),
+    });
+
+    // 1. Columnas válidas solicitadas en scheduleMaterializationService
+    expect(validateWeeklyPlanItemsSelect('plan_id, activity_key, planned_qty, planned_jr, planned_rendimiento')).toBeNull();
+    expect(validateWeeklyPlanItemsSelect('plan_id, activity_key, planned_qty')).toBeNull();
+
+    // 2. Columna inválida 'status' debe ser rechazada por el validador
+    expect(validateWeeklyPlanItemsSelect('plan_id, activity_key, status')).toEqual({
+      message: 'column "status" does not exist',
+    });
+
+    // 3. Columna inválida 'theoretical_jr' debe ser rechazada por el validador
+    expect(validateWeeklyPlanItemsSelect('plan_id, activity_key, theoretical_jr')).toEqual({
+      message: 'column "theoretical_jr" does not exist',
+    });
+
+    // 4. Servicio ejecutado contra mock estricto: select con 'status' falla con MONTH_PROJECTION_READ_FAILED
+    const invalidMock: any = createStrictMockSupabase('plan_id, activity_key, planned_qty, planned_jr, planned_rendimiento, status');
+    await expect(
+      ensureWeeklyPlanMaterialized(invalidMock, 'board-1', 'group-1', new Date('2026-10-05T00:00:00Z'))
+    ).rejects.toThrow('MONTH_PROJECTION_READ_FAILED: column "status" does not exist');
   });
 });
 
