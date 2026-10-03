@@ -19,6 +19,8 @@ import { ensureWeeklyPlanMaterialized } from '@/lib/scheduleMaterializationServi
 // ocurrencias reales en PostgreSQL (`weekly_plan_items`).
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { CarryoverItem, CarryoverNextMonthItem, RecurrentExceedsCapacityItem } from '@/lib/routineScheduler';
+
 export interface UseWeeklyPlanResult {
   /** No vacío implica un plan PARCIAL — construido solo con las actividades que sí tienen catálogo técnico (ver missingStandards). */
   plan: WeeklyPlanningContext | null;
@@ -29,6 +31,11 @@ export interface UseWeeklyPlanResult {
   error: Error | null;
   /** Indicador explícito de sitio fuera de operación (D25). Si es true, el plan es null y se muestra banner informativo. */
   notOperational?: boolean;
+  carryoverIn?: CarryoverItem[];
+  carryoverNextMonth?: CarryoverNextMonthItem[];
+  carryoverNextMonthProjection?: CarryoverNextMonthItem[];
+  carryoverFromThisWeek?: CarryoverNextMonthItem[];
+  recurrentExceedsCapacity?: RecurrentExceedsCapacityItem[];
 }
 
 export function useWeeklyPlan(
@@ -166,5 +173,17 @@ export function useWeeklyPlan(
   const error = (stdErr ?? poaErr ?? mapErr ?? qtyErr ?? missingErr ?? matErr) as Error | null;
   const isError = stdError || poaError || mapError || qtyError || missingError || matError;
 
-  return { plan, missingStandards: missingStandards ?? [], isLoading, isError, error, notOperational: isNotOperational };
+  return {
+    plan,
+    missingStandards: missingStandards ?? [],
+    isLoading,
+    isError,
+    error,
+    notOperational: isNotOperational,
+    carryoverIn: matData?.carryoverIn,
+    carryoverNextMonth: matData?.carryoverNextMonth,
+    carryoverNextMonthProjection: matData?.carryoverNextMonthProjection ?? matData?.carryoverNextMonth,
+    carryoverFromThisWeek: matData?.carryoverFromThisWeek,
+    recurrentExceedsCapacity: matData?.recurrentExceedsCapacity,
+  };
 }

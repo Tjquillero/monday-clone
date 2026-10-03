@@ -17,12 +17,28 @@ export interface DailyCapacityDetailItem {
   exceeded: boolean;
 }
 
+export interface CarryoverItemDisplay {
+  activity_key: string;
+  qty: number;
+  jr: number;
+  reason?: string;
+}
+
+export interface RecurrentExceedsDisplay {
+  dateStr: string;
+  deficit_jr: number;
+}
+
 interface Props {
   plan?: WeeklyPlanningContext | null;
   siteDailyCapacity?: number | null;
   workingDaysCount?: number;
   dailyDetails?: DailyCapacityDetailItem[];
   zoneName?: string;
+  carryoverNextMonth?: CarryoverItemDisplay[];
+  carryoverNextMonthProjection?: CarryoverItemDisplay[];
+  carryoverFromThisWeek?: CarryoverItemDisplay[];
+  recurrentExceedsCapacity?: RecurrentExceedsDisplay[];
 }
 
 export default function CapacitySummary({
@@ -31,6 +47,10 @@ export default function CapacitySummary({
   workingDaysCount,
   dailyDetails,
   zoneName,
+  carryoverNextMonth,
+  carryoverNextMonthProjection,
+  carryoverFromThisWeek,
+  recurrentExceedsCapacity,
 }: Props) {
   const zoneTitle = zoneName || plan?.zone.name || 'Sitio';
 
@@ -201,6 +221,66 @@ export default function CapacitySummary({
         <p className="text-[10px] text-red-400 font-medium">
           ⚠️ Déficit detectado: <span className="font-black">{totalDeficit.toFixed(2)} JR</span> — requiere ajustar distribución de días o capacidad contratada.
         </p>
+      )}
+
+      {/* ── D30.6 / B4: Sección "Pasa al próximo mes (proyección del mes)" y "De esta semana" ── */}
+      {((carryoverNextMonthProjection && carryoverNextMonthProjection.length > 0) ||
+        (carryoverNextMonth && carryoverNextMonth.length > 0) ||
+        (carryoverFromThisWeek && carryoverFromThisWeek.length > 0)) && (
+        <div className="pt-2 border-t border-[var(--border-color)]/60 space-y-2">
+          {/* Proyección del mes */}
+          {((carryoverNextMonthProjection && carryoverNextMonthProjection.length > 0) ||
+            (carryoverNextMonth && carryoverNextMonth.length > 0)) && (
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-widest text-amber-400 mb-1.5 flex items-center gap-1">
+                <span>Pasa al próximo mes (proyección del mes)</span>
+              </p>
+              <div className="space-y-1">
+                {(carryoverNextMonthProjection || carryoverNextMonth || []).map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between text-[10px] bg-black/20 px-2 py-1 rounded border border-white/5"
+                  >
+                    <span className="font-mono font-bold text-slate-300">{item.activity_key}</span>
+                    <span className="text-slate-400">
+                      {item.qty} cant ({item.jr.toFixed(2)} JR)
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* De esta semana */}
+          {carryoverFromThisWeek && carryoverFromThisWeek.length > 0 && (
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-widest text-orange-400 mb-1 flex items-center gap-1">
+                <span>De esta semana</span>
+              </p>
+              <div className="space-y-1">
+                {carryoverFromThisWeek.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between text-[10px] bg-black/20 px-2 py-1 rounded border border-white/5"
+                  >
+                    <span className="font-mono font-bold text-slate-300">{item.activity_key}</span>
+                    <span className="text-slate-400">
+                      {item.qty} cant ({item.jr.toFixed(2)} JR)
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── D30.6: Aviso de Recurrentes Exceden Capacidad ───────── */}
+      {recurrentExceedsCapacity && recurrentExceedsCapacity.length > 0 && (
+        <div className="p-2 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-medium flex items-center gap-1.5">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+          <span>Recurrentes exceden el límite: revisar límite o rendimientos</span>
+        </div>
       )}
     </div>
   );

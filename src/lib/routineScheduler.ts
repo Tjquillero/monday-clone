@@ -44,17 +44,54 @@ export interface DailyRoutineAssignment {
   counts_capacity?: boolean;
 }
 
+export interface CarryoverItem {
+  activity_key: string;
+  qty: number;
+  jr: number;
+}
+
+export interface CarryoverNextMonthItem {
+  activity_key: string;
+  qty: number;
+  jr: number;
+  reason: 'CAPACITY';
+}
+
+export interface RecurrentExceedsCapacityItem {
+  dateStr: string;
+  deficit_jr: number;
+}
+
 export interface RoutineWeeklyProjection {
   weekStartStr: string;
   weekEndStr: string;
   assignments: DailyRoutineAssignment[];
   totalJournals: number;
+  carryoverIn?: CarryoverItem[];
+  carryoverNextMonth?: CarryoverNextMonthItem[];
+  carryoverNextMonthProjection?: CarryoverNextMonthItem[];
+  carryoverFromThisWeek?: CarryoverNextMonthItem[];
+  recurrentExceedsCapacity?: RecurrentExceedsCapacityItem[];
+}
+
+export interface MonthlyPlanInput {
+  week_start: string;
+  items?: Array<{
+    activity_key: string;
+    planned_qty?: number;
+    planned_jr?: number;
+    counts_capacity?: boolean;
+    status?: string;
+  }>;
 }
 
 export interface SchedulerOptions {
   customNonWorkingDays?: string[]; // Project-specific exceptions YYYY-MM-DD
   workingDaysPerMonth?: number; // Default 25
   siteDailyCapacity?: number | null; // D24 / D27 / D28: Capacidad diaria del sitio en jornales
+  existingMonthPlans?: MonthlyPlanInput[];
+  skipMonthlyAllocation?: boolean;
+  carryoverIn?: CarryoverItem[]; // D30.4: Arrastre de entrada
 }
 
 function formatDateISO(date: Date): string {
@@ -144,24 +181,6 @@ interface WorkingDayState {
   machineJournals: number;
 }
 
-export interface MonthlyPlanItemInput {
-  activity_key: string;
-  planned_jr: number;
-  counts_capacity?: boolean;
-}
-
-export interface MonthlyPlanInput {
-  week_start: string;
-  items: MonthlyPlanItemInput[];
-}
-
-export interface SchedulerOptions {
-  customNonWorkingDays?: string[];
-  siteDailyCapacity?: number | null;
-  existingMonthPlans?: MonthlyPlanInput[];
-  skipMonthlyAllocation?: boolean;
-}
-
 export interface CandidateWeekInfo {
   weekNumber: number; // 1..4 (or 5)
   mondayDate: Date;
@@ -200,6 +219,9 @@ interface WeekLoadState {
   weekStartStr: string;
   isFixed: boolean;
   baseLoad: number;
+  workingDaysCount: number;
+  weekCapacity: number;
+  holgura: number;
   presentKeys: Set<string>;
 }
 
@@ -236,103 +258,248 @@ function calculateBaseWeekCountingLoad(
 }
 
 /**
- * Proyección mensual determinista (D29): reparte visitas de baja frecuencia (2, 1, 0.5, 0.33)
- * entre las semanas candidatas 1 a 4 del mes según la carga acumulada.
+ * Proyección mensual determinista (D29 / D30 / B1): reparte visitas de baja frecuencia (2, 1, 0.5, 0.33)
+ * y arrastre de entrada entre las semanas candidatas 1 a 4 del mes según la holgura de capacidad (D30.1).
+ * Contabilidad estricta por cantidad física requerida y planificada (B1).
+ * Si no cabe en una semana, se divide entre las semanas de mayor holgura (D30.2), y lo que no cabe pasa al arrastre (D30.4).
  */
 export function projectMonthlyLowFrequencyAllocation(
   templates: RoutineBaseTemplate[],
   targetMondayInput: Date | string,
   options: SchedulerOptions = {}
-): Map<string, RoutineBaseTemplate[]> {
+): Map<string, RoutineBaseTemplate[]> & { carryoverNextMonth?: CarryoverNextMonthItem[] } {
   const targetMonday = parseUTCDate(targetMondayInput);
   const customNonWorkingDays = options.customNonWorkingDays || [];
   const existingPlans = options.existingMonthPlans || [];
+  const siteDailyCapacity =
+    typeof options.siteDailyCapacity === 'number' && !isNaN(options.siteDailyCapacity) && options.siteDailyCapacity > 0
+      ? options.siteDailyCapacity
+      : null;
 
   const candidateWeeks = getMonthlyCandidateWeeks(targetMonday);
   const eligibleWeeks = candidateWeeks.filter((w) => w.weekNumber <= 4);
 
+  const allocationMap: Map<string, RoutineBaseTemplate[]> & { carryoverNextMonth?: CarryoverNextMonthItem[] } = new Map();
+  for (const ew of eligibleWeeks) {
+    allocationMap.set(ew.weekStartStr, []);
+  }
+
+  // Mapear ya planificado en semanas fijas del mes por actividad (excluyendo items cancelados, B1/B2)
+  const alreadyPlannedQtyMap = new Map<string, number>();
+
   const weekStates: WeekLoadState[] = eligibleWeeks.map((ew) => {
+    let workingDaysCount = 0;
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(ew.mondayDate);
+      d.setUTCDate(ew.mondayDate.getUTCDate() + i);
+      const dow = d.getUTCDay();
+      if (dow >= 1 && dow <= 6 && isOperationalWorkingDay(d, customNonWorkingDays)) {
+        workingDaysCount++;
+      }
+    }
+
+    const weekCapacity = siteDailyCapacity !== null ? siteDailyCapacity * workingDaysCount : Infinity;
     const existing = existingPlans.find((p) => p.week_start === ew.weekStartStr);
+
     if (existing) {
-      const fixedLoad = (existing.items || [])
+      const nonCancelledItems = (existing.items || []).filter((i) => i.status !== 'cancelled');
+      const fixedLoad = nonCancelledItems
         .filter((i) => i.counts_capacity !== false)
         .reduce((sum, i) => sum + (i.planned_jr || 0), 0);
-      const keys = new Set((existing.items || []).map((i) => i.activity_key));
+      const keys = new Set<string>(nonCancelledItems.map((i) => i.activity_key));
+
+      for (const it of nonCancelledItems) {
+        const matched = templates.find((t) => t.activity_key === it.activity_key);
+        let q = 0;
+        if (it.planned_qty !== undefined) {
+          q = Number(it.planned_qty);
+        } else if (it.planned_jr !== undefined && matched?.rendimiento && matched.rendimiento > 0) {
+          q = Number((it.planned_jr * matched.rendimiento).toFixed(2));
+        } else if (matched) {
+          q = matched.cantidad;
+        }
+
+        if (q > 0) {
+          alreadyPlannedQtyMap.set(
+            it.activity_key,
+            Number(((alreadyPlannedQtyMap.get(it.activity_key) || 0) + q).toFixed(2))
+          );
+        }
+        if (matched && matched.frecuencia <= 2) {
+          allocationMap.get(ew.weekStartStr)?.push({
+            ...matched,
+            cantidad: q,
+          });
+        }
+      }
+
+      const holgura = siteDailyCapacity !== null ? Math.max(0, weekCapacity - fixedLoad) : Infinity;
       return {
         weekNumber: ew.weekNumber,
         mondayDate: ew.mondayDate,
         weekStartStr: ew.weekStartStr,
         isFixed: true,
         baseLoad: fixedLoad,
+        workingDaysCount,
+        weekCapacity,
+        holgura,
         presentKeys: keys,
       };
     } else {
       const baseLoad = calculateBaseWeekCountingLoad(templates, ew.mondayDate, customNonWorkingDays);
+      const holgura = siteDailyCapacity !== null ? Math.max(0, weekCapacity - baseLoad) : Infinity;
       return {
         weekNumber: ew.weekNumber,
         mondayDate: ew.mondayDate,
         weekStartStr: ew.weekStartStr,
         isFixed: false,
         baseLoad,
+        workingDaysCount,
+        weekCapacity,
+        holgura,
         presentKeys: new Set<string>(),
       };
     }
   });
 
-  const mondayMonth = targetMonday.getUTCMonth() + 1;
+  const carryoverNextMonth: CarryoverNextMonthItem[] = [];
+  const alreadyPlannedRemainingMap = new Map<string, number>(alreadyPlannedQtyMap);
 
-  // Filtrar templates de baja frecuencia aplicables en este mes
-  const lowFreqTemplates: Array<{
+  // 1. Arrastre de entrada (carryoverIn): prioridad de reparto (D30.4 / B1)
+  // La parte del arrastre se consume antes que la parte regular
+  const carryoverInItems: Array<{
     template: RoutineBaseTemplate;
     theoreticalJr: number;
     countsCapacity: boolean;
-    visitsCount: number; // 2 o 1
+    visitsCount: number;
+    isCarryover: boolean;
+  }> = [];
+
+  if (options.carryoverIn && options.carryoverIn.length > 0) {
+    for (const ci of options.carryoverIn) {
+      const matched = templates.find((t) => t.activity_key === ci.activity_key);
+      if (matched) {
+        const ciQty = ci.qty;
+        const alreadyCovered = alreadyPlannedRemainingMap.get(ci.activity_key) || 0;
+        const usedByFixed = Math.min(ciQty, alreadyCovered);
+        alreadyPlannedRemainingMap.set(
+          ci.activity_key,
+          Number((alreadyCovered - usedByFixed).toFixed(2))
+        );
+
+        const ciPendingQty = Number((ciQty - usedByFixed).toFixed(2));
+        if (ciPendingQty > 0.005) {
+          const ciJr =
+            matched.rendimiento !== null && matched.rendimiento !== undefined && matched.rendimiento > 0
+              ? Number((ciPendingQty / matched.rendimiento).toFixed(4))
+              : (ci.qty > 0 ? Number((ci.jr * (ciPendingQty / ci.qty)).toFixed(4)) : 0);
+
+          carryoverInItems.push({
+            template: {
+              ...matched,
+              cantidad: ciPendingQty,
+            },
+            theoreticalJr: ciJr,
+            countsCapacity: matched.counts_capacity !== false,
+            visitsCount: 1,
+            isCarryover: true,
+          });
+        }
+      }
+    }
+    carryoverInItems.sort((a, b) => {
+      const diff = b.theoreticalJr - a.theoreticalJr;
+      if (Math.abs(diff) > 1e-6) return diff;
+      return compareStringsCode(a.template.activity_key, b.template.activity_key);
+    });
+  }
+
+  // 2. Visitas regulares del mes (2, 1, 0.5, 0.33)
+  const mondayMonth = targetMonday.getUTCMonth() + 1;
+  const regularLowFreqItems: Array<{
+    template: RoutineBaseTemplate;
+    theoreticalJr: number;
+    countsCapacity: boolean;
+    visitsCount: number;
+    isCarryover: boolean;
   }> = [];
 
   for (const template of templates) {
     const freq = template.frecuencia;
-    const theoreticalJr =
+    const theoreticalJrPerVisit =
       template.rendimiento !== null && template.rendimiento !== undefined && template.rendimiento > 0
         ? template.cantidad / template.rendimiento
         : 0;
     const countsCapacity = template.counts_capacity !== false;
 
-    // Frecuencia 2: 2 visitas en el mes
     if (Math.abs(freq - 2) < 0.1) {
-      lowFreqTemplates.push({ template, theoreticalJr, countsCapacity, visitsCount: 2 });
-    }
-    // Frecuencia 1: 1 visita en el mes
-    else if (Math.abs(freq - 1) < 0.1) {
-      lowFreqTemplates.push({ template, theoreticalJr, countsCapacity, visitsCount: 1 });
-    }
-    // Frecuencia 0.5: 1 visita en meses pares
-    else if (Math.abs(freq - 0.5) < 0.05) {
-      if (mondayMonth % 2 === 0) {
-        lowFreqTemplates.push({ template, theoreticalJr, countsCapacity, visitsCount: 1 });
+      // Frecuencia 2
+      let fixedVisitsCount = 0;
+      for (const w of weekStates) {
+        if (w.isFixed && w.presentKeys.has(template.activity_key)) {
+          fixedVisitsCount++;
+        }
       }
-    }
-    // Frecuencia 0.33: 1 visita en meses donde (mes % 3 = 1)
-    else if (Math.abs(freq - 0.33) < 0.05 || Math.abs(freq - 1 / 3) < 0.05) {
-      if (mondayMonth % 3 === 1) {
-        lowFreqTemplates.push({ template, theoreticalJr, countsCapacity, visitsCount: 1 });
+      const pendingVisits = Math.max(0, 2 - fixedVisitsCount);
+      if (pendingVisits > 0) {
+        regularLowFreqItems.push({
+          template,
+          theoreticalJr: theoreticalJrPerVisit,
+          countsCapacity,
+          visitsCount: 2,
+          isCarryover: false,
+        });
+      }
+    } else {
+      let reqVisits = 0;
+      if (Math.abs(freq - 1) < 0.1) {
+        reqVisits = 1;
+      } else if (Math.abs(freq - 0.5) < 0.05) {
+        if (mondayMonth % 2 === 0) reqVisits = 1;
+      } else if (Math.abs(freq - 0.33) < 0.05 || Math.abs(freq - 1 / 3) < 0.05) {
+        if (mondayMonth % 3 === 1) reqVisits = 1;
+      }
+
+      if (reqVisits > 0) {
+        const reqQty = Number((reqVisits * template.cantidad).toFixed(2));
+        const alreadyCovered = alreadyPlannedRemainingMap.get(template.activity_key) || 0;
+        const usedByFixed = Math.min(reqQty, alreadyCovered);
+        alreadyPlannedRemainingMap.set(
+          template.activity_key,
+          Number((alreadyCovered - usedByFixed).toFixed(2))
+        );
+
+        const pendingQty = Number((reqQty - usedByFixed).toFixed(2));
+        if (pendingQty > 0.005) {
+          const pendingJr =
+            template.rendimiento !== null && template.rendimiento !== undefined && template.rendimiento > 0
+              ? Number((pendingQty / template.rendimiento).toFixed(4))
+              : (template.cantidad > 0 ? Number((theoreticalJrPerVisit * (pendingQty / template.cantidad)).toFixed(4)) : 0);
+
+          regularLowFreqItems.push({
+            template: {
+              ...template,
+              cantidad: pendingQty,
+            },
+            theoreticalJr: pendingJr,
+            countsCapacity,
+            visitsCount: 1,
+            isCarryover: false,
+          });
+        }
       }
     }
   }
 
-  // Ordenar por jornales de la visita (mayor primero; empate activity_key asc)
-  lowFreqTemplates.sort((a, b) => {
+  regularLowFreqItems.sort((a, b) => {
     const diff = b.theoreticalJr - a.theoreticalJr;
     if (Math.abs(diff) > 1e-6) return diff;
     return compareStringsCode(a.template.activity_key, b.template.activity_key);
   });
 
-  const allocationMap = new Map<string, RoutineBaseTemplate[]>();
-  for (const ew of eligibleWeeks) {
-    allocationMap.set(ew.weekStartStr, []);
-  }
+  const queueToAllocate = [...carryoverInItems, ...regularLowFreqItems];
 
-  // Distribuir cada actividad
-  for (const item of lowFreqTemplates) {
+  for (const item of queueToAllocate) {
     const key = item.template.activity_key;
 
     if (item.visitsCount === 2) {
@@ -342,7 +509,6 @@ export function projectMonthlyLowFrequencyAllocation(
       const w3 = weekStates.find((w) => w.weekNumber === 3);
       const w4 = weekStates.find((w) => w.weekNumber === 4);
 
-      // Verificar si ya está en semanas fijas
       const inW1 = w1?.presentKeys.has(key);
       const inW3 = w3?.presentKeys.has(key);
       const inW2 = w2?.presentKeys.has(key);
@@ -355,8 +521,6 @@ export function projectMonthlyLowFrequencyAllocation(
       } else if (inW2 || inW4) {
         chosenPair = 24;
       } else {
-        // Ninguno tiene la key fija: evaluar carga de pares
-        // Si una semana es fija y NO tiene la key, no puede recibir nuevas visitas
         const pair13Blocked = (w1?.isFixed && !inW1) || (w3?.isFixed && !inW3) || !w1 || !w3;
         const pair24Blocked = (w2?.isFixed && !inW2) || (w4?.isFixed && !inW4) || !w2 || !w4;
 
@@ -365,60 +529,210 @@ export function projectMonthlyLowFrequencyAllocation(
         } else if (!pair13Blocked && pair24Blocked) {
           chosenPair = 13;
         } else {
-          const load13 = (w1?.baseLoad || 0) + (w3?.baseLoad || 0);
-          const load24 = (w2?.baseLoad || 0) + (w4?.baseLoad || 0);
-
-          if (load13 <= load24) {
-            chosenPair = 13;
+          if (siteDailyCapacity !== null) {
+            // D30.1: Suma de holguras
+            const holgura13 = (w1?.isFixed ? 0 : w1?.holgura || 0) + (w3?.isFixed ? 0 : w3?.holgura || 0);
+            const holgura24 = (w2?.isFixed ? 0 : w2?.holgura || 0) + (w4?.isFixed ? 0 : w4?.holgura || 0);
+            if (holgura13 >= holgura24) {
+              chosenPair = 13;
+            } else {
+              chosenPair = 24;
+            }
           } else {
-            chosenPair = 24;
+            const load13 = (w1?.baseLoad || 0) + (w3?.baseLoad || 0);
+            const load24 = (w2?.baseLoad || 0) + (w4?.baseLoad || 0);
+            if (load13 <= load24) {
+              chosenPair = 13;
+            } else {
+              chosenPair = 24;
+            }
           }
         }
       }
 
-      if (chosenPair === 13 && w1 && w3) {
-        allocationMap.get(w1.weekStartStr)?.push(item.template);
-        allocationMap.get(w3.weekStartStr)?.push(item.template);
-        if (item.countsCapacity) {
-          w1.baseLoad += item.theoreticalJr;
-          w3.baseLoad += item.theoreticalJr;
+      const pairWeeks = chosenPair === 13 ? [w1, w3] : [w2, w4];
+      for (const targetW of pairWeeks) {
+        if (!targetW) continue;
+        if (targetW.isFixed) {
+          if (targetW.presentKeys.has(key)) {
+            // Ya está presente en esta semana fija
+            continue;
+          } else {
+            // B1: Si el par elegido tiene una semana fija sin la llave, esa visita pasa al arrastre
+            carryoverNextMonth.push({
+              activity_key: key,
+              qty: item.template.cantidad,
+              jr: Number(item.theoreticalJr.toFixed(4)),
+              reason: 'CAPACITY',
+            });
+            continue;
+          }
         }
-      } else if (chosenPair === 24 && w2 && w4) {
-        allocationMap.get(w2.weekStartStr)?.push(item.template);
-        allocationMap.get(w4.weekStartStr)?.push(item.template);
-        if (item.countsCapacity) {
-          w2.baseLoad += item.theoreticalJr;
-          w4.baseLoad += item.theoreticalJr;
+
+        if (siteDailyCapacity === null || !item.countsCapacity) {
+          allocationMap.get(targetW.weekStartStr)?.push(item.template);
+          if (item.countsCapacity) {
+            targetW.baseLoad += item.theoreticalJr;
+          }
+        } else {
+          // D30.2: Frecuencia 2: cada visita se queda en la semana de su par. La parte que no quepa pasa al arrastre.
+          const availableInWeek = Math.max(0, targetW.holgura);
+          const allocJr = Math.min(item.theoreticalJr, availableInWeek);
+
+          if (allocJr < 0.05 && item.theoreticalJr >= 0.05) {
+            const carryoverJr = Number(item.theoreticalJr.toFixed(4));
+            const carryoverQty = item.template.cantidad;
+            carryoverNextMonth.push({
+              activity_key: key,
+              qty: carryoverQty,
+              jr: carryoverJr,
+              reason: 'CAPACITY',
+            });
+          } else {
+            const allocQty = Number((item.template.cantidad * (allocJr / item.theoreticalJr)).toFixed(2));
+            allocationMap.get(targetW.weekStartStr)?.push({
+              ...item.template,
+              cantidad: allocQty,
+            });
+            targetW.holgura = Math.max(0, targetW.holgura - allocJr);
+            targetW.baseLoad += allocJr;
+
+            if (item.theoreticalJr - allocJr > 1e-4) {
+              const remJr = Number((item.theoreticalJr - allocJr).toFixed(4));
+              const remQty = Number((item.template.cantidad - allocQty).toFixed(2));
+              carryoverNextMonth.push({
+                activity_key: key,
+                qty: remQty,
+                jr: remJr,
+                reason: 'CAPACITY',
+              });
+            }
+          }
         }
       }
     } else {
-      // Visitas ÚNICAS del mes (freq 1, 0.5, 0.33)
-      // Si ya está en una semana fija existente, cuenta como hecha en esa semana
-      const existingFixedWeek = weekStates.find((w) => w.isFixed && w.presentKeys.has(key));
-      if (existingFixedWeek) {
-        allocationMap.get(existingFixedWeek.weekStartStr)?.push(item.template);
-      } else {
-        // Buscar entre las semanas candidatas NO fijas la de menor carga
-        const availableWeeks = weekStates.filter((w) => !w.isFixed);
-        const candidates = availableWeeks.length > 0 ? availableWeeks : weekStates;
+      // Visitas ÚNICAS del mes (freq 1, 0.5, 0.33, o carryover_in)
+      // Nota: item.template.cantidad ya es el pendiente (descontado lo de semanas fijas)
+      const availableWeeks = weekStates.filter((w) => !w.isFixed);
 
-        let bestWeek = candidates[0];
-        for (let i = 1; i < candidates.length; i++) {
-          if (candidates[i].baseLoad < bestWeek.baseLoad - 1e-6) {
-            bestWeek = candidates[i];
+      if (availableWeeks.length === 0) {
+        // Todas las semanas están fijas: el pendiente va directo a carryoverNextMonth
+        carryoverNextMonth.push({
+          activity_key: key,
+          qty: item.template.cantidad,
+          jr: Number(item.theoreticalJr.toFixed(4)),
+          reason: 'CAPACITY',
+        });
+      } else if (siteDailyCapacity === null) {
+        let bestWeek = availableWeeks[0];
+        for (let i = 1; i < availableWeeks.length; i++) {
+          if (availableWeeks[i].baseLoad < bestWeek.baseLoad - 1e-6) {
+            bestWeek = availableWeeks[i];
+          }
+        }
+        if (bestWeek) {
+          allocationMap.get(bestWeek.weekStartStr)?.push(item.template);
+          if (item.countsCapacity) bestWeek.baseLoad += item.theoreticalJr;
+        }
+      } else if (!item.countsCapacity) {
+        let bestWeek = availableWeeks[0];
+        for (let i = 1; i < availableWeeks.length; i++) {
+          if (availableWeeks[i].holgura > bestWeek.holgura + 1e-6) {
+            bestWeek = availableWeeks[i];
+          }
+        }
+        if (bestWeek) {
+          allocationMap.get(bestWeek.weekStartStr)?.push(item.template);
+        }
+      } else {
+        // D30.1 & D30.2: Reparto por holgura y división entre semanas si no cabe
+        let remJr = item.theoreticalJr;
+        let remQty = item.template.cantidad;
+        const allocatedFragments: Array<{ week: WeekLoadState; jr: number; qty: number }> = [];
+
+        while (remJr > 1e-4) {
+          const nonFixedWithHolgura = weekStates.filter((w) => !w.isFixed && w.holgura > 1e-4);
+          if (nonFixedWithHolgura.length === 0) {
+            break;
+          }
+          nonFixedWithHolgura.sort((a, b) => {
+            const diff = b.holgura - a.holgura;
+            if (Math.abs(diff) > 1e-6) return diff;
+            return a.weekNumber - b.weekNumber;
+          });
+
+          const bestWeek = nonFixedWithHolgura[0];
+          const allocJr = Math.min(remJr, bestWeek.holgura);
+
+          if (allocJr < 0.05) {
+            if (allocatedFragments.length > 0) {
+              const prevFrag = allocatedFragments[allocatedFragments.length - 1];
+              if (prevFrag.week.holgura >= allocJr - 0.005) {
+                prevFrag.jr += allocJr;
+                prevFrag.qty += remQty;
+                prevFrag.week.holgura = Math.max(0, prevFrag.week.holgura - allocJr);
+                prevFrag.week.baseLoad += allocJr;
+                remJr = 0;
+                remQty = 0;
+              }
+            }
+            break;
+          }
+
+          let allocQty = Number((item.template.cantidad * (allocJr / item.theoreticalJr)).toFixed(2));
+          if (Math.abs(remJr - allocJr) < 1e-4) {
+            allocQty = remQty;
+          } else {
+            allocQty = Math.min(allocQty, remQty);
+          }
+
+          allocatedFragments.push({
+            week: bestWeek,
+            jr: allocJr,
+            qty: allocQty,
+          });
+
+          bestWeek.holgura = Math.max(0, bestWeek.holgura - allocJr);
+          bestWeek.baseLoad += allocJr;
+          remJr = Number((remJr - allocJr).toFixed(4));
+          remQty = Number((remQty - allocQty).toFixed(2));
+        }
+
+        if (allocatedFragments.length > 0) {
+          const totalAllocQty = allocatedFragments.reduce((acc, f) => acc + f.qty, 0);
+          const diffQty = Number((item.template.cantidad - (remJr > 1e-4 ? remQty : 0) - totalAllocQty).toFixed(2));
+          if (Math.abs(diffQty) > 0) {
+            allocatedFragments[allocatedFragments.length - 1].qty = Number(
+              (allocatedFragments[allocatedFragments.length - 1].qty + diffQty).toFixed(2)
+            );
+          }
+
+          for (const frag of allocatedFragments) {
+            allocationMap.get(frag.week.weekStartStr)?.push({
+              ...item.template,
+              cantidad: frag.qty,
+            });
           }
         }
 
-        if (bestWeek) {
-          allocationMap.get(bestWeek.weekStartStr)?.push(item.template);
-          if (item.countsCapacity) {
-            bestWeek.baseLoad += item.theoreticalJr;
-          }
+        if (remJr > 1e-4 && remQty > 0.005) {
+          const carryoverJr =
+            item.template.rendimiento !== null && item.template.rendimiento !== undefined && item.template.rendimiento > 0
+              ? Number((remQty / item.template.rendimiento).toFixed(4))
+              : Number(remJr.toFixed(4));
+
+          carryoverNextMonth.push({
+            activity_key: key,
+            qty: remQty,
+            jr: carryoverJr,
+            reason: 'CAPACITY',
+          });
         }
       }
     }
   }
 
+  allocationMap.carryoverNextMonth = carryoverNextMonth;
   return allocationMap;
 }
 
@@ -446,6 +760,8 @@ export function generateRoutineScheduleForWeek(
     : null;
 
   const assignments: DailyRoutineAssignment[] = [];
+  const intraWeekCarryover: CarryoverNextMonthItem[] = [];
+  let monthlyCarryoverNextMonth: CarryoverNextMonthItem[] = [];
 
   // Build map of days for the week (Monday = index 0 .. Sunday = index 6)
   const weekDays: WorkingDayState[] = [];
@@ -468,14 +784,14 @@ export function generateRoutineScheduleForWeek(
   // Working days Monday..Saturday (excluding Sunday and holidays)
   const workingDays = weekDays.filter((d) => d.dayOfWeek >= 1 && d.dayOfWeek <= 6 && d.isWorking);
 
-  // Reglas de calendario mensual D19 / D29
+  // Reglas de calendario mensual D19 / D29 / D30
   const mondayDayOfMonth = weekStart.getUTCDate();
   const weekOfMonth = Math.ceil(mondayDayOfMonth / 7);
 
-  // Clasificar actividades por tipo de programación D27 / D29:
+  // Clasificar actividades por tipo de programación D27 / D29 / D30:
   // a) Diarias (25)
   // b) Patrones repetidos (12, 8, 6 en semanas impares)
-  // c) Visitas únicas de la semana (4, 6 en semanas pares, y baja frecuencia asignadas a esta semana por D29)
+  // c) Visitas únicas de la semana (4, 6 en semanas pares, y baja frecuencia / arrastre asignadas a esta semana por D30)
   const dailyTemplates: RoutineBaseTemplate[] = [];
   const patternTemplates: Array<{ template: RoutineBaseTemplate; targetDows: number[] }> = [];
   const uniqueVisits: Array<{ template: RoutineBaseTemplate; theoreticalJr: number; countsCapacity: boolean }> = [];
@@ -527,10 +843,11 @@ export function generateRoutineScheduleForWeek(
     }
   }
 
-  // 2. Actividades de baja frecuencia repartidas por proyección mensual (D29: 2, 1, 0.5, 0.33)
+  // 2. Actividades de baja frecuencia repartidas por proyección mensual (D30: 2, 1, 0.5, 0.33 y arrastre)
   if (weekOfMonth <= 4 && !options.skipMonthlyAllocation) {
     const monthlyAllocations = projectMonthlyLowFrequencyAllocation(templates, weekStart, options);
     const thisWeekAllocated = monthlyAllocations.get(weekStartStr) || [];
+    monthlyCarryoverNextMonth = monthlyAllocations.carryoverNextMonth || [];
 
     for (const template of thisWeekAllocated) {
       const theoreticalJr =
@@ -640,7 +957,7 @@ export function generateRoutineScheduleForWeek(
     }
   }
 
-  // --- c, d, e) Programar VISITAS ÚNICAS de la semana (D27 / D28) ---
+  // --- c, d, e) Programar VISITAS ÚNICAS de la semana (D27 / D28 / D30) ---
   // Ordenar por jornales de la visita (mayor primero; empate activity_key asc)
   uniqueVisits.sort((a, b) => {
     const diff = b.theoreticalJr - a.theoreticalJr;
@@ -693,7 +1010,7 @@ export function generateRoutineScheduleForWeek(
     // Caso con capacidad: verificar si cabe en bestDay sin exceder siteDailyCapacity
     const availableInBest = Math.max(0, siteDailyCapacity - bestDay.countingJournals);
 
-    if (theoreticalJr <= availableInBest + 1e-6) {
+    if (theoreticalJr <= availableInBest + 0.005) {
       // Cabe completo en bestDay
       assignments.push({
         dateStr: bestDay.dateStr,
@@ -711,18 +1028,18 @@ export function generateRoutineScheduleForWeek(
       bestDay.countingJournals += theoreticalJr;
     } else {
       // Caso d: No cabe completo en el mejor día -> dividir en partes en días hábiles consecutivos de la misma semana
-      // cada parte <= capacidad libre de su día; lo que no quepa queda en el día de menor carga
+      // cada parte <= capacidad libre de su día
       const n = workingDays.length;
       let remJr = theoreticalJr;
       let remQty = template.cantidad;
       const parts: Array<{ day: WorkingDayState; jr: number; qty: number }> = [];
 
-      for (let step = 0; step < n && remJr > 1e-6; step++) {
+      for (let step = 0; step < n && remJr > 1e-4; step++) {
         const idx = (bestDayIndex + step) % n;
         const day = workingDays[idx];
         const freeCap = Math.max(0, siteDailyCapacity - day.countingJournals);
 
-        if (freeCap > 1e-6) {
+        if (freeCap > 1e-4) {
           const allocJr = Math.min(remJr, freeCap);
           const allocQty = Number((template.cantidad * (allocJr / theoreticalJr)).toFixed(2));
           parts.push({ day, jr: allocJr, qty: allocQty });
@@ -732,58 +1049,83 @@ export function generateRoutineScheduleForWeek(
         }
       }
 
-      // Si aún sobra remJr porque todos los días coparon su capacidad:
-      if (remJr > 1e-6) {
-        // Encontrar el día con menor carga actual
-        let minOverflowDay = workingDays[0];
-        for (const d of workingDays) {
-          if (d.countingJournals < minOverflowDay.countingJournals - 1e-6) {
-            minOverflowDay = d;
+      // D30.3: Control de sobrante intra-semana
+      if (template.frecuencia <= 2) {
+        // Para visitas de frecuencia <= 2, el sobrante que no cabe en ningún día pasa al arrastre.
+        // NUNCA se suma al día de menor carga por encima del límite.
+        if (remJr > 1e-4 && remQty > 0) {
+          const cJr =
+            template.rendimiento !== null && template.rendimiento !== undefined && template.rendimiento > 0
+              ? Number((remQty / template.rendimiento).toFixed(4))
+              : Number(remJr.toFixed(4));
+
+          intraWeekCarryover.push({
+            activity_key: template.activity_key,
+            qty: remQty,
+            jr: cJr,
+            reason: 'CAPACITY',
+          });
+        }
+      } else {
+        // Actividades recurrentes (freq 4, 6 en sem pares): si sobra, se suma al día de menor carga
+        if (remJr > 1e-4) {
+          let minOverflowDay = workingDays[0];
+          for (const d of workingDays) {
+            if (d.countingJournals < minOverflowDay.countingJournals - 1e-6) {
+              minOverflowDay = d;
+            }
           }
+          const existingPart = parts.find((p) => p.day === minOverflowDay);
+          if (existingPart) {
+            existingPart.jr += remJr;
+            existingPart.qty += remQty;
+          } else {
+            parts.push({ day: minOverflowDay, jr: remJr, qty: remQty });
+          }
+          minOverflowDay.countingJournals += remJr;
         }
-        const existingPart = parts.find((p) => p.day === minOverflowDay);
-        if (existingPart) {
-          existingPart.jr += remJr;
-          existingPart.qty += remQty;
-        } else {
-          parts.push({ day: minOverflowDay, jr: remJr, qty: remQty });
+      }
+
+      if (parts.length > 0) {
+        const allocatedQtyTotal = template.cantidad - (template.frecuencia <= 2 && remJr > 1e-4 ? remQty : 0);
+        const sumQty = parts.reduce((acc, p) => acc + p.qty, 0);
+        const diffQty = Number((allocatedQtyTotal - sumQty).toFixed(2));
+        if (Math.abs(diffQty) > 0) {
+          parts[parts.length - 1].qty = Number((parts[parts.length - 1].qty + diffQty).toFixed(2));
         }
-        minOverflowDay.countingJournals += remJr;
-        remJr = 0;
-        remQty = 0;
-      }
 
-      if (parts.length === 0) {
-        parts.push({ day: bestDay, jr: theoreticalJr, qty: template.cantidad });
-        bestDay.countingJournals += theoreticalJr;
-      }
+        for (const part of parts) {
+          const partJr =
+            template.rendimiento !== null && template.rendimiento !== undefined && template.rendimiento > 0
+              ? Number((part.qty / template.rendimiento).toFixed(4))
+              : (theoreticalJr > 0 ? Number((theoreticalJr * (part.qty / template.cantidad)).toFixed(4)) : 0);
 
-      // Ajuste exacto de suma de cantidades para evitar errores de redondeo
-      const sumQty = parts.reduce((acc, p) => acc + p.qty, 0);
-      const diffQty = Number((template.cantidad - sumQty).toFixed(2));
-      if (Math.abs(diffQty) > 0) {
-        parts[parts.length - 1].qty = Number((parts[parts.length - 1].qty + diffQty).toFixed(2));
+          assignments.push({
+            dateStr: part.day.dateStr,
+            dayOfWeek: part.day.dayOfWeek,
+            activity_key: template.activity_key,
+            name: template.name,
+            zone: template.zone,
+            unit: template.unit,
+            cantidad: part.qty,
+            theoretical_jr: partJr,
+            frequency_interval: template.frecuencia,
+            counts_capacity: countsCapacity,
+          });
+        }
       }
+    }
+  }
 
-      for (const part of parts) {
-        const partJr =
-          template.rendimiento !== null && template.rendimiento !== undefined && template.rendimiento > 0
-            ? Number((part.qty / template.rendimiento).toFixed(4))
-            : (theoreticalJr > 0 ? Number((theoreticalJr * (part.qty / template.cantidad)).toFixed(4)) : 0);
-
-        assignments.push({
-          dateStr: part.day.dateStr,
-          dayOfWeek: part.day.dayOfWeek,
-          activity_key: template.activity_key,
-          name: template.name,
-          zone: template.zone,
-          unit: template.unit,
-          cantidad: part.qty,
-          theoretical_jr: partJr,
-          frequency_interval: template.frecuencia,
-          counts_capacity: countsCapacity,
-        });
-      }
+  // D30.3: Calcular excesos de actividades recurrentes
+  const recurrentExceedsCapacity: RecurrentExceedsCapacityItem[] = [];
+  for (const wd of workingDays) {
+    if (siteDailyCapacity !== null && wd.countingJournals > siteDailyCapacity + 0.005) {
+      const deficit = Number((wd.countingJournals - siteDailyCapacity).toFixed(4));
+      recurrentExceedsCapacity.push({
+        dateStr: wd.dateStr,
+        deficit_jr: deficit,
+      });
     }
   }
 
@@ -794,6 +1136,11 @@ export function generateRoutineScheduleForWeek(
     weekEndStr,
     assignments,
     totalJournals,
+    carryoverIn: options.carryoverIn || [],
+    carryoverNextMonth: monthlyCarryoverNextMonth, // Alias de carryoverNextMonthProjection para compatibilidad
+    carryoverNextMonthProjection: monthlyCarryoverNextMonth,
+    carryoverFromThisWeek: intraWeekCarryover,
+    recurrentExceedsCapacity: recurrentExceedsCapacity.length > 0 ? recurrentExceedsCapacity : undefined,
   };
 }
 

@@ -9,16 +9,16 @@ import { ensureWeeklyPlanMaterialized } from '../scheduleMaterializationService'
 
 function createMockQuery(data: any, count: number | null = null, error: any = null) {
   const query: any = {
-    select: jest.fn().mockReturnThis(),
-    insert: jest.fn().mockReturnThis(),
-    update: jest.fn().mockReturnThis(),
-    delete: jest.fn().mockReturnThis(),
-    eq: jest.fn().mockReturnThis(),
-    in: jest.fn().mockReturnThis(),
-    order: jest.fn().mockReturnThis(),
-    limit: jest.fn().mockReturnThis(),
-    maybeSingle: jest.fn().mockResolvedValue({ data, error }),
-    single: jest.fn().mockResolvedValue({ data, error }),
+    select: () => query,
+    insert: () => query,
+    update: () => query,
+    delete: () => query,
+    eq: () => query,
+    in: () => query,
+    order: () => query,
+    limit: () => query,
+    maybeSingle: () => Promise.resolve({ data, error }),
+    single: () => Promise.resolve({ data, error }),
     then: (resolve: (val: any) => any) => resolve({ data, count, error }),
   };
   return query;
@@ -209,7 +209,7 @@ describe('GATE FREQ-OP-03 — D27 Reparto por Carga y D28 Máquinas Fuera de Cap
       const siteId = 'site_cap_test';
 
       const mockSupabase: any = {
-        from: jest.fn((table: string) => {
+        from: (table: string) => {
           if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
           if (table === 'poa_versions') {
             return createMockQuery([{ id: 'ver_1', poa_id: 'poa_1', status: 'active', poa: { id: 'poa_1', board_id: boardId } }]);
@@ -242,8 +242,8 @@ describe('GATE FREQ-OP-03 — D27 Reparto por Carga y D28 Máquinas Fuera de Cap
             return createMockQuery({ jornales_dia: 3.0, source: 'COSTOS GENERALES V3' });
           }
           return createMockQuery([]);
-        }),
-        rpc: jest.fn((name: string, params: any) => {
+        },
+        rpc: (name: string, params: any) => {
           if (name === 'ensure_weekly_plan_header') {
             return Promise.resolve({ data: 'plan_telemetry_test', error: null });
           }
@@ -255,7 +255,7 @@ describe('GATE FREQ-OP-03 — D27 Reparto por Carga y D28 Máquinas Fuera de Cap
             return Promise.resolve({ data: 'evt_1', error: null });
           }
           return Promise.resolve({ data: null, error: null });
-        }),
+        },
       };
 
       const result = await ensureWeeklyPlanMaterialized(mockSupabase, boardId, siteId, weekStart);

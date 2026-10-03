@@ -71,7 +71,18 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
   );
 
   // Motor de cálculo — produce WeeklyPlanningContext determinista
-  const { plan, missingStandards, isLoading, isError, error, notOperational } = useWeeklyPlan(boardId, group, weekStart);
+  const {
+    plan,
+    missingStandards,
+    isLoading,
+    isError,
+    error,
+    notOperational,
+    carryoverNextMonth,
+    carryoverNextMonthProjection,
+    carryoverFromThisWeek,
+    recurrentExceedsCapacity,
+  } = useWeeklyPlan(boardId, group, weekStart);
 
   // Planes persistidos para este grupo — cache hit si el board ya cargó
   const { data: savedPlans } = useWeeklyPlans(boardId, validSelectedGroup?.id);
@@ -232,6 +243,10 @@ export default function WeeklyPlannerContainer({ boardId, selectedGroupId, group
       onPrevWeek={() => setWeekStart(d => shiftWeek(d, -1))}
       onNextWeek={() => setWeekStart(d => shiftWeek(d, 1))}
       onChangeSite={() => onSelectGroup?.(null)}
+      carryoverNextMonth={carryoverNextMonth}
+      carryoverNextMonthProjection={carryoverNextMonthProjection}
+      carryoverFromThisWeek={carryoverFromThisWeek}
+      recurrentExceedsCapacity={recurrentExceedsCapacity}
     />
   );
 }

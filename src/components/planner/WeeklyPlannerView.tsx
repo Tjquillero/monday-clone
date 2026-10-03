@@ -16,7 +16,7 @@ import { isColombianHoliday, getColombianHolidayName } from '@/lib/colombianHoli
 import { isOperationalWorkingDay } from '@/lib/routineScheduler';
 import WeekSelector from './WeekSelector';
 import PlanningTable, { PlanningTableActivityItem } from './PlanningTable';
-import CapacitySummary, { DailyCapacityDetailItem } from './CapacitySummary';
+import CapacitySummary, { DailyCapacityDetailItem, CarryoverItemDisplay, RecurrentExceedsDisplay } from './CapacitySummary';
 import PlanningWarnings from './PlanningWarnings';
 import PlanLifecyclePanel from './PlanLifecyclePanel';
 
@@ -71,6 +71,10 @@ interface Props {
   onPrevWeek: () => void;
   onNextWeek: () => void;
   onChangeSite?: () => void;
+  carryoverNextMonth?: CarryoverItemDisplay[];
+  carryoverNextMonthProjection?: CarryoverItemDisplay[];
+  carryoverFromThisWeek?: CarryoverItemDisplay[];
+  recurrentExceedsCapacity?: RecurrentExceedsDisplay[];
 }
 
 export default function WeeklyPlannerView({
@@ -102,6 +106,10 @@ export default function WeeklyPlannerView({
   onPrevWeek,
   onNextWeek,
   onChangeSite,
+  carryoverNextMonth,
+  carryoverNextMonthProjection,
+  carryoverFromThisWeek,
+  recurrentExceedsCapacity,
 }: Props) {
   const noGroupSelected = !group;
   const hasMissingStandards = missingStandards.length > 0;
@@ -404,6 +412,10 @@ export default function WeeklyPlannerView({
                 workingDaysCount={workingDaysCount}
                 dailyDetails={dailyDetails}
                 zoneName={group?.title}
+                carryoverNextMonth={carryoverNextMonth}
+                carryoverNextMonthProjection={carryoverNextMonthProjection}
+                carryoverFromThisWeek={carryoverFromThisWeek}
+                recurrentExceedsCapacity={recurrentExceedsCapacity}
               />
             </>
           )}

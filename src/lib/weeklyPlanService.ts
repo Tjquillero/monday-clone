@@ -6,7 +6,7 @@
  */
 
 import { SupabaseClient } from '@supabase/supabase-js';
-import { RoutineWeeklyProjection } from './routineScheduler';
+import { RoutineWeeklyProjection, CarryoverItem, CarryoverNextMonthItem, RecurrentExceedsCapacityItem } from './routineScheduler';
 import { calculateContractWeek } from './weeklyPlanner';
 import {
   WeeklyPlan,
@@ -29,6 +29,11 @@ export interface SyncWeeklyPlanResult {
   protectedCount: number;
   totalItems: number;
   notOperational?: boolean;
+  carryoverIn?: CarryoverItem[];
+  carryoverNextMonth?: CarryoverNextMonthItem[];
+  carryoverNextMonthProjection?: CarryoverNextMonthItem[];
+  carryoverFromThisWeek?: CarryoverNextMonthItem[];
+  recurrentExceedsCapacity?: RecurrentExceedsCapacityItem[];
 }
 
 /**

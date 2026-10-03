@@ -329,6 +329,74 @@ Fuente: `COSTOS GENERALES V3` (Tablero `3ea0326f-6ff7-409f-848a-1f296e6e3cc8`):
    - Un día exactamente en el límite o con sobrecarga $\le 0.005$ **NO se considera excedido**.
    - Se aplica tolerancia numérica de `0.005` tanto en el servicio de materialización como en los componentes de la interfaz de usuario.
 
+---
+
+## 12. Decisión D30: Reparto Mensual por Holgura, Límite Diario Estricto y Arrastre al Mes Siguiente
+
+> **Decisión de Tomás (2026-10-02):** *"El mantenimiento es continuo: nunca se programa por encima del límite diario. Lo que no cabe en el mes pasa al mes siguiente."*
+
+### 12.1. D30.1 — Elección de Semana por Holgura
+- Para cada semana candidata del mes (semanas 1 a 4, igual que D29):
+  $$\text{holgura}_w = \text{capacidad\_diaria} \times \text{días\_hábiles}_w - \text{carga\_que\_cuenta}_w$$
+- **Días hábiles:** lunes a sábado, sin festivos colombianos ni `customNonWorkingDays` (misma función D26).
+- En la carga solo computan las actividades con `counts_capacity = true`.
+- Las visitas únicas (`freq 1`, `0.5` y `0.33`) van a la semana no fija con **mayor holgura**. En caso de empate, gana la semana de número menor.
+- Para **frecuencia 2**, el par (1-3 o 2-4) se elige por la **suma de holguras**, no por la suma de cargas.
+- Si el sitio no tiene capacidad (`site_daily_capacity = null`), se mantiene el comportamiento previo.
+
+### 12.2. D30.2 — Dividir entre Semanas una Visita que no Cabe (solo freq 1, 0.5 y 0.33)
+- Si $\text{jr\_visita} > \text{holgura}$ de la mejor semana:
+  1. Se asigna a esa semana un fragmento igual a su holgura disponible.
+  2. El resto pasa a la siguiente semana no fija de mayor holgura, y así sucesivamente.
+  3. La cantidad de cada fragmento es proporcional a sus jornales:
+     $$\text{cantidad\_fragmento} = \text{cantidad\_total} \times \frac{\text{jr\_fragmento}}{\text{jr\_visita}}$$
+     El último fragmento absorbe la diferencia de redondeo. El rendimiento no cambia.
+  4. No se crean fragmentos menores de 0,05 JR. Ese residuo se suma al fragmento anterior si cabe; si no cabe, pasa al arrastre.
+  5. Si al recorrer todas las semanas aún queda resto, ese resto pasa como **arrastre al mes siguiente** (`carryover_next_month`).
+- **Frecuencia 2:** cada visita se queda en la semana de su par. La parte que no quepa en su semana pasa al arrastre. No se fragmenta hacia otras semanas.
+
+### 12.3. D30.3 — Dentro de la Semana (D27) Nunca se Excede el Límite
+- En la distribución diaria intra-semana:
+  - Para visitas de frecuencia $\le 2$, el sobrante que no cabe en ningún día de la semana pasa al arrastre (`carryover_next_month`). No se crea ningún ítem por encima del límite.
+  - Para actividades recurrentes (frecuencias 25, 12, 8, 6 y 4), se mantiene la asignación y si exceden la capacidad diaria se reporta en `recurrent_exceeds_capacity` (lista de días y déficit).
+  - La maquinaria (`counts_capacity = false`) nunca se divide ni pasa al arrastre.
+
+### 12.4. D30.4 — Arrastre al Mes Siguiente (Determinista, sin Tabla Nueva)
+- **Primer mes con arrastre:** `2026-11` (constante `CARRYOVER_START_MONTH`). Octubre no recibe arrastre de septiembre.
+- **Cálculo del arrastre de entrada (`carryover_in`) del mes M:** para cada actividad de frecuencia $\le 2$ que aplica en $M-1$, es la cantidad requerida en $M-1$ menos la cantidad realmente planificada en los planes no cancelados de $M-1$. Si es $\le 0$, no hay arrastre.
+- **Fuente incompleta:** si alguna semana candidata de $M-1$ no tiene plan no cancelado, la materialización de la primera semana de $M$ falla inmediatamente con error `CARRYOVER_SOURCE_INCOMPLETE` y 0 escrituras.
+- **Prioridad:** el arrastre de entrada se reparte **antes** que las visitas regulares del mes con D30.1 y D30.2.
+- **Visibilidad en telemetría `SITE_MATERIALIZATION_SUMMARY`:**
+  - `carryover_in`: lista con `activity_key`, `qty` y `jr`.
+  - `carryover_next_month`: lista con `activity_key`, `qty`, `jr` y motivo `CAPACITY`.
+  - `recurrent_exceeds_capacity`: lista con `dateStr` y `deficit_jr`.
+
+### 12.5. D30.5 — Lectura de Planes Existentes
+- Se excluyen los planes cancelados (`status === 'cancelled'`).
+- La carga fija de semanas existentes solo suma ítems con `counts_capacity = true`.
+
+### 12.6. D30.6 — UI del Cronograma
+- El panel `CapacitySummary` incluye la sección **"Pasa al próximo mes (proyección del mes)"** con `carryover_next_month_projection` (o alias `carryover_next_month`), y debajo, si existe sobrante intra-semana, la sección **"De esta semana"** con `carryover_from_this_week`.
+- Si existe `recurrent_exceeds_capacity`, muestra el aviso: *"Recurrentes exceden el límite: revisar límite o rendimientos"*.
+
+### 12.7. D30.7 — Contabilidad Mensual por Cantidad Física y Manejo de Ítems Cancelados (B1 / B2)
+- **Contabilidad por cantidad:** La asignación no decide presencia por llave única, sino por balance de cantidades:
+  $$\text{requerido} = \text{arrastre\_in.qty} + \text{visitas\_del\_mes} \times \text{cantidad\_por\_visita}$$
+  $$\text{ya\_planificado} = \sum \text{planned\_qty (semanas fijas no canceladas)}$$
+  $$\text{pendiente} = \text{requerido} - \text{ya\_planificado}$$
+- Solo $\text{pendiente} > 0.005$ se distribuye entre las semanas no fijas disponibles mediante D30.1 y D30.2. Lo que no quepa pasa a `carryover_next_month`.
+- **Prioridad de consumo:** El `ya_planificado` de semanas fijas consume primero la cuota de `carryover_in` y luego la cuota de visitas regulares.
+- **Frecuencia 2:** $\text{pendiente\_visitas} = 2 - \text{visitas presentes en semanas fijas}$. Si el par elegido (1-3 o 2-4) tiene una semana fija que no contiene la llave, esa visita no se descarta: pasa a `carryover_next_month`.
+- **Exclusión de ítems cancelados (B2 / B3):** Tanto en la lectura de planes del mes como en el cálculo de arrastre de $M-1$, se excluyen estrictamente los registros con `status = 'cancelled'` (definido en las restricciones CHECK de `weekly_plans` y `weekly_plan_items`).
+
+### 12.8. D30.8 — Separación de Arrastre de Proyección Mensual vs Intra-Semana (B4)
+- **Separación en el evento `SITE_MATERIALIZATION_SUMMARY`:**
+  - `carryover_next_month_projection`: Arrastre del mes recalculado dinámicamente con las semanas fijas.
+  - `carryover_from_this_week`: Sobrante intra-semana generado por el límite diario (D30.3).
+  - `carryover_next_month`: Mantenido como alias de `carryover_next_month_projection` para compatibilidad retroactiva con el arnés de pruebas.
+- **UI:** Presenta claramente ambos niveles de arrastre diferenciando la proyección general del mes respecto al excedente específico de la semana en curso.
+
+
 
 
 

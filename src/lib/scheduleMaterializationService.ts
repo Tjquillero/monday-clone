@@ -13,6 +13,9 @@ import {
   getMonthlyCandidateWeeks,
   MonthlyPlanInput,
   RoutineBaseTemplate,
+  CarryoverItem,
+  CarryoverNextMonthItem,
+  RecurrentExceedsCapacityItem,
 } from './routineScheduler';
 import { SyncWeeklyPlanResult } from './weeklyPlanService';
 import { calculateContractWeek } from './weeklyPlanner';
@@ -21,6 +24,8 @@ import {
   isValidISODateString,
   persistMaterializationEvent,
 } from './materialization/siteActivityClassifier';
+
+export const CARRYOVER_START_MONTH = '2026-11';
 
 export interface MaterializeWeeklyPlanOptions {
   customNonWorkingDays?: string[];
@@ -589,7 +594,7 @@ export async function ensureWeeklyPlanMaterialized(
       const planIds = monthPlans.map((p: any) => p.id);
       let itemsQuery: any = supabase
         .from('weekly_plan_items')
-        .select('plan_id, activity_key, planned_jr, planned_rendimiento');
+        .select('plan_id, activity_key, planned_qty, planned_jr, planned_rendimiento, status');
 
       if (typeof itemsQuery?.in === 'function') {
         itemsQuery = itemsQuery.in('plan_id', planIds);
@@ -621,16 +626,19 @@ export async function ensureWeeklyPlanMaterialized(
         throw new Error(`MONTH_PROJECTION_READ_FAILED: ${itemsErr.message}`);
       }
 
-      for (const p of monthPlans) {
+      const nonCancelledMonthPlans = (monthPlans || []).filter((p: any) => p.status !== 'cancelled');
+      for (const p of nonCancelledMonthPlans) {
         const pItems = (monthItems || [])
-          .filter((i: any) => i.plan_id === p.id)
+          .filter((i: any) => i.plan_id === p.id && i.status !== 'cancelled')
           .map((i: any) => {
             const opFreq = operationalFreqMap.get(i.activity_key);
             const countsCap = opFreq?.counts_capacity !== false;
             return {
               activity_key: i.activity_key,
+              planned_qty: Number(i.planned_qty || 0),
               planned_jr: Number(i.planned_jr || 0),
               counts_capacity: countsCap,
+              status: i.status,
             };
           });
 
@@ -667,7 +675,171 @@ export async function ensureWeeklyPlanMaterialized(
     throw new Error(`MONTH_PROJECTION_READ_FAILED: ${err.message || String(err)}`);
   }
 
-  // 7. Generar Ocurrencias Diarias con Calendario Laboral Colombiano (F3.1, D26, D27, D28, D29)
+  // 6.c. D30.4 / D30.5: Cálculo de Arrastre de Entrada (carryoverIn) para mes M >= CARRYOVER_START_MONTH
+  const carryoverIn: CarryoverItem[] = [];
+  const currentYear = mondayDate.getUTCFullYear();
+  const currentMonth = mondayDate.getUTCMonth() + 1; // 1..12
+  const currentMonthStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+
+  if (currentMonthStr >= CARRYOVER_START_MONTH) {
+    const prevMonthDate = new Date(Date.UTC(currentYear, mondayDate.getUTCMonth() - 1, 15));
+    const prevYear = prevMonthDate.getUTCFullYear();
+    const prevMonth = prevMonthDate.getUTCMonth() + 1;
+    const prevMonthStr = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
+
+    const prevCandidateWeeks = getMonthlyCandidateWeeks(prevMonthDate).filter((w) => w.weekNumber <= 4);
+    const prevCandidateMondays = prevCandidateWeeks.map((w) => w.weekStartStr);
+
+    let prevPlansQuery: any = supabase
+      .from('weekly_plans')
+      .select('id, week_start, status')
+      .eq('board_id', boardId)
+      .eq('group_id', gId);
+
+    if (typeof prevPlansQuery?.in === 'function') {
+      prevPlansQuery = prevPlansQuery.in('week_start', prevCandidateMondays);
+    }
+
+    const { data: prevPlans, error: prevPlansErr } = await prevPlansQuery;
+
+    if (prevPlansErr) {
+      await persistMaterializationEvent(
+        supabase,
+        boardId,
+        gId,
+        weekStartStr,
+        null,
+        'SITE_MATERIALIZATION_SUMMARY',
+        'FAILED',
+        {
+          ...classification.summary,
+          poa_id: activePoaId,
+          poa_version_id: activeVersionId,
+          status: 'FAILED',
+          error: {
+            stage: 'carryover_read',
+            code: 'MONTH_PROJECTION_READ_FAILED',
+            message: prevPlansErr.message || 'Error al consultar planes de M-1 para arrastre',
+          },
+        }
+      );
+      throw new Error(`MONTH_PROJECTION_READ_FAILED: ${prevPlansErr.message}`);
+    }
+
+    const nonCancelledPrevPlans = (prevPlans || []).filter((p: any) => p.status !== 'cancelled');
+
+    // D30.4: Fuente incompleta -> Si alguna semana candidata de M-1 no tiene plan no cancelado, la materialización falla
+    const missingM1Weeks = prevCandidateWeeks.filter(
+      (pw) => !nonCancelledPrevPlans.some((p: any) => p.week_start === pw.weekStartStr)
+    );
+
+    if (missingM1Weeks.length > 0) {
+      await persistMaterializationEvent(
+        supabase,
+        boardId,
+        gId,
+        weekStartStr,
+        null,
+        'SITE_MATERIALIZATION_SUMMARY',
+        'FAILED',
+        {
+          ...classification.summary,
+          poa_id: activePoaId,
+          poa_version_id: activeVersionId,
+          status: 'FAILED',
+          error: {
+            stage: 'carryover_validation',
+            code: 'CARRYOVER_SOURCE_INCOMPLETE',
+            message: `Fuente incompleta en M-1 (${prevMonthStr}): faltan planes no cancelados en las semanas ${missingM1Weeks.map((w) => w.weekStartStr).join(', ')}`,
+            missing_weeks: missingM1Weeks.map((w) => w.weekStartStr),
+          },
+        }
+      );
+      throw new Error(
+        `CARRYOVER_SOURCE_INCOMPLETE: Fuente incompleta en M-1 (${prevMonthStr}): faltan planes no cancelados en las semanas candidatas`
+      );
+    }
+
+    const prevPlanIds = nonCancelledPrevPlans.map((p: any) => p.id);
+    let prevItemsQuery: any = supabase
+      .from('weekly_plan_items')
+      .select('plan_id, activity_key, planned_qty, status');
+
+    if (typeof prevItemsQuery?.in === 'function') {
+      prevItemsQuery = prevItemsQuery.in('plan_id', prevPlanIds);
+    }
+
+    const { data: prevItems, error: prevItemsErr } = await prevItemsQuery;
+
+    if (prevItemsErr) {
+      await persistMaterializationEvent(
+        supabase,
+        boardId,
+        gId,
+        weekStartStr,
+        null,
+        'SITE_MATERIALIZATION_SUMMARY',
+        'FAILED',
+        {
+          ...classification.summary,
+          poa_id: activePoaId,
+          poa_version_id: activeVersionId,
+          status: 'FAILED',
+          error: {
+            stage: 'carryover_read',
+            code: 'MONTH_PROJECTION_READ_FAILED',
+            message: prevItemsErr.message || 'Error al consultar items de planes de M-1 para arrastre',
+          },
+        }
+      );
+      throw new Error(`MONTH_PROJECTION_READ_FAILED: ${prevItemsErr.message}`);
+    }
+
+    const plannedQtyM1Map = new Map<string, number>();
+    for (const item of (prevItems || []).filter((i: any) => i.status !== 'cancelled')) {
+      plannedQtyM1Map.set(
+        item.activity_key,
+        Number(((plannedQtyM1Map.get(item.activity_key) || 0) + Number(item.planned_qty || 0)).toFixed(2))
+      );
+    }
+
+    for (const template of templates) {
+      const f = template.frecuencia;
+      if (f <= 2) {
+        let requiredVisitsM1 = 0;
+        if (Math.abs(f - 2) < 0.1) {
+          requiredVisitsM1 = 2;
+        } else if (Math.abs(f - 1) < 0.1) {
+          requiredVisitsM1 = 1;
+        } else if (Math.abs(f - 0.5) < 0.05) {
+          if (prevMonth % 2 === 0) requiredVisitsM1 = 1;
+        } else if (Math.abs(f - 0.33) < 0.05) {
+          if (prevMonth % 3 === 1) requiredVisitsM1 = 1;
+        }
+
+        if (requiredVisitsM1 > 0) {
+          const requiredQtyM1 = Number((requiredVisitsM1 * template.cantidad).toFixed(2));
+          const actualPlannedQtyM1 = plannedQtyM1Map.get(template.activity_key) || 0;
+          const deficitQty = Number((requiredQtyM1 - actualPlannedQtyM1).toFixed(2));
+
+          if (deficitQty > 0.005) {
+            const carryoverJr =
+              template.rendimiento !== null && template.rendimiento !== undefined && template.rendimiento > 0
+                ? Number((deficitQty / template.rendimiento).toFixed(4))
+                : 0;
+
+            carryoverIn.push({
+              activity_key: template.activity_key,
+              qty: deficitQty,
+              jr: carryoverJr,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // 7. Generar Ocurrencias Diarias con Calendario Laboral Colombiano (F3.1, D26, D27, D28, D29, D30)
   const projection = generateRoutineScheduleForWeek(
     templates,
     mondayDate,
@@ -676,6 +848,7 @@ export async function ensureWeeklyPlanMaterialized(
       customNonWorkingDays: options.customNonWorkingDays,
       siteDailyCapacity,
       existingMonthPlans,
+      carryoverIn,
     }
   );
 
@@ -920,6 +1093,9 @@ export async function ensureWeeklyPlanMaterialized(
       cancelledCount: 0,
       protectedCount: existingItems.length,
       totalItems: existingItems.length,
+      carryoverIn: projection.carryoverIn,
+      carryoverNextMonth: projection.carryoverNextMonth,
+      recurrentExceedsCapacity: projection.recurrentExceedsCapacity,
     };
   }
 
@@ -1140,6 +1316,11 @@ export async function ensureWeeklyPlanMaterialized(
     daily_capacity_detail: dailyCapacityDetail,
     exceeded_capacity_days: exceededCapacityDays,
     capacity_exceeded: exceededCapacityDays.length > 0,
+    carryover_in: projection.carryoverIn || [],
+    carryover_next_month: projection.carryoverNextMonth || [],
+    carryover_next_month_projection: projection.carryoverNextMonthProjection || projection.carryoverNextMonth || [],
+    carryover_from_this_week: projection.carryoverFromThisWeek || [],
+    recurrent_exceeds_capacity: projection.recurrentExceedsCapacity || [],
   };
   let finalStatus = classification.status;
 
@@ -1177,5 +1358,10 @@ export async function ensureWeeklyPlanMaterialized(
     cancelledCount: 0,
     protectedCount: existingItems.length,
     totalItems: (syncedRows?.length ?? 0) + existingItems.length,
+    carryoverIn: projection.carryoverIn,
+    carryoverNextMonth: projection.carryoverNextMonth,
+    carryoverNextMonthProjection: projection.carryoverNextMonthProjection,
+    carryoverFromThisWeek: projection.carryoverFromThisWeek,
+    recurrentExceedsCapacity: projection.recurrentExceedsCapacity,
   };
 }
