@@ -117,17 +117,17 @@ export default function ModalShell({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`w-full ${sizeClasses[size]} max-h-[calc(100dvh-24px)] sm:max-h-[calc(100dvh-48px)] flex flex-col rounded-[var(--radius-surface)] border border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-primary)] shadow-[var(--shadow-modal)] outline-hidden ${className}`}
+        className={`w-full ${sizeClasses[size]} max-h-[calc(100dvh-24px)] sm:max-h-[calc(100dvh-48px)] flex flex-col rounded-[var(--radius-surface)] border border-[var(--color-border)] dark:border-[#223347] bg-[var(--bg-secondary)] text-[var(--text-primary)] shadow-[var(--shadow-modal)] outline-hidden ${className}`}
         style={{
-          backgroundColor: 'var(--card-bg)',
-          borderColor: 'var(--border-color)',
+          backgroundColor: 'var(--bg-secondary)',
+          borderColor: 'var(--color-border)',
           borderRadius: 'var(--radius-surface)',
           boxShadow: 'var(--shadow-modal)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Encabezado fijo */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-color)] shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)] dark:border-[#223347] shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             {icon && <div className="shrink-0">{icon}</div>}
             <h3
@@ -165,7 +165,7 @@ export default function ModalShell({
         {footer && (
           <div
             data-modal-footer
-            className="px-5 py-3.5 border-t border-[var(--border-color)] shrink-0 bg-[var(--card-bg)] rounded-b-[var(--radius-surface)]"
+            className="px-5 py-3.5 border-t border-[var(--color-border)] dark:border-[#223347] shrink-0 bg-[var(--bg-secondary)] rounded-b-[var(--radius-surface)]"
           >
             {footer}
           </div>

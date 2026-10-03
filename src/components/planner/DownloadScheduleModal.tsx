@@ -95,7 +95,7 @@ export default function DownloadScheduleModal({
         type="button"
         onClick={onClose}
         disabled={isGenerating}
-        className="w-full sm:w-auto min-h-[40px] px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-[var(--radius-control)] border border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors disabled:opacity-40"
+        className="w-full sm:w-auto min-h-[40px] px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-[var(--radius-control)] border border-[var(--border-color)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)] transition-colors disabled:opacity-40"
       >
         Cancelar
       </button>

@@ -115,13 +115,24 @@ describe('GATE UI-MODAL-01 / UI-MODAL-01c — ModalShell y gobernanza de modales
     unmount();
   });
 
-  test('4. Prueba estática sobre ResetWeeklyPlanModal.tsx y DownloadScheduleModal.tsx: cero uso de tokens obsoletos ni microtipografía ilegible', () => {
+  test('4. Prueba estática sobre ModalShell.tsx, ResetWeeklyPlanModal.tsx y DownloadScheduleModal.tsx: cero uso de --card-bg, uso de --bg-secondary y cero microtipografía ilegible', () => {
+    const modalShellPath = path.resolve(__dirname, '../../components/ui/ModalShell.tsx');
     const resetModalPath = path.resolve(__dirname, '../../components/planner/ResetWeeklyPlanModal.tsx');
     const downloadModalPath = path.resolve(__dirname, '../../components/planner/DownloadScheduleModal.tsx');
 
+    const modalShellContent = fs.readFileSync(modalShellPath, 'utf8');
     const resetContent = fs.readFileSync(resetModalPath, 'utf8');
     const downloadContent = fs.readFileSync(downloadModalPath, 'utf8');
 
+    // UI-MODAL-01d: cero --card-bg en los tres archivos
+    expect(modalShellContent).not.toContain('--card-bg');
+    expect(resetContent).not.toContain('--card-bg');
+    expect(downloadContent).not.toContain('--card-bg');
+
+    // UI-MODAL-01d: el panel de ModalShell contiene --bg-secondary
+    expect(modalShellContent).toContain('--bg-secondary');
+
+    // Cero tokens obsoletos
     expect(resetContent).not.toContain('--surface-primary');
     expect(resetContent).not.toContain('--surface-secondary');
     expect(downloadContent).not.toContain('--surface-primary');
