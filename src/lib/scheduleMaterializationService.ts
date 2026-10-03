@@ -11,6 +11,10 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import {
   generateRoutineScheduleForWeek,
   getMonthlyCandidateWeeks,
+  computeTractorRouteForWeek,
+  TractorUnit,
+  TractorRouteResult,
+  TRACTOR_PACKAGE_ACTIVITIES,
   MonthlyPlanInput,
   RoutineBaseTemplate,
   CarryoverItem,
@@ -26,6 +30,7 @@ import {
 } from './materialization/siteActivityClassifier';
 
 export const CARRYOVER_START_MONTH = '2026-11';
+export const TRACTOR_PAIR_TITLES = ['PLAYA DEL COUNTRY', 'PLAYA DE SABANILLA 2'] as const;
 
 export interface MaterializeWeeklyPlanOptions {
   customNonWorkingDays?: string[];
@@ -473,6 +478,129 @@ export async function ensureWeeklyPlanMaterialized(
     };
   }
 
+  // D31: Cálculo de Ruta Coordinada del Tractor si el sitio cuenta con actividad 1.15
+  let tractorDaysForSite: string[] | undefined = undefined;
+  let tractorRoute: Record<string, string[]> = {};
+  let tractorDeficits: Array<{ unitKey: string; missingVisits: number }> = [];
+  let tractorPairUnresolved = false;
+
+  if (operationalFreqMap.has('1.15')) {
+    const { data: tractorFreqRows, error: tractorFreqErr } = await supabase
+      .from('operational_frequencies')
+      .select('group_id, visits_per_month')
+      .eq('board_id', boardId)
+      .eq('activity_key', '1.15');
+
+    if (tractorFreqErr) {
+      await persistMaterializationEvent(
+        supabase,
+        boardId,
+        gId,
+        weekStartStr,
+        null,
+        'SITE_MATERIALIZATION_SUMMARY',
+        'FAILED',
+        {
+          poa_id: activePoaId,
+          poa_version_id: activeVersionId,
+          status: 'FAILED',
+          error: {
+            stage: 'tractor_route_read',
+            code: 'TRACTOR_ROUTE_READ_FAILED',
+            message: tractorFreqErr.message || 'Error al consultar operational_frequencies para la ruta del tractor',
+          },
+        }
+      );
+      throw new Error(`TRACTOR_ROUTE_READ_FAILED: ${tractorFreqErr.message || 'Error al consultar operational_frequencies para la ruta del tractor'}`);
+    }
+
+    const { data: boardGroups, error: boardGroupsErr } = await supabase
+      .from('groups')
+      .select('id, title')
+      .eq('board_id', boardId);
+
+    if (boardGroupsErr) {
+      await persistMaterializationEvent(
+        supabase,
+        boardId,
+        gId,
+        weekStartStr,
+        null,
+        'SITE_MATERIALIZATION_SUMMARY',
+        'FAILED',
+        {
+          poa_id: activePoaId,
+          poa_version_id: activeVersionId,
+          status: 'FAILED',
+          error: {
+            stage: 'tractor_route_read',
+            code: 'TRACTOR_ROUTE_READ_FAILED',
+            message: boardGroupsErr.message || 'Error al consultar groups para la ruta del tractor',
+          },
+        }
+      );
+      throw new Error(`TRACTOR_ROUTE_READ_FAILED: ${boardGroupsErr.message || 'Error al consultar groups para la ruta del tractor'}`);
+    }
+
+    const groupTitleById = new Map<string, string>();
+    for (const g of boardGroups || []) {
+      groupTitleById.set(g.id, g.title);
+    }
+
+    const countryGroup = (boardGroups || []).find(
+      (g: any) => g.title && g.title.trim().toUpperCase() === 'PLAYA DEL COUNTRY'
+    );
+    const sabanillaGroup = (boardGroups || []).find(
+      (g: any) => g.title && g.title.trim().toUpperCase() === 'PLAYA DE SABANILLA 2'
+    );
+
+    const tractorRows = tractorFreqRows || [];
+    const countryRow = countryGroup ? tractorRows.find((r: any) => r.group_id === countryGroup.id) : undefined;
+    const sabanillaRow = sabanillaGroup ? tractorRows.find((r: any) => r.group_id === sabanillaGroup.id) : undefined;
+
+    const tractorUnits: TractorUnit[] = [];
+    const processedGroupIds = new Set<string>();
+
+    if (countryRow && sabanillaRow && countryGroup && sabanillaGroup) {
+      const pairIds = [countryGroup.id, sabanillaGroup.id].sort(compareStringsCode);
+      const maxVisits = Math.max(Number(countryRow.visits_per_month), Number(sabanillaRow.visits_per_month));
+      tractorUnits.push({
+        unitKey: pairIds[0],
+        groupIds: pairIds,
+        visitsPerMonth: maxVisits,
+        groupTitles: [countryGroup.title, sabanillaGroup.title],
+        isPair: true,
+      });
+      processedGroupIds.add(countryGroup.id);
+      processedGroupIds.add(sabanillaGroup.id);
+    } else {
+      tractorPairUnresolved = true;
+    }
+
+    for (const r of tractorRows) {
+      if (processedGroupIds.has(r.group_id)) continue;
+      const gTitle = groupTitleById.get(r.group_id) || r.group_id;
+      tractorUnits.push({
+        unitKey: r.group_id,
+        groupIds: [r.group_id],
+        visitsPerMonth: Number(r.visits_per_month),
+        groupTitles: [gTitle],
+        isPair: false,
+      });
+      processedGroupIds.add(r.group_id);
+    }
+
+    const tractorRouteResult = computeTractorRouteForWeek(
+      tractorUnits,
+      mondayDate,
+      options.customNonWorkingDays
+    );
+
+    tractorDaysForSite = tractorRouteResult.daysByGroup.get(gId) ?? [];
+    tractorRoute = tractorRouteResult.routeByDate || {};
+    tractorDeficits = tractorRouteResult.deficits;
+  }
+
   // 4. Leer Capacidad Diaria del Sitio (D24: no bloqueante)
   let siteDailyCapacity: number | null = null;
   let capacityReadError: string | null = null;
@@ -838,7 +966,7 @@ export async function ensureWeeklyPlanMaterialized(
     }
   }
 
-  // 7. Generar Ocurrencias Diarias con Calendario Laboral Colombiano (F3.1, D26, D27, D28, D29, D30)
+  // 7. Generar Ocurrencias Diarias con Calendario Laboral Colombiano (F3.1, D26, D27, D28, D29, D30, D31)
   const projection = generateRoutineScheduleForWeek(
     templates,
     mondayDate,
@@ -848,6 +976,7 @@ export async function ensureWeeklyPlanMaterialized(
       siteDailyCapacity,
       existingMonthPlans,
       carryoverIn,
+      tractorDays: tractorDaysForSite,
     }
   );
 
@@ -1258,6 +1387,12 @@ export async function ensureWeeklyPlanMaterialized(
     carryover_next_month_projection: projection.carryoverNextMonthProjection || projection.carryoverNextMonth || [],
     carryover_from_this_week: projection.carryoverFromThisWeek || [],
     recurrent_exceeds_capacity: projection.recurrentExceedsCapacity || [],
+    tractor_days: tractorDaysForSite,
+    tractor_route: tractorRoute,
+    tractor_deficits: tractorDeficits,
+    tractor_day_over_capacity: projection.tractor_day_over_capacity || [],
+    tractor_package_not_aligned: projection.tractor_package_not_aligned || [],
+    ...(tractorPairUnresolved ? { tractor_pair_unresolved: true } : {}),
   };
   let finalStatus = classification.status;
 

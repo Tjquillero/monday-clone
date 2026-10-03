@@ -23,6 +23,10 @@
  */
 
 import { generateRoutineScheduleForWeek, type RoutineBaseTemplate } from '../routineScheduler';
+
+if (typeof (globalThis as any).jest === 'undefined' && typeof (globalThis as any).vi !== 'undefined') {
+  (globalThis as any).jest = (globalThis as any).vi;
+}
 import { ensureWeeklyPlanMaterialized } from '../scheduleMaterializationService';
 import { classifySiteActivities } from '../materialization/siteActivityClassifier';
 import * as fs from 'fs';

@@ -12,6 +12,10 @@
 
 import { ensureWeeklyPlanMaterialized } from '../scheduleMaterializationService';
 
+if (typeof (globalThis as any).jest === 'undefined' && typeof (globalThis as any).vi !== 'undefined') {
+  (globalThis as any).jest = (globalThis as any).vi;
+}
+
 describe('Test Suite 40 — Integración y Persistencia del Motor de Materialización (weekly_plan_items)', () => {
   let mockSupabase: any;
   const boardId = 'board_barranquilla_40';

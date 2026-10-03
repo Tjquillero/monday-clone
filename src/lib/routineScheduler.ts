@@ -62,6 +62,25 @@ export interface RecurrentExceedsCapacityItem {
   deficit_jr: number;
 }
 
+export interface TractorDayOverCapacityItem {
+  dateStr: string;
+  exceso_jr: number;
+}
+
+export interface TractorUnit {
+  unitKey: string;
+  groupIds: string[];
+  visitsPerMonth: number;
+  groupTitles?: string[];
+  isPair?: boolean;
+}
+
+export interface TractorRouteResult {
+  daysByGroup: Map<string, string[]>;
+  deficits: Array<{ unitKey: string; missingVisits: number }>;
+  routeByDate?: Record<string, string[]>;
+}
+
 export interface RoutineWeeklyProjection {
   weekStartStr: string;
   weekEndStr: string;
@@ -72,6 +91,8 @@ export interface RoutineWeeklyProjection {
   carryoverNextMonthProjection?: CarryoverNextMonthItem[];
   carryoverFromThisWeek?: CarryoverNextMonthItem[];
   recurrentExceedsCapacity?: RecurrentExceedsCapacityItem[];
+  tractor_day_over_capacity?: TractorDayOverCapacityItem[];
+  tractor_package_not_aligned?: string[];
 }
 
 export interface MonthlyPlanInput {
@@ -91,6 +112,7 @@ export interface SchedulerOptions {
   existingMonthPlans?: MonthlyPlanInput[];
   skipMonthlyAllocation?: boolean;
   carryoverIn?: CarryoverItem[]; // D30.4: Arrastre de entrada
+  tractorDays?: string[]; // D31: Fechas del tractor coordinado para este sitio en esta semana
 }
 
 function formatDateISO(date: Date): string {
@@ -210,6 +232,205 @@ export function getMonthlyCandidateWeeks(targetMondayInput: Date | string): Cand
     }
   }
   return mondays;
+}
+
+export const TRACTOR_PACKAGE_ACTIVITIES = ['1.10', '1.11', '1.12', '1.13', '1.14'] as const;
+
+/**
+ * Decisión D31 (Tomás, 2026-10-03): Cálculo determinista de la ruta semanal del tractor con barber.
+ *
+ * Asigna los días de visita del único tractor disponible a las unidades de playa,
+ * garantizando que nunca se crucen dos playas en el mismo día (salvo la unidad par Country + Sabanilla 2).
+ */
+export function computeTractorRouteForWeek(
+  units: TractorUnit[],
+  weekStartInput: Date | string,
+  customNonWorkingDays: string[] = []
+): TractorRouteResult {
+  const weekStart = parseUTCDate(weekStartInput);
+  const mondayDayOfMonth = weekStart.getUTCDate();
+  const weekOfMonth = Math.ceil(mondayDayOfMonth / 7);
+
+  // 1. Días hábiles de la semana (Lunes a Sábado, sin festivos colombianos ni excepciones)
+  const workingDays: Array<{ date: Date; dateStr: string; dayOfWeek: number }> = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart);
+    d.setUTCDate(weekStart.getUTCDate() + i);
+    const dow = d.getUTCDay();
+    if (dow >= 1 && dow <= 6 && isOperationalWorkingDay(d, customNonWorkingDays)) {
+      workingDays.push({
+        date: d,
+        dateStr: formatDateISO(d),
+        dayOfWeek: dow,
+      });
+    }
+  }
+
+  // 2. Contar visitas requeridas por unidad en la semana
+  const requestedVisitsMap = new Map<string, number>();
+  for (const u of units) {
+    let visits = 1;
+    const f = u.visitsPerMonth;
+    if (Math.abs(f - 8) < 0.1 || f >= 8) {
+      visits = 2;
+    } else if (Math.abs(f - 6) < 0.1) {
+      visits = (weekOfMonth % 2 === 1 || weekOfMonth >= 5) ? 2 : 1;
+    } else {
+      visits = 1; // Frecuencia 4 u otras >= 4
+    }
+    requestedVisitsMap.set(u.unitKey, visits);
+  }
+
+  // 3. Manejo de déficit si faltan días hábiles
+  const availableDaysCount = workingDays.length;
+  let totalRequested = 0;
+  for (const u of units) {
+    totalRequested += requestedVisitsMap.get(u.unitKey) || 0;
+  }
+
+  const deficitsMap = new Map<string, number>();
+
+  if (totalRequested > availableDaysCount) {
+    let visitsToRemove = totalRequested - availableDaysCount;
+
+    // a) Quitar primero la segunda visita de las unidades con 2 visitas, empezando por el par
+    const twoVisitUnits = units
+      .filter((u) => (requestedVisitsMap.get(u.unitKey) || 0) === 2)
+      .sort((a, b) => {
+        if (a.isPair && !b.isPair) return -1;
+        if (!a.isPair && b.isPair) return 1;
+        return compareStringsCode(b.unitKey, a.unitKey); // desc
+      });
+
+    for (const u of twoVisitUnits) {
+      if (visitsToRemove <= 0) break;
+      requestedVisitsMap.set(u.unitKey, 1);
+      deficitsMap.set(u.unitKey, (deficitsMap.get(u.unitKey) || 0) + 1);
+      visitsToRemove--;
+    }
+
+    // b) Si aún faltan días, quitar la visita de las unidades con 1 visita, empezando por group_id / unitKey mayor
+    if (visitsToRemove > 0) {
+      const oneVisitUnits = units
+        .filter((u) => (requestedVisitsMap.get(u.unitKey) || 0) === 1)
+        .sort((a, b) => compareStringsCode(b.unitKey, a.unitKey)); // desc
+
+      for (const u of oneVisitUnits) {
+        if (visitsToRemove <= 0) break;
+        requestedVisitsMap.set(u.unitKey, 0);
+        deficitsMap.set(u.unitKey, (deficitsMap.get(u.unitKey) || 0) + 1);
+        visitsToRemove--;
+      }
+    }
+  }
+
+  const deficits: Array<{ unitKey: string; missingVisits: number }> = [];
+  for (const [unitKey, missingVisits] of deficitsMap.entries()) {
+    if (missingVisits > 0) {
+      deficits.push({ unitKey, missingVisits });
+    }
+  }
+
+  // 4. Asignación determinista a días
+  const assignedDatesByUnit = new Map<string, string[]>();
+  for (const u of units) {
+    assignedDatesByUnit.set(u.unitKey, []);
+  }
+
+  let freeWorkingDays = [...workingDays];
+
+  // 4.1. Unidades con 2 visitas
+  const unitsWith2 = units
+    .filter((u) => (requestedVisitsMap.get(u.unitKey) || 0) === 2)
+    .sort((a, b) => compareStringsCode(a.unitKey, b.unitKey));
+
+  for (const u of unitsWith2) {
+    if (freeWorkingDays.length < 2) break;
+
+    const tueIndex = freeWorkingDays.findIndex((d) => d.dayOfWeek === 2);
+    const thuIndex = freeWorkingDays.findIndex((d) => d.dayOfWeek === 4);
+
+    if (tueIndex !== -1 && thuIndex !== -1) {
+      // Martes y Jueves están libres
+      const tueDay = freeWorkingDays[tueIndex];
+      const thuDay = freeWorkingDays[thuIndex];
+      assignedDatesByUnit.get(u.unitKey)?.push(tueDay.dateStr, thuDay.dateStr);
+      freeWorkingDays = freeWorkingDays.filter((d) => d.dayOfWeek !== 2 && d.dayOfWeek !== 4);
+    } else {
+      // Tomar los dos días libres más separados entre sí
+      let bestPair: [number, number] = [0, freeWorkingDays.length - 1];
+      let maxDistance = -1;
+
+      for (let i = 0; i < freeWorkingDays.length; i++) {
+        for (let j = i + 1; j < freeWorkingDays.length; j++) {
+          const dist = freeWorkingDays[j].dayOfWeek - freeWorkingDays[i].dayOfWeek;
+          if (dist > maxDistance) {
+            maxDistance = dist;
+            bestPair = [i, j];
+          }
+        }
+      }
+
+      const day1 = freeWorkingDays[bestPair[0]];
+      const day2 = freeWorkingDays[bestPair[1]];
+      assignedDatesByUnit.get(u.unitKey)?.push(day1.dateStr, day2.dateStr);
+      freeWorkingDays = freeWorkingDays.filter((d) => d !== day1 && d !== day2);
+    }
+  }
+
+  // 4.2. Unidades con 1 visita
+  const unitsWith1 = units
+    .filter((u) => (requestedVisitsMap.get(u.unitKey) || 0) === 1)
+    .sort((a, b) => compareStringsCode(a.unitKey, b.unitKey));
+
+  const PREFERENCE_DOWS = [1, 3, 5, 6, 2, 4]; // Lun, Mié, Vie, Sáb, Mar, Jue
+
+  for (const u of unitsWith1) {
+    if (freeWorkingDays.length === 0) break;
+
+    let chosenDay: (typeof workingDays)[0] | undefined;
+    for (const prefDow of PREFERENCE_DOWS) {
+      const match = freeWorkingDays.find((d) => d.dayOfWeek === prefDow);
+      if (match) {
+        chosenDay = match;
+        break;
+      }
+    }
+
+    if (!chosenDay) {
+      chosenDay = freeWorkingDays[0];
+    }
+
+    assignedDatesByUnit.get(u.unitKey)?.push(chosenDay.dateStr);
+    freeWorkingDays = freeWorkingDays.filter((d) => d !== chosenDay);
+  }
+
+  // 5. Mapeo final por groupId y por fecha
+  const daysByGroup = new Map<string, string[]>();
+  const routeByDate: Record<string, string[]> = {};
+
+  for (const u of units) {
+    const dates = (assignedDatesByUnit.get(u.unitKey) || []).sort();
+    for (const gId of u.groupIds) {
+      daysByGroup.set(gId, dates);
+    }
+    for (const dStr of dates) {
+      if (!routeByDate[dStr]) {
+        routeByDate[dStr] = [];
+      }
+      if (u.groupTitles && u.groupTitles.length > 0) {
+        routeByDate[dStr].push(...u.groupTitles);
+      } else {
+        routeByDate[dStr].push(...u.groupIds);
+      }
+    }
+  }
+
+  return {
+    daysByGroup,
+    deficits,
+    routeByDate,
+  };
 }
 
 interface WeekLoadState {
@@ -897,15 +1118,21 @@ export function generateRoutineScheduleForWeek(
   const mondayDayOfMonth = weekStart.getUTCDate();
   const weekOfMonth = Math.ceil(mondayDayOfMonth / 7);
 
-  // Clasificar actividades por tipo de programación D27 / D29 / D30:
+  // Clasificar actividades por tipo de programación D27 / D29 / D30 / D31:
   // a) Diarias (25)
   // b) Patrones repetidos (12, 8, 6 en semanas impares)
   // c) Visitas únicas de la semana (4, 6 en semanas pares, y baja frecuencia / arrastre asignadas a esta semana por D30)
+  // d) D31: Tractor (1.15) y su paquete (1.10..1.14) cuando options.tractorDays está definido
   const dailyTemplates: RoutineBaseTemplate[] = [];
   const patternTemplates: Array<{ template: RoutineBaseTemplate; targetDows: number[] }> = [];
   const uniqueVisits: Array<{ template: RoutineBaseTemplate; theoreticalJr: number; countsCapacity: boolean }> = [];
+  const tractorPackageNotAligned: string[] = [];
 
-  // 1. Actividades recurrentes fijas (25, 12, 8, 6, 4)
+  const hasTractorOption = options.tractorDays !== undefined;
+  const tractorDays = options.tractorDays || [];
+  const primaryTractorDateStr = tractorDays.length > 0 ? tractorDays[0] : null;
+
+  // 1. Actividades recurrentes fijas (25, 12, 8, 6, 4, 1.15)
   for (const template of templates) {
     const freq = template.frecuencia; // visitas/mes
     const theoreticalJr =
@@ -921,34 +1148,104 @@ export function generateRoutineScheduleForWeek(
       continue;
     }
 
+    // D31: Manejo de 1.15 cuando viene options.tractorDays definido
+    if (hasTractorOption && template.activity_key === '1.15') {
+      for (const dateStr of tractorDays) {
+        const wd = weekDays.find((d) => d.dateStr === dateStr);
+        if (wd && wd.isWorking) {
+          assignments.push({
+            dateStr: wd.dateStr,
+            dayOfWeek: wd.dayOfWeek,
+            activity_key: template.activity_key,
+            name: template.name,
+            zone: template.zone,
+            unit: template.unit,
+            cantidad: template.cantidad,
+            theoretical_jr: theoreticalJr,
+            frequency_interval: template.frecuencia,
+            counts_capacity: false,
+          });
+          wd.machineJournals += theoreticalJr;
+        }
+      }
+      continue;
+    }
+
+    const isPackageAct = (TRACTOR_PACKAGE_ACTIVITIES as readonly string[]).includes(template.activity_key);
+
+    const tryAssignPackageOnTractorDay = (): boolean => {
+      if (hasTractorOption && primaryTractorDateStr && isPackageAct) {
+        const wd = weekDays.find((d) => d.dateStr === primaryTractorDateStr);
+        if (wd && wd.isWorking) {
+          assignments.push({
+            dateStr: wd.dateStr,
+            dayOfWeek: wd.dayOfWeek,
+            activity_key: template.activity_key,
+            name: template.name,
+            zone: template.zone,
+            unit: template.unit,
+            cantidad: template.cantidad,
+            theoretical_jr: theoreticalJr,
+            frequency_interval: template.frecuencia,
+            counts_capacity: countsCapacity,
+          });
+          if (countsCapacity) {
+            wd.countingJournals += theoreticalJr;
+          } else {
+            wd.machineJournals += theoreticalJr;
+          }
+          return true;
+        }
+      }
+      return false;
+    };
+
     // 1. Frecuencia 25 visitas/mes -> Diaria (Lunes a Sábado)
     if (Math.abs(freq - 25) < 0.1 || freq >= 25) {
+      if (hasTractorOption && isPackageAct && !tractorPackageNotAligned.includes(template.activity_key)) {
+        tractorPackageNotAligned.push(template.activity_key);
+      }
       dailyTemplates.push(template);
     }
     // 2. Frecuencia 12 visitas/mes -> Patrón repetido (Lun, Mié, Vie o Mar, Jue, Sáb)
     else if (Math.abs(freq - 12) < 0.1) {
+      if (hasTractorOption && isPackageAct && !tractorPackageNotAligned.includes(template.activity_key)) {
+        tractorPackageNotAligned.push(template.activity_key);
+      }
       const targetDows = template.pattern_offset === 'turn_b' ? [2, 4, 6] : [1, 3, 5];
       patternTemplates.push({ template, targetDows });
     }
     // 3. Frecuencia 8 visitas/mes -> Patrón repetido (Mar, Jue)
     else if (Math.abs(freq - 8) < 0.1) {
+      if (hasTractorOption && isPackageAct && !tractorPackageNotAligned.includes(template.activity_key)) {
+        tractorPackageNotAligned.push(template.activity_key);
+      }
       patternTemplates.push({ template, targetDows: [2, 4] });
     }
     // 4. Frecuencia 6 visitas/mes -> Semanas impares (1, 3, 5): Mar, Jue / Semanas pares (2, 4): 1 visita
     else if (Math.abs(freq - 6) < 0.1) {
       if (weekOfMonth % 2 === 1) {
+        if (hasTractorOption && isPackageAct && !tractorPackageNotAligned.includes(template.activity_key)) {
+          tractorPackageNotAligned.push(template.activity_key);
+        }
         patternTemplates.push({ template, targetDows: [2, 4] });
       } else {
-        uniqueVisits.push({ template, theoreticalJr, countsCapacity });
+        if (!tryAssignPackageOnTractorDay()) {
+          uniqueVisits.push({ template, theoreticalJr, countsCapacity });
+        }
       }
     }
     // 5. Frecuencia 4 visitas/mes -> 1 visita todas las semanas
     else if (Math.abs(freq - 4) < 0.1) {
-      uniqueVisits.push({ template, theoreticalJr, countsCapacity });
+      if (!tryAssignPackageOnTractorDay()) {
+        uniqueVisits.push({ template, theoreticalJr, countsCapacity });
+      }
     }
     // Fallback para otras frecuencias >= 4 -> 1 visita
     else if (freq >= 4) {
-      uniqueVisits.push({ template, theoreticalJr, countsCapacity });
+      if (!tryAssignPackageOnTractorDay()) {
+        uniqueVisits.push({ template, theoreticalJr, countsCapacity });
+      }
     }
   }
 
@@ -966,6 +1263,33 @@ export function generateRoutineScheduleForWeek(
           ? template.cantidad / template.rendimiento
           : 0;
       const countsCapacity = template.counts_capacity !== false;
+
+      // D31: Si es actividad del paquete asignada a esta semana y tractorDays tiene fecha
+      const isPackageAct = (TRACTOR_PACKAGE_ACTIVITIES as readonly string[]).includes(template.activity_key);
+      if (hasTractorOption && primaryTractorDateStr && isPackageAct) {
+        const wd = weekDays.find((d) => d.dateStr === primaryTractorDateStr);
+        if (wd && wd.isWorking) {
+          assignments.push({
+            dateStr: wd.dateStr,
+            dayOfWeek: wd.dayOfWeek,
+            activity_key: template.activity_key,
+            name: template.name,
+            zone: template.zone,
+            unit: template.unit,
+            cantidad: template.cantidad,
+            theoretical_jr: theoreticalJr,
+            frequency_interval: template.frecuencia,
+            counts_capacity: countsCapacity,
+          });
+          if (countsCapacity) {
+            wd.countingJournals += theoreticalJr;
+          } else {
+            wd.machineJournals += theoreticalJr;
+          }
+          continue;
+        }
+      }
+
       uniqueVisits.push({ template, theoreticalJr, countsCapacity });
     }
   }
@@ -1238,6 +1562,18 @@ export function generateRoutineScheduleForWeek(
     }
   }
 
+  // D31: Exceso en día del tractor por el paquete
+  const tractorDayOverCapacity: TractorDayOverCapacityItem[] = [];
+  if (hasTractorOption && primaryTractorDateStr && siteDailyCapacity !== null) {
+    const wd = weekDays.find((d) => d.dateStr === primaryTractorDateStr);
+    if (wd && wd.countingJournals > siteDailyCapacity + 0.005) {
+      tractorDayOverCapacity.push({
+        dateStr: primaryTractorDateStr,
+        exceso_jr: Number((wd.countingJournals - siteDailyCapacity).toFixed(4)),
+      });
+    }
+  }
+
   const totalJournals = assignments.reduce((acc, a) => acc + a.theoretical_jr, 0);
 
   return {
@@ -1250,6 +1586,8 @@ export function generateRoutineScheduleForWeek(
     carryoverNextMonthProjection: monthlyCarryoverNextMonth,
     carryoverFromThisWeek: intraWeekCarryover,
     recurrentExceedsCapacity: recurrentExceedsCapacity.length > 0 ? recurrentExceedsCapacity : undefined,
+    tractor_day_over_capacity: tractorDayOverCapacity.length > 0 ? tractorDayOverCapacity : undefined,
+    tractor_package_not_aligned: tractorPackageNotAligned.length > 0 ? tractorPackageNotAligned : undefined,
   };
 }
 
