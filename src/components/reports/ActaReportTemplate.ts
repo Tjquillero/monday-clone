@@ -1,4 +1,6 @@
 
+import { CONSORCIO_LOGO_DATA_URI } from '../../lib/reportBrandAssets';
+
 export const generateActaReportHtml = (acta: any, tableData: any[]) => {
     const currencyFormatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
     const periodYear = new Date(new Date(acta.date).getFullYear(), new Date(acta.date).getMonth() - 1, 1).getFullYear();
@@ -40,7 +42,7 @@ export const generateActaReportHtml = (acta: any, tableData: any[]) => {
                 <!-- Logo -->
                 <div class="flex-1 flex flex-col items-center justify-center p-4 bg-white">
                     <div style="width: 250px; height: 100px; display: flex; align-items: center; justify-content: center;">
-                         <img src="http://localhost:3000/logo-consorcio-hd.png" alt="Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+                         <img src="${CONSORCIO_LOGO_DATA_URI}" alt="Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
                     </div>
                 </div>
 

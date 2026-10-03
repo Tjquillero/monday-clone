@@ -1,4 +1,5 @@
 import { CertifiedActa, CertifiedActaTotals } from '@/types/monday';
+import { CONSORCIO_LOGO_DATA_URI } from '../../lib/reportBrandAssets';
 
 // Plantilla del PDF del Acta certificada (Incremento 5, Commit 6).
 //
@@ -56,7 +57,7 @@ export const generateCertifiedActaReportHtml = (
               <!-- Logo -->
               <div class="flex-1 flex flex-col items-center justify-center p-4 bg-white">
                   <div style="width: 250px; height: 100px; display: flex; align-items: center; justify-content: center;">
-                       <img src="http://localhost:3000/logo-consorcio-hd.png" alt="Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+                       <img src="${CONSORCIO_LOGO_DATA_URI}" alt="Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
                   </div>
               </div>
 

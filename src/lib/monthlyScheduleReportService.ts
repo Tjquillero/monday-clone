@@ -1,6 +1,10 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { getColombianHolidays } from './colombianHolidays';
 import { getReportFontFaceStyles } from './reportFontHelper';
+import {
+  CONSORCIO_LOGO_DATA_URI,
+  MANTENIX_LOGO_DATA_URI,
+} from './reportBrandAssets';
 
 export interface MonthlyScheduleReportParams {
   boardId: string;
@@ -695,17 +699,6 @@ export function renderMonthlyScheduleReportHtml(data: MonthlyScheduleReportData)
         'mq'
       );
 
-      const rowLimit = renderFooterRow(
-        `L\u00edmite diario (${formatColombianNumber(site.dailyCapacityLimit, 2)} jr)`,
-        (d) => {
-          if (d.dateStr >= firstPlanned && plannedWorkingDays.some((w) => w.dateStr === d.dateStr)) {
-            return formatColombianNumber(site.dailyCapacityLimit, 2);
-          }
-          return '';
-        },
-        'lim'
-      );
-
       const rowPct = renderFooterRow(
         'Uso del l\u00edmite',
         (d) => {
@@ -720,16 +713,15 @@ export function renderMonthlyScheduleReportHtml(data: MonthlyScheduleReportData)
         'pct'
       );
 
-      footRows = rowCounting + rowMachine + rowLimit + rowPct;
+      footRows = rowCounting + rowMachine + rowPct;
     }
 
-    // KPIs Block (Full version only)
+    // KPIs Block (Full version only) — UI-CRON-03: sin límite de jornales
     let kpisHtml = '';
     if (full) {
       kpisHtml = `
 <div class="kpis">
   <div><b>${plannedWorkingDaysCount}</b><span>d\u00edas h\u00e1biles programados</span></div>
-  <div><b>${formatColombianNumber(site.dailyCapacityLimit, 2)}</b><span>l\u00edmite jornales / d\u00eda</span></div>
   <div><b>${formatColombianNumber(totalCountingJournals, 1)}</b><span>jornales programados (personal)</span></div>
   <div><b>${capacityUsagePct}%</b><span>uso de capacidad del mes</span></div>
   <div><b>${formatColombianNumber(carryTotalJr, 1)}</b><span>jornales que pasan a ${nextMonthName}</span></div>
@@ -822,14 +814,21 @@ export function renderMonthlyScheduleReportHtml(data: MonthlyScheduleReportData)
     siteBlocks.push(`
 <div class="site-section" style="${pageBreakStyle}">
   <div class="top">
-    <div>
-      <h1>CRONOGRAMA DE MANTENIMIENTO \u2014 ${data.monthName} ${data.year}</h1>
-      <div class="sub">${escapeHtml(site.siteName)}</div>
+    <div class="brand-left">
+      <img src="${CONSORCIO_LOGO_DATA_URI}" class="logo-consorcio" alt="Logo Consorcio" />
+      <div>
+        <h1>CRONOGRAMA DE MANTENIMIENTO \u2014 ${data.monthName} ${data.year}</h1>
+        <div class="sub">${escapeHtml(site.siteName)}</div>
+      </div>
     </div>
-    <div class="ver">${versionTitle}</div>
+    <div class="brand-right">
+      <img src="${MANTENIX_LOGO_DATA_URI}" class="logo-mantenix" alt="Mantenix" />
+      <div class="ver">${versionTitle}</div>
+    </div>
   </div>
 
   <div class="meta">
+    <div><span>Contratista:</span> CONSORCIO CONSERVACI\u00d3N COSTERA</div>
     <div><span>Contrato:</span> ${escapeHtml(data.contractNumber)}</div>
     <div><span>Entidad:</span> ${escapeHtml(data.entityName)}</div>
     <div><span>Base de cantidades:</span> ${escapeHtml(data.poaVersionLabel)}</div>
@@ -886,6 +885,10 @@ ${getReportFontFaceStyles()}
 body { font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif; color: #1c2430; font-size: 7pt; margin: 0; }
 .site-section { width: 100%; }
 .top { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #1f3a5f; padding-bottom: 4px; margin-bottom: 5px; }
+.brand-left { display: flex; align-items: center; gap: 4mm; }
+.logo-consorcio { height: 14mm; max-height: 14mm; object-fit: contain; }
+.brand-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.logo-mantenix { height: 7mm; max-height: 7mm; object-fit: contain; }
 .top h1 { font-size: 13pt; margin: 0; color: #1f3a5f; letter-spacing: .3px; }
 .top .sub { font-size: 8pt; color: #4a5566; margin-top: 2px; }
 .top .ver { font-size: 7.5pt; font-weight: 700; color: ${full ? '#8a3b12' : '#1f3a5f'}; text-align: right; }
@@ -919,7 +922,6 @@ tr.cap td { background: #eef2f7; font-weight: 700; color: #1f3a5f; font-size: 6.
 tr.tot td { background: #f7f8fa; font-weight: 600; }
 tr.tot td.lbl { text-align: right; padding-right: 4px; font-size: 6.4pt; }
 tr.mq td { color: #6b7686; font-weight: 400; }
-tr.lim td { color: #8a3b12; }
 tr.pct td { color: #1f3a5f; }
 h3 { font-size: 8pt; color: #1f3a5f; margin: 8px 0 3px; }
 table.carry { width: auto; }

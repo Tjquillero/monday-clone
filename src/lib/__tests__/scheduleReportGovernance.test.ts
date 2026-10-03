@@ -49,6 +49,9 @@ vi.mock('@supabase/ssr', () => ({
   })),
 }));
 
+import fs from 'fs';
+import path from 'path';
+
 import {
   buildMonthlyScheduleReportData,
   renderMonthlyScheduleReportHtml,
@@ -59,6 +62,12 @@ import {
   fetchAllRows,
   MonthlyScheduleReportData,
 } from '../monthlyScheduleReportService';
+import {
+  CONSORCIO_LOGO_DATA_URI,
+  MANTENIX_LOGO_DATA_URI,
+} from '../reportBrandAssets';
+import { generateActaReportHtml } from '../../components/reports/ActaReportTemplate';
+import { generateCertifiedActaReportHtml } from '../../components/reports/CertifiedActaReportTemplate';
 import { POST } from '../../app/api/reports/schedule-month/route';
 
 describe('GATE UI-CRON-02 / UI-CRON-02b — Informe PDF del Cronograma Mensual', () => {
@@ -792,4 +801,108 @@ describe('GATE UI-CRON-02 / UI-CRON-02b — Informe PDF del Cronograma Mensual',
     expect(shortenDescription('LIMPIEZA Y DESHIERBE DE PLAYAS, INCLUYE TRANSPORTE')).toBe('LIMPIEZA Y DESHIERBE DE PLAYAS');
     expect(shortenDescription('ACTIVIDAD CORTO')).toBe('ACTIVIDAD CORTO');
   });
+
+  // UI-CRON-03: Pruebas específicas
+  // 12. HTML completo: no contiene "Límite diario" ni "límite jornales", ni el valor de jornales_dia del mock
+  test('12. UI-CRON-03: HTML completo no contiene "Límite diario" ni "límite jornales" ni el valor de jornales_dia. Sí contiene "Uso del límite"', async () => {
+    const supabase = createMockSupabase();
+    const data = await buildMonthlyScheduleReportData(supabase, {
+      boardId,
+      month: '2026-10',
+      groupId: 'grp-plaza',
+      version: 'full',
+    });
+
+    const html = renderMonthlyScheduleReportHtml(data);
+    expect(html).not.toContain('Límite diario');
+    expect(html).not.toContain('límite jornales');
+    // Plaza tiene jornales_dia = 7.0
+    expect(html).not.toContain('7,00 jr');
+    expect(html).not.toContain('7,0 jr');
+    // Sí debe contener Uso del límite
+    expect(html).toContain('Uso del límite');
+    expect(html).toContain('días hábiles programados');
+    expect(html).toContain('jornales programados (personal)');
+    expect(html).toContain('uso de capacidad del mes');
+  });
+
+  // 13. HTML externo y completo contienen data URIs y no contienen localhost ni http://
+  test('13. UI-CRON-03b: HTML externo y completo contienen data URIs base64 embebidos (JPEG/SVG) y no contienen localhost ni http://', async () => {
+    const supabase = createMockSupabase();
+    const dataExt = await buildMonthlyScheduleReportData(supabase, {
+      boardId,
+      month: '2026-10',
+      groupId: 'grp-plaza',
+      version: 'external',
+    });
+    const htmlExt = renderMonthlyScheduleReportHtml(dataExt);
+    expect(htmlExt).toContain('data:image/jpeg;base64,');
+    expect(htmlExt).toContain('data:image/svg+xml;base64,');
+    expect(htmlExt).not.toContain('localhost');
+    expect(htmlExt).not.toContain('http://');
+    expect(htmlExt).toContain('CONSORCIO CONSERVACIÓN COSTERA');
+
+    const dataFull = await buildMonthlyScheduleReportData(supabase, {
+      boardId,
+      month: '2026-10',
+      groupId: 'grp-plaza',
+      version: 'full',
+    });
+    const htmlFull = renderMonthlyScheduleReportHtml(dataFull);
+    expect(htmlFull).toContain('data:image/jpeg;base64,');
+    expect(htmlFull).toContain('data:image/svg+xml;base64,');
+    expect(htmlFull).not.toContain('localhost');
+    expect(htmlFull).not.toContain('http://');
+    expect(htmlFull).toContain('CONSORCIO CONSERVACIÓN COSTERA');
+  });
+
+  // 14. Plantillas de acta y acta certificada no contienen localhost
+  test('14. UI-CRON-03b: Plantillas de acta y acta certificada no contienen localhost y usan el logo embebido (JPEG)', () => {
+    const dummyActa = {
+      id: 'acta-1',
+      name: 'Acta de Pago 01',
+      numero: 1,
+      date: '2026-10-15',
+      issued_at: '2026-10-15T12:00:00Z',
+      items: [],
+    };
+
+    const dummyTotals = {
+      subtotal: 1000000,
+      administracion: 200000,
+      imprevistos: 50000,
+      utilidad: 50000,
+      total_pagar: 1300000,
+    };
+
+    const actaHtml = generateActaReportHtml(dummyActa, []);
+    expect(actaHtml).not.toContain('localhost');
+    expect(actaHtml).toContain('data:image/jpeg;base64,');
+
+    const certHtml = generateCertifiedActaReportHtml(dummyActa as any, dummyTotals);
+    expect(certHtml).not.toContain('localhost');
+    expect(certHtml).toContain('data:image/jpeg;base64,');
+  });
+
+  // 15. CONSORCIO_LOGO_DATA_URI decodificado tiene firma JPEG (FF D8 FF)
+  test('15. UI-CRON-03b: CONSORCIO_LOGO_DATA_URI decodificado tiene la firma JPEG (FF D8 FF)', () => {
+    expect(CONSORCIO_LOGO_DATA_URI).toMatch(/^data:image\/jpeg;base64,/);
+    const base64Data = CONSORCIO_LOGO_DATA_URI.replace(/^data:image\/jpeg;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+    const signature = buffer.slice(0, 3);
+
+    expect(signature[0]).toBe(0xff);
+    expect(signature[1]).toBe(0xd8);
+    expect(signature[2]).toBe(0xff);
+  });
+
+  // 16. CONSORCIO_LOGO_DATA_URI decodificado es idéntico byte a byte al archivo public/logo-consorcio-hd.png
+  test('16. UI-CRON-03b: el base64 decodificado de CONSORCIO_LOGO_DATA_URI es idéntico byte a byte a public/logo-consorcio-hd.png', () => {
+    const base64Data = CONSORCIO_LOGO_DATA_URI.replace(/^data:image\/jpeg;base64,/, '');
+    const bufferFromUri = Buffer.from(base64Data, 'base64');
+    const originalFileBuffer = fs.readFileSync(path.resolve(process.cwd(), 'public/logo-consorcio-hd.png'));
+
+    expect(bufferFromUri.equals(originalFileBuffer)).toBe(true);
+  });
 });
+
