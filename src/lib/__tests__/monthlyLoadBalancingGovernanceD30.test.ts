@@ -791,5 +791,458 @@ describe('GATE FREQ-OP-05 — Decisión D30', () => {
       ensureWeeklyPlanMaterialized(invalidMock, 'board-1', 'group-1', new Date('2026-10-05T00:00:00Z'))
     ).rejects.toThrow('MONTH_PROJECTION_READ_FAILED: column "status" does not exist');
   });
+
+  // 13. FREQ-OP-05d / E1: Visita freq 1 con rendimiento null (jr 0) y capacidad definida se asigna completa a semana no fija y cantidad no es nula
+  test('13. E1: Visita freq 1 con rendimiento null (jr 0) se asigna completa a semana no fija y cantidad no es nula', () => {
+    const siteDailyCapacity = 8;
+    const templates: RoutineBaseTemplate[] = [
+      {
+        id: 't-e1-1',
+        activity_key: '1.13',
+        name: 'ACTIVIDAD SIN RENDIMIENTO (D20)',
+        zone: 'ZONA 1',
+        unit: 'UND',
+        cantidad: 15,
+        rendimiento: null as any,
+        frecuencia: 1,
+        counts_capacity: true,
+      },
+    ];
+
+    const existingMonthPlans = [
+      {
+        week_start: '2026-10-05',
+        status: 'published',
+        items: [],
+      },
+    ];
+
+    const allocation = projectMonthlyLowFrequencyAllocation(templates, '2026-10-05', {
+      siteDailyCapacity,
+      existingMonthPlans,
+    });
+
+    const w12 = allocation.get('2026-10-12') || [];
+    const w19 = allocation.get('2026-10-19') || [];
+    const w26 = allocation.get('2026-10-26') || [];
+    const allAlloc = [...w12, ...w19, ...w26];
+
+    const found = allAlloc.find((i) => i.activity_key === '1.13');
+    expect(found).toBeDefined();
+    expect(found?.cantidad).toBe(15);
+    expect(Number.isNaN(found?.cantidad)).toBe(false);
+  });
+
+  // 14. FREQ-OP-05d / E1: Visita freq 2 con rendimiento null: ninguna cantidad es NaN o null; las 2 visitas quedan en las semanas de su par
+  test('14. E1: Visita freq 2 con rendimiento null: cantidades no son NaN/null y quedan en semanas de su par', () => {
+    const siteDailyCapacity = 8;
+    const templates: RoutineBaseTemplate[] = [
+      {
+        id: 't-e1-2',
+        activity_key: '2.10',
+        name: 'ACTIVIDAD FREQ 2 SIN RENDIMIENTO',
+        zone: 'ZONA 1',
+        unit: 'UND',
+        cantidad: 10,
+        rendimiento: null as any,
+        frecuencia: 2,
+        counts_capacity: true,
+      },
+    ];
+
+    const allocation = projectMonthlyLowFrequencyAllocation(templates, '2026-10-05', {
+      siteDailyCapacity,
+    });
+
+    const w05 = allocation.get('2026-10-05') || [];
+    const w12 = allocation.get('2026-10-12') || [];
+    const w19 = allocation.get('2026-10-19') || [];
+    const w26 = allocation.get('2026-10-26') || [];
+
+    const in05 = w05.find((i) => i.activity_key === '2.10');
+    const in19 = w19.find((i) => i.activity_key === '2.10');
+    const in12 = w12.find((i) => i.activity_key === '2.10');
+    const in26 = w26.find((i) => i.activity_key === '2.10');
+
+    // Debe elegirse el par 13 o 24
+    if (in05 || in19) {
+      expect(in05?.cantidad).toBe(10);
+      expect(in19?.cantidad).toBe(10);
+      expect(Number.isNaN(in05?.cantidad)).toBe(false);
+      expect(Number.isNaN(in19?.cantidad)).toBe(false);
+      expect(in12).toBeUndefined();
+      expect(in26).toBeUndefined();
+    } else {
+      expect(in12?.cantidad).toBe(10);
+      expect(in26?.cantidad).toBe(10);
+      expect(Number.isNaN(in12?.cantidad)).toBe(false);
+      expect(Number.isNaN(in26?.cantidad)).toBe(false);
+    }
+  });
+
+  // 15. FREQ-OP-05d / E2: Visita única de 0,02 jr con holgura amplia: se asigna completa, no va al arrastre
+  test('15. E2: Visita única pequeña de 0.02 JR con holgura amplia se asigna completa y no va a carryover', () => {
+    const siteDailyCapacity = 8;
+    const templates: RoutineBaseTemplate[] = [
+      {
+        id: 't-e2-1',
+        activity_key: '2.04',
+        name: 'VISITA PEQUEÑA',
+        zone: 'ZONA 1',
+        unit: 'M2',
+        cantidad: 0.2, // 0.2 / 10 = 0.02 JR
+        rendimiento: 10,
+        frecuencia: 1,
+        counts_capacity: true,
+      },
+    ];
+
+    const allocation = projectMonthlyLowFrequencyAllocation(templates, '2026-10-05', {
+      siteDailyCapacity,
+    });
+
+    let totalAlloc = 0;
+    for (const [, items] of allocation.entries()) {
+      for (const it of items) {
+        if (it.activity_key === '2.04') totalAlloc += it.cantidad;
+      }
+    }
+
+    const carryover = allocation.carryoverNextMonth?.find((c) => c.activity_key === '2.04')?.qty || 0;
+    expect(totalAlloc).toBe(0.2);
+    expect(carryover).toBe(0);
+  });
+
+  // 16. FREQ-OP-05d / E3: Freq 2 con una semana fija que tiene la mitad de la cantidad: el pendiente se programa en la otra semana del par
+  test('16. E3: Freq 2 con semana fija con mitad de cantidad programa el pendiente en la otra semana del par', () => {
+    const siteDailyCapacity = 8;
+    const templates: RoutineBaseTemplate[] = [
+      {
+        id: 't-e3-1',
+        activity_key: '2.03',
+        name: 'FREQ 2 CON CANTIDAD PARCIAL',
+        zone: 'ZONA 1',
+        unit: 'M2',
+        cantidad: 100, // Cada visita es de 100 M2 (Total mes = 200 M2 = 20 JR)
+        rendimiento: 10,
+        frecuencia: 2,
+        counts_capacity: true,
+      },
+    ];
+
+    // Semana 1 (2026-10-05) fija con solo 50 M2 ejecutados (la mitad de una visita)
+    const existingMonthPlans = [
+      {
+        week_start: '2026-10-05',
+        status: 'published',
+        items: [
+          { activity_key: '2.03', planned_qty: 50, planned_jr: 5, counts_capacity: true },
+        ],
+      },
+    ];
+
+    const allocation = projectMonthlyLowFrequencyAllocation(templates, '2026-10-12', {
+      siteDailyCapacity,
+      existingMonthPlans,
+    });
+
+    // Como semana 1 del par 13 es fija, el resto pendiente (200 - 50 = 150 M2) va a la semana 3 (2026-10-19)
+    const w19 = allocation.get('2026-10-19') || [];
+    const item19 = w19.find((i) => i.activity_key === '2.03');
+    expect(item19).toBeDefined();
+    // Capacidad de sem 3 es 8 * 6 = 48 JR (480 M2), por lo que caben los 150 M2 completos
+    expect(item19?.cantidad).toBe(150);
+
+    const carryover = allocation.carryoverNextMonth?.find((c) => c.activity_key === '2.03')?.qty || 0;
+    expect(carryover).toBe(0);
+    // Suma total mes: 50 fija + 150 no fija = 200 M2
+    expect(50 + (item19?.cantidad || 0) + carryover).toBe(200);
+  });
+
+  // 17. FREQ-OP-05d / E4: Semana objetivo fija con ítems distintos a la proyección da NOOP y 0 escrituras
+  test('17. E4: Semana objetivo fija con ítems distintos da NOOP sin error de conflicto y 0 escrituras', async () => {
+    const mockRpcCalls: Array<{ fn: string; args: any }> = [];
+    const mockSupabaseFixed: any = {
+      from: (table: string) => {
+        if (table === 'poa') {
+          return { select: () => ({ eq: () => ({ data: [{ id: 'poa-1' }], error: null }) }) };
+        }
+        if (table === 'poa_versions') {
+          return { select: () => ({ in: () => ({ eq: () => ({ data: [{ id: 'v-1', poa_id: 'poa-1' }], error: null }) }) }) };
+        }
+        if (table === 'poa_activities') {
+          return { select: () => ({ eq: () => ({ order: () => ({ data: [{ id: 'pa-1', activity_key: '1.01' }], error: null }) }) }) };
+        }
+        if (table === 'board_activity_standards') {
+          return { select: () => ({ eq: () => ({ data: [{ id: 'std-1', activity_key: '1.01', name: 'BARRIDO', category: 'ASEO', rendimiento: 10, unit: 'M2', requiere_rendimiento: true }], error: null }) }) };
+        }
+        if (table === 'poa_activity_zones') {
+          return { select: () => ({ eq: () => ({ in: () => ({ order: () => ({ data: [{ id: 'paz-1', poa_activity_id: 'pa-1', zone_id: 'group-1', cantidad_contratada: 100 }], error: null }) }) }) }) };
+        }
+        if (table === 'operational_frequencies') {
+          return { select: () => ({ eq: () => ({ eq: () => ({ data: [{ activity_key: '1.01', visits_per_month: 25, counts_capacity: true }], error: null }) }) }) };
+        }
+        if (table === 'site_daily_capacity') {
+          return { select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => ({ data: { jornales_dia: 8 }, error: null }) }) }) }) };
+        }
+        if (table === 'weekly_plans') {
+          const createPlanQuery = (filters: Record<string, any> = {}) => ({
+            eq: (col: string, val: any) => createPlanQuery({ ...filters, [col]: val }),
+            in: (col: string, dates: string[]) => ({
+              data: [
+                { id: 'plan-fixed-10-05', week_start: '2026-10-05', status: 'published' },
+              ],
+              error: null,
+            }),
+            maybeSingle: () => ({
+              data: { id: 'plan-fixed-10-05', status: 'published' },
+              error: null,
+            }),
+          });
+          return { select: () => createPlanQuery() };
+        }
+        if (table === 'weekly_plan_items') {
+          return {
+            select: () => ({
+              eq: () => ({
+                data: [
+                  // Ítems existentes en la BD con secuencias y claves distintas a la proyección fresca
+                  { planned_sequence: 1, activity_key: 'HISTORICAL_1', planned_date: '2026-10-05' },
+                  { planned_sequence: 2, activity_key: 'HISTORICAL_2', planned_date: '2026-10-06' },
+                ],
+                error: null,
+              }),
+              in: () => ({
+                data: [
+                  { plan_id: 'plan-fixed-10-05', activity_key: 'HISTORICAL_1', planned_qty: 50, planned_jr: 5, planned_rendimiento: 10 },
+                ],
+                error: null,
+              }),
+            }),
+          };
+        }
+        if (table === 'materialization_events') {
+          return { insert: () => ({ error: null }) };
+        }
+        return { select: () => ({ eq: () => ({ data: [], error: null }) }) };
+      },
+      rpc: (fn: string, args: any) => {
+        mockRpcCalls.push({ fn, args });
+        return Promise.resolve({ data: 'ok', error: null });
+      },
+    };
+
+    const res = await ensureWeeklyPlanMaterialized(mockSupabaseFixed, 'board-1', 'group-1', new Date('2026-10-05T00:00:00Z'));
+    expect(res.weeklyPlan.id).toBe('plan-fixed-10-05');
+    expect(res.insertedCount).toBe(0);
+    expect(res.protectedCount).toBe(2);
+
+    // 0 llamadas a RPCs de mutación (ensure_weekly_plan_header o sync_weekly_plan_items_rpc)
+    const writeRpcCalls = mockRpcCalls.filter((c) => c.fn === 'ensure_weekly_plan_header' || c.fn === 'sync_weekly_plan_items_rpc');
+    expect(writeRpcCalls.length).toBe(0);
+  });
+
+  // 18. FREQ-OP-05d: Secuencial de mes completo con mock de columnas reales: arrastre M-1 cuadra con proyección
+  test('18. Secuencial de mes completo con columnas reales: arrastre M-1 coincide exactamente con proyección del mes anterior', async () => {
+    // Definición de base de datos simulada con esquema físico real
+    const storedPlans: any[] = [];
+    const storedItems: any[] = [];
+    let planSeqCounter = 1;
+
+    // Inicializar semana 1 (2026-10-05) como fija
+    storedPlans.push({
+      id: 'plan-oct-w1',
+      board_id: 'board-1',
+      group_id: 'group-1',
+      week_start: '2026-10-05',
+      status: 'published',
+    });
+    storedItems.push(
+      { id: 'item-1', plan_id: 'plan-oct-w1', activity_key: '1.01', planned_sequence: 1, planned_qty: 360, planned_jr: 36, planned_rendimiento: 10, planned_date: '2026-10-05' },
+      { id: 'item-2', plan_id: 'plan-oct-w1', activity_key: '3.02', planned_sequence: 2, planned_qty: 40, planned_jr: 4, planned_rendimiento: 10, planned_date: '2026-10-06' }
+    );
+
+    const createSimulatedSupabase = () => ({
+      from: (table: string) => {
+        if (table === 'poa') {
+          return { select: () => ({ eq: () => ({ data: [{ id: 'poa-1' }], error: null }) }) };
+        }
+        if (table === 'poa_versions') {
+          return { select: () => ({ in: () => ({ eq: () => ({ data: [{ id: 'v-1', poa_id: 'poa-1' }], error: null }) }) }) };
+        }
+        if (table === 'poa_activities') {
+          return {
+            select: () => ({
+              eq: () => ({
+                order: () => ({
+                  data: [
+                    { id: 'pa-1', activity_key: '1.01' },
+                    { id: 'pa-2', activity_key: '3.02' },
+                    { id: 'pa-3', activity_key: '1.13' },
+                  ],
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
+        if (table === 'board_activity_standards') {
+          return {
+            select: () => ({
+              eq: () => ({
+                data: [
+                  { id: 'std-1', activity_key: '1.01', name: 'BARRIDO', category: 'ASEO', rendimiento: 10, unit: 'M2', requiere_rendimiento: true },
+                  { id: 'std-2', activity_key: '3.02', name: 'MARMOL', category: 'PISOS', rendimiento: 10, unit: 'M2', requiere_rendimiento: true },
+                  { id: 'std-3', activity_key: '1.13', name: 'INSPECCION', category: 'SUPERVISION', rendimiento: null, unit: 'UND', requiere_rendimiento: false },
+                ],
+                error: null,
+              }),
+            }),
+          };
+        }
+        if (table === 'poa_activity_zones') {
+          return {
+            select: () => ({
+              eq: () => ({
+                in: () => ({
+                  order: () => ({
+                    data: [
+                      { id: 'paz-1', poa_activity_id: 'pa-1', zone_id: 'group-1', cantidad_contratada: 360 },
+                      { id: 'paz-2', poa_activity_id: 'pa-2', zone_id: 'group-1', cantidad_contratada: 100 },
+                      { id: 'paz-3', poa_activity_id: 'pa-3', zone_id: 'group-1', cantidad_contratada: 10 },
+                    ],
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+        if (table === 'operational_frequencies') {
+          return {
+            select: () => ({
+              eq: () => ({
+                eq: () => ({
+                  data: [
+                    { activity_key: '1.01', visits_per_month: 25, counts_capacity: true },
+                    { activity_key: '3.02', visits_per_month: 1, counts_capacity: true },
+                    { activity_key: '1.13', visits_per_month: 1, counts_capacity: true },
+                  ],
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
+        if (table === 'site_daily_capacity') {
+          return { select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => ({ data: { jornales_dia: 7 }, error: null }) }) }) }) };
+        }
+        if (table === 'weekly_plans') {
+          const createPlanQuery = (filters: Record<string, any> = {}) => ({
+            eq: (col: string, val: any) => createPlanQuery({ ...filters, [col]: val }),
+            in: (col: string, dates: string[]) => {
+              const matched = storedPlans.filter((p) => dates.includes(p.week_start));
+              return { data: matched, error: null };
+            },
+            maybeSingle: () => {
+              const matched = storedPlans.find((p) => {
+                if (filters.week_start && p.week_start !== filters.week_start) return false;
+                if (filters.group_id && p.group_id !== filters.group_id) return false;
+                if (filters.board_id && p.board_id !== filters.board_id) return false;
+                return true;
+              });
+              return { data: matched || null, error: null };
+            },
+          });
+          return { select: () => createPlanQuery() };
+        }
+        if (table === 'weekly_plan_items') {
+          return {
+            select: (cols: string) => {
+              const err = validateWeeklyPlanItemsSelect(cols);
+              if (err) {
+                return {
+                  eq: () => ({ data: null, error: err }),
+                  in: () => ({ data: null, error: err }),
+                };
+              }
+              return {
+                eq: (col: string, planId: string) => {
+                  const items = storedItems.filter((i) => i.plan_id === planId);
+                  return { data: items, error: null };
+                },
+                in: (col: string, planIds: string[]) => {
+                  const items = storedItems.filter((i) => planIds.includes(i.plan_id));
+                  return { data: items, error: null };
+                },
+              };
+            },
+          };
+        }
+        if (table === 'materialization_events') {
+          return { insert: () => ({ error: null }) };
+        }
+        return { select: () => ({ eq: () => ({ data: [], error: null }) }) };
+      },
+      rpc: (fn: string, args: any) => {
+        if (fn === 'ensure_weekly_plan_header') {
+          const newPlanId = `plan-oct-w${++planSeqCounter}`;
+          storedPlans.push({
+            id: newPlanId,
+            board_id: args.p_board_id,
+            group_id: args.p_group_id,
+            week_start: args.p_week_start,
+            status: 'published',
+          });
+          return Promise.resolve({ data: newPlanId, error: null });
+        }
+        if (fn === 'sync_weekly_plan_items_rpc') {
+          const planId = args.p_plan_id;
+          for (const it of args.p_items || []) {
+            storedItems.push({
+              id: `item-${storedItems.length + 1}`,
+              plan_id: planId,
+              activity_key: it.activity_key,
+              planned_sequence: it.planned_sequence,
+              planned_qty: it.planned_qty,
+              planned_jr: it.planned_jr,
+              planned_rendimiento: it.planned_rendimiento,
+              planned_date: it.planned_date,
+            });
+          }
+          return Promise.resolve({ data: args.p_items || [], error: null });
+        }
+        return Promise.resolve({ data: 'ok', error: null });
+      },
+    });
+
+    const simSupabase: any = createSimulatedSupabase();
+
+    // Materializar secuencialmente semanas 2, 3 y 4 de Octubre 2026
+    const resW12 = await ensureWeeklyPlanMaterialized(simSupabase, 'board-1', 'group-1', new Date('2026-10-12T00:00:00Z'));
+    expect(resW12.weeklyPlan).toBeDefined();
+
+    const resW19 = await ensureWeeklyPlanMaterialized(simSupabase, 'board-1', 'group-1', new Date('2026-10-19T00:00:00Z'));
+    expect(resW19.weeklyPlan).toBeDefined();
+
+    const resW26 = await ensureWeeklyPlanMaterialized(simSupabase, 'board-1', 'group-1', new Date('2026-10-26T00:00:00Z'));
+    expect(resW26.weeklyPlan).toBeDefined();
+
+    // Obtener proyección de arrastre calculada para fin de mes
+    const projectedCarryoverNextMonth = resW26.carryoverNextMonth || [];
+
+    // Materializar primera semana de Noviembre 2026 (2026-11-02)
+    const resNov = await ensureWeeklyPlanMaterialized(simSupabase, 'board-1', 'group-1', new Date('2026-11-02T00:00:00Z'));
+    expect(resNov.weeklyPlan).toBeDefined();
+
+    const novCarryoverIn = resNov.carryoverIn || [];
+
+    // Verificar correspondencia exacta por cantidad (tolerancia 0.05) entre la proyección del mes anterior y carryoverIn
+    for (const proj of projectedCarryoverNextMonth) {
+      const matchNov = novCarryoverIn.find((c) => c.activity_key === proj.activity_key);
+      expect(matchNov).toBeDefined();
+      expect(Math.abs((matchNov?.qty || 0) - proj.qty)).toBeLessThanOrEqual(0.05);
+    }
+  });
 });
 

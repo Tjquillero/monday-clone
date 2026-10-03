@@ -379,14 +379,14 @@ Fuente: `COSTOS GENERALES V3` (Tablero `3ea0326f-6ff7-409f-848a-1f296e6e3cc8`):
 - El panel `CapacitySummary` incluye la sección **"Pasa al próximo mes (proyección del mes)"** con `carryover_next_month_projection` (o alias `carryover_next_month`), y debajo, si existe sobrante intra-semana, la sección **"De esta semana"** con `carryover_from_this_week`.
 - Si existe `recurrent_exceeds_capacity`, muestra el aviso: *"Recurrentes exceden el límite: revisar límite o rendimientos"*.
 
-### 12.7. D30.7 — Contabilidad Mensual por Cantidad Física y Manejo de Planes Cancelados (B1 / B2 / FREQ-OP-05c)
-- **Contabilidad por cantidad:** La asignación no decide presencia por llave única, sino por balance de cantidades:
+### 12.7. D30.7 — Contabilidad Mensual por Cantidad Física y Manejo de Planes Cancelados (B1 / B2 / E3 / FREQ-OP-05c / FREQ-OP-05d)
+- **Contabilidad por cantidad física (E3):** La asignación mensual de todas las bajas frecuencias (incluyendo frecuencia 2) no decide presencia por llave única, sino por balance estricto de cantidades:
   $$\text{requerido} = \text{arrastre\_in.qty} + \text{visitas\_del\_mes} \times \text{cantidad\_por\_visita}$$
   $$\text{ya\_planificado} = \sum \text{planned\_qty (semanas fijas no canceladas)}$$
   $$\text{pendiente} = \text{requerido} - \text{ya\_planificado}$$
 - Solo $\text{pendiente} > 0.005$ se distribuye entre las semanas no fijas disponibles mediante D30.1 y D30.2. Lo que no quepa pasa a `carryover_next_month`.
+- **Frecuencia 2 por cantidad:** Con `requerido = 2 * cantidad_por_visita`, el pendiente se programa en la semana no fija de su par (o en las dos si faltan ambas visitas). La proyección mensual y el arrastre de entrada de $M+1$ coinciden exactamente por cantidad para cada actividad.
 - **Prioridad de consumo:** El `ya_planificado` de semanas fijas consume primero la cuota de `carryover_in` y luego la cuota de visitas regulares.
-- **Frecuencia 2:** $\text{pendiente\_visitas} = 2 - \text{visitas presentes en semanas fijas}$. Si el par elegido (1-3 o 2-4) tiene una semana fija que no contiene la llave, esa visita no se descarta: pasa a `carryover_next_month`.
 - **Exclusión de planes cancelados (B2 / FREQ-OP-05c):** En el esquema físico vivo, la tabla `weekly_plan_items` **no** tiene columna `status`. La exclusión de planes cancelados se realiza **únicamente a nivel de cabecera de plan** (`weekly_plans.status !== 'cancelled'`). Tanto en la lectura de planes del mes como en el cálculo de arrastre de $M-1$, los ítems pertenecen a planes activos.
 
 ### 12.8. D30.8 — Separación de Arrastre de Proyección Mensual vs Intra-Semana (B4)
@@ -395,6 +395,11 @@ Fuente: `COSTOS GENERALES V3` (Tablero `3ea0326f-6ff7-409f-848a-1f296e6e3cc8`):
   - `carryover_from_this_week`: Sobrante intra-semana generado por el límite diario (D30.3).
   - `carryover_next_month`: Mantenido como alias de `carryover_next_month_projection` para compatibilidad retroactiva con el arnés de pruebas.
 - **UI:** Presenta claramente ambos niveles de arrastre diferenciando la proyección general del mes respecto al excedente específico de la semana en curso.
+
+### 12.9. D30.9 — Reglas Operativas Especiales (E1, E2, E4 / FREQ-OP-05d)
+- **E1: Visitas sin rendimiento (D20, jr = 0):** Actividades sin rendimiento o con `theoretical_jr = 0` no consumen capacidad de jornales. Se asignan completas, sin fragmentar y sin división por cero ni valores NaN, a la semana no fija con mayor holgura (empate: semana de menor número). En frecuencia 2 van a las semanas no fijas de su par. Si no hay semana no fija disponible, pasan íntegras al arrastre con `jr = 0`.
+- **E2: Fragmentos mínimos aplicables solo a restos:** El límite mínimo de $0.05\text{ JR}$ aplica exclusivamente a fragmentos parciales cuando una actividad no cabe completa ($\text{allocJr} < \text{remJr}$). Si una visita completa mide menos de $0.05\text{ JR}$ y cabe en la semana disponible, se asigna íntegramente.
+- **E4: Inmutabilidad estricta de planes existentes con ítems:** Si la semana objetivo ya cuenta con un plan existente no cancelado que contiene ítems ($\text{items.length} > 0$), la materialización es completamente inmutable: no recalcula, no compara secuencias (evitando falsos `SEQUENCE_IDENTITY_CONFLICT`) y devuelve de inmediato el resultado NOOP con 0 llamadas a RPCs de escritura (`ensure_weekly_plan_header` y `sync_weekly_plan_items_rpc`), registrando el evento resumen de telemetría.
 
 
 

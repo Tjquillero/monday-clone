@@ -2,10 +2,10 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { SupabaseClient } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabaseClient';
-import { offlineDB } from '@/lib/offlineDB';
+import { supabase } from '../lib/supabaseClient';
+import { offlineDB } from '../lib/offlineDB';
 import { isNetworkError } from './useBoardData';
-import { WeeklyPlan, WeeklyPlanItem, WeeklyPlanItemExecution, WeeklyPlanConfirmationSummary } from '@/types/scheduler';
+import { WeeklyPlan, WeeklyPlanItem, WeeklyPlanItemExecution, WeeklyPlanConfirmationSummary } from '../types/scheduler';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Query keys
@@ -124,7 +124,7 @@ export function useWeeklyPlanWithItems(planId: string | undefined) {
 // plan publicado de la semana activa).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { extractCuratedEvidencePair, ExecutionAttachmentItem } from '@/lib/evidenceCuration';
+import { extractCuratedEvidencePair, ExecutionAttachmentItem } from '../lib/evidenceCuration';
 
 export interface ExecutionEvidencePreviewDTO {
   id: string;

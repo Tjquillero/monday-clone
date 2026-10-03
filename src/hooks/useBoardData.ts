@@ -1,9 +1,9 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabaseClient';
-import { Board, Group, Column, Item } from '@/types/monday';
-import { offlineDB } from '@/lib/offlineDB';
+import { supabase } from '../lib/supabaseClient';
+import { Board, Group, Column, Item } from '../types/monday';
+import { offlineDB } from '../lib/offlineDB';
 
 export function isNetworkError(error: any): boolean {
   if (!error) return false;

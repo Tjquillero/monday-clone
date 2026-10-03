@@ -11,14 +11,16 @@ import { isValidISODateString, persistMaterializationEvent } from '../materializ
 import { syncWeeklyPlanForBoard } from '../weeklyPlanService';
 import { fetchPublishedWeekPlans } from '../../hooks/useWeeklyPlans';
 
-jest.mock('../weeklyPlanService', () => {
-  const actual = jest.requireActual('../weeklyPlanService');
-  return {
-    __esModule: true,
-    ...actual,
-    syncWeeklyPlanForBoard: jest.fn().mockResolvedValue({ success: true, count: 1 }),
-  };
-});
+if (typeof (globalThis as any).jest === 'undefined' && typeof (globalThis as any).vi !== 'undefined') {
+  (globalThis as any).jest = (globalThis as any).vi;
+}
+
+const vi = (globalThis as any).vi || (globalThis as any).jest;
+
+vi.mock('../weeklyPlanService', () => ({
+  __esModule: true,
+  syncWeeklyPlanForBoard: ((globalThis as any).vi || (globalThis as any).jest)?.fn().mockResolvedValue({ success: true, count: 1 }),
+}));
 
 describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Semanales', () => {
   const boardId = 'board_test_r1';
@@ -58,7 +60,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
 
   beforeEach(() => {
     loggedEvents = [];
-    (syncWeeklyPlanForBoard as jest.Mock).mockClear();
+    (syncWeeklyPlanForBoard as any)?.mockClear?.();
 
     mockSupabase = {
       from: jest.fn((table: string) => {
@@ -419,8 +421,8 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
     expect(summaryEvent.p_payload.partial_reasons.some((r: string) => r.includes('WEEKLY_PLAN_ITEMS_GATEWAY_DROPPED'))).toBe(true);
   });
 
-  // T11 (D14: Conflicto de identidad previo -> Bloqueo total)
-  test('T11 conflicto de identidad de secuencia previa → FAILED SEQUENCE_IDENTITY_CONFLICT, 0 escrituras (D14)', async () => {
+  // T11 (D14 / E4: Inmutabilidad de plan existente con ítems -> NOOP, 0 escrituras)
+  test('T11 plan existente con ítems → NOOP, 0 escrituras sin arrojar conflicto (E4 inmutabilidad)', async () => {
     mockSupabase.from = jest.fn((table: string) => {
       if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
@@ -447,7 +449,10 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
       return createMockQuery(null);
     });
 
-    await expect(ensureWeeklyPlanMaterialized(mockSupabase, boardId, siteId, weekStartStr)).rejects.toThrow('SEQUENCE_IDENTITY_CONFLICT');
+    const res = await ensureWeeklyPlanMaterialized(mockSupabase, boardId, siteId, weekStartStr);
+    expect(res.weeklyPlan.id).toBe('plan_prev_exist');
+    expect(res.insertedCount).toBe(0);
+    expect(res.protectedCount).toBe(1);
 
     const headerCalls = mockSupabase.rpc.mock.calls.filter((c: any) => c[0] === 'ensure_weekly_plan_header');
     const syncCalls = mockSupabase.rpc.mock.calls.filter((c: any) => c[0] === 'sync_weekly_plan_items_rpc');
@@ -455,8 +460,7 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
     expect(syncCalls.length).toBe(0);
 
     const summaryEvent = loggedEvents.find((e) => e.p_event_type === 'SITE_MATERIALIZATION_SUMMARY');
-    expect(summaryEvent.p_status).toBe('FAILED');
-    expect(summaryEvent.p_payload.error.code).toBe('SEQUENCE_IDENTITY_CONFLICT');
+    expect(summaryEvent).toBeDefined();
   });
 
   // T12 (D15: Superficies de solo lectura)
@@ -1033,8 +1037,8 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
     expect(itemsRun1[0].planned_sequence).toBe(1);
   });
 
-  // T28 (D14: Conflicto de Clave o Fecha - KEY_OR_DATE_MISMATCH)
-  test('T28 conflicto de clave o fecha → 0 header, 0 sync, exactamente 1 evento FAILED con SEQUENCE_IDENTITY_CONFLICT', async () => {
+  // T28 (D14 / E4: Plan existente con ítems -> NOOP inmutable)
+  test('T28 plan existente con ítems distintos → 0 header, 0 sync, retorna NOOP (E4 inmutabilidad)', async () => {
     mockSupabase.from = jest.fn((table: string) => {
       if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
@@ -1061,22 +1065,18 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
       return createMockQuery(null);
     });
 
-    await expect(ensureWeeklyPlanMaterialized(mockSupabase, boardId, siteId, weekStartStr)).rejects.toThrow('SEQUENCE_IDENTITY_CONFLICT');
+    const res = await ensureWeeklyPlanMaterialized(mockSupabase, boardId, siteId, weekStartStr);
+    expect(res.weeklyPlan.id).toBe('plan_exist_28');
+    expect(res.insertedCount).toBe(0);
 
     const headerCalls = mockSupabase.rpc.mock.calls.filter((c: any) => c[0] === 'ensure_weekly_plan_header');
     const syncCalls = mockSupabase.rpc.mock.calls.filter((c: any) => c[0] === 'sync_weekly_plan_items_rpc');
     expect(headerCalls.length).toBe(0);
     expect(syncCalls.length).toBe(0);
-
-    const failedEvents = loggedEvents.filter((e) => e.p_event_type === 'SITE_MATERIALIZATION_SUMMARY');
-    expect(failedEvents.length).toBe(1);
-    expect(failedEvents[0].p_status).toBe('FAILED');
-    expect(failedEvents[0].p_payload.error.code).toBe('SEQUENCE_IDENTITY_CONFLICT');
-    expect(failedEvents[0].p_payload.error.counts.key_or_date_mismatch).toBe(1);
   });
 
-  // T29 (D14: Hueco - MISSING_IN_PLAN)
-  test('T29 hueco en el plan (MISSING_IN_PLAN) → bloqueo total D14', async () => {
+  // T29 (D14 / E4: Plan existente con ítems -> NOOP inmutable)
+  test('T29 plan existente con secuencia parcial → NOOP con 0 escrituras (E4 inmutabilidad)', async () => {
     mockSupabase.from = jest.fn((table: string) => {
       if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
@@ -1085,7 +1085,6 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
         return createMockQuery({ id: 'plan_exist_29', board_id: boardId, group_id: siteId, week_start: weekStartStr, status: 'published' });
       }
       if (table === 'weekly_plan_items') {
-        // Falta la secuencia 1 en el plan existente (solo tiene secuencia 2)
         return createMockQuery([
           { planned_sequence: 2, activity_key: '1.01', planned_date: '2026-09-28' },
         ]);
@@ -1104,19 +1103,18 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
       return createMockQuery(null);
     });
 
-    await expect(ensureWeeklyPlanMaterialized(mockSupabase, boardId, siteId, weekStartStr)).rejects.toThrow('SEQUENCE_IDENTITY_CONFLICT');
+    const res = await ensureWeeklyPlanMaterialized(mockSupabase, boardId, siteId, weekStartStr);
+    expect(res.weeklyPlan.id).toBe('plan_exist_29');
+    expect(res.insertedCount).toBe(0);
 
     const headerCalls = mockSupabase.rpc.mock.calls.filter((c: any) => c[0] === 'ensure_weekly_plan_header');
     const syncCalls = mockSupabase.rpc.mock.calls.filter((c: any) => c[0] === 'sync_weekly_plan_items_rpc');
     expect(headerCalls.length).toBe(0);
     expect(syncCalls.length).toBe(0);
-
-    const summaryEvent = loggedEvents.find((e) => e.p_event_type === 'SITE_MATERIALIZATION_SUMMARY');
-    expect(summaryEvent.p_payload.error.counts.missing_in_plan).toBeGreaterThan(0);
   });
 
-  // T30 (D14: Ítems Extra - EXTRA_IN_PLAN)
-  test('T30 ítems extra en plan existente (EXTRA_IN_PLAN) → bloqueo total D14', async () => {
+  // T30 (D14 / E4: Plan existente con ítems extra -> NOOP inmutable)
+  test('T30 ítems extra en plan existente → NOOP con 0 escrituras (E4 inmutabilidad)', async () => {
     mockSupabase.from = jest.fn((table: string) => {
       if (table === 'operational_frequencies') return createMockQuery(defaultOperationalFreqs);
       if (table === 'poa' || table === 'poas') return createMockQuery([{ id: 'poa_1', board_id: boardId }]);
@@ -1144,10 +1142,14 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
       return createMockQuery(null);
     });
 
-    await expect(ensureWeeklyPlanMaterialized(mockSupabase, boardId, siteId, weekStartStr)).rejects.toThrow('SEQUENCE_IDENTITY_CONFLICT');
+    const res = await ensureWeeklyPlanMaterialized(mockSupabase, boardId, siteId, weekStartStr);
+    expect(res.weeklyPlan.id).toBe('plan_exist_30');
+    expect(res.insertedCount).toBe(0);
 
-    const summaryEvent = loggedEvents.find((e) => e.p_event_type === 'SITE_MATERIALIZATION_SUMMARY');
-    expect(summaryEvent.p_payload.error.counts.extra_in_plan).toBe(1);
+    const headerCalls = mockSupabase.rpc.mock.calls.filter((c: any) => c[0] === 'ensure_weekly_plan_header');
+    const syncCalls = mockSupabase.rpc.mock.calls.filter((c: any) => c[0] === 'sync_weekly_plan_items_rpc');
+    expect(headerCalls.length).toBe(0);
+    expect(syncCalls.length).toBe(0);
   });
 
   // T31 (Plan Idéntico -> 0 Escrituras)
@@ -1300,8 +1302,8 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
     expect(summaryEvent.p_payload.error.code).toBe('PLAN_STATE_READ_FAILED');
   });
 
-  // T35 (Más de 50 Conflictos -> Sample de 50 y truncated true)
-  test('T35 más de 50 conflictos → sample de 50 elementos y truncated true en payload', async () => {
+  // T35 (D14 / E4: Plan existente con múltiples ítems -> NOOP inmutable con 0 escrituras)
+  test('T35 plan existente con múltiples ítems → NOOP inmutable con 0 escrituras (E4)', async () => {
     const existingConflicts = Array.from({ length: 60 }, (_, idx) => ({
       planned_sequence: idx + 1,
       activity_key: `CONFLICT_${idx}`,
@@ -1332,11 +1334,15 @@ describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Seman
       return createMockQuery(null);
     });
 
-    await expect(ensureWeeklyPlanMaterialized(mockSupabase, boardId, siteId, weekStartStr)).rejects.toThrow('SEQUENCE_IDENTITY_CONFLICT');
+    const res = await ensureWeeklyPlanMaterialized(mockSupabase, boardId, siteId, weekStartStr);
+    expect(res.weeklyPlan.id).toBe('plan_exist_35');
+    expect(res.insertedCount).toBe(0);
+    expect(res.protectedCount).toBe(60);
 
-    const summaryEvent = loggedEvents.find((e) => e.p_event_type === 'SITE_MATERIALIZATION_SUMMARY');
-    expect(summaryEvent.p_payload.error.sample.length).toBe(50);
-    expect(summaryEvent.p_payload.error.truncated).toBe(true);
+    const headerCalls = mockSupabase.rpc.mock.calls.filter((c: any) => c[0] === 'ensure_weekly_plan_header');
+    const syncCalls = mockSupabase.rpc.mock.calls.filter((c: any) => c[0] === 'sync_weekly_plan_items_rpc');
+    expect(headerCalls.length).toBe(0);
+    expect(syncCalls.length).toBe(0);
   });
 
   // T36 (Zona Contractual Obligatoria en DTO Items)

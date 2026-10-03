@@ -985,99 +985,35 @@ export async function ensureWeeklyPlanMaterialized(
     existingItems = itemsData || [];
   }
 
-  // 8. D14 — DEFINICIÓN Y EVALUACIÓN DE CONFLICTOS
+  // 8. D14 / E4 — INMUTABILIDAD DE PLANES EXISTENTES CON ÍTEMS
   if (existingPlan?.id && existingItems.length > 0) {
-    const existingSeqMap = new Map<number, { activity_key: string; planned_date: string }>();
-    for (const it of existingItems) {
-      existingSeqMap.set(it.planned_sequence, {
-        activity_key: it.activity_key,
-        planned_date: it.planned_date,
-      });
-    }
-
-    const sentSeqMap = new Map<number, { activity_key: string; planned_date: string }>();
-    for (const it of dtoItems) {
-      sentSeqMap.set(it.planned_sequence, {
-        activity_key: it.activity_key,
-        planned_date: it.planned_date,
-      });
-    }
-
-    let keyOrDateMismatchCount = 0;
-    let missingInPlanCount = 0;
-    let extraInPlanCount = 0;
-    const conflictsList: Array<{ type: string; sequence: number; sent?: any; existing?: any }> = [];
-
-    // Comprobar lo enviado contra lo existente
-    for (const item of dtoItems) {
-      const existing = existingSeqMap.get(item.planned_sequence);
-      if (!existing) {
-        missingInPlanCount++;
-        conflictsList.push({
-          type: 'MISSING_IN_PLAN',
-          sequence: item.planned_sequence,
-          sent: { activity_key: item.activity_key, planned_date: item.planned_date },
-        });
-      } else if (existing.activity_key !== item.activity_key || existing.planned_date !== item.planned_date) {
-        keyOrDateMismatchCount++;
-        conflictsList.push({
-          type: 'KEY_OR_DATE_MISMATCH',
-          sequence: item.planned_sequence,
-          sent: { activity_key: item.activity_key, planned_date: item.planned_date },
-          existing: { activity_key: existing.activity_key, planned_date: existing.planned_date },
-        });
+    // Invariante de Inmutabilidad (E4): Si el plan ya existe no cancelado y con ítems,
+    // la materialización no recalcula ni compara secuencias. Devuelve NOOP con 0 mutaciones y registra el resumen.
+    await persistMaterializationEvent(
+      supabase,
+      boardId,
+      gId,
+      weekStartStr,
+      existingPlan.id,
+      'SITE_MATERIALIZATION_SUMMARY',
+      classification.status,
+      {
+        ...classification.summary,
+        plan_id: existingPlan.id,
+        poa_id: activePoaId,
+        poa_version_id: activeVersionId,
+        site_daily_capacity: siteDailyCapacity,
+        capacity_read_error: capacityReadError,
+        capacity_error: capacityReadError,
+        carryover_in: projection.carryoverIn || [],
+        carryover_next_month: projection.carryoverNextMonth || [],
+        carryover_next_month_projection: projection.carryoverNextMonthProjection || projection.carryoverNextMonth || [],
+        carryover_from_this_week: projection.carryoverFromThisWeek || [],
+        recurrent_exceeds_capacity: projection.recurrentExceedsCapacity || [],
+        status: classification.status,
       }
-    }
+    );
 
-    // Comprobar lo existente que no está en lo enviado
-    for (const [seq, ex] of existingSeqMap.entries()) {
-      if (!sentSeqMap.has(seq)) {
-        extraInPlanCount++;
-        conflictsList.push({
-          type: 'EXTRA_IN_PLAN',
-          sequence: seq,
-          existing: { activity_key: ex.activity_key, planned_date: ex.planned_date },
-        });
-      }
-    }
-
-    const totalConflicts = keyOrDateMismatchCount + missingInPlanCount + extraInPlanCount;
-
-    if (totalConflicts > 0) {
-      // D14: Bloqueo total ante conflicto. Cero llamadas a header, cero a sync. Exactamente UN evento.
-      await persistMaterializationEvent(
-        supabase,
-        boardId,
-        gId,
-        weekStartStr,
-        existingPlan.id,
-        'SITE_MATERIALIZATION_SUMMARY',
-        'FAILED',
-        {
-          ...classification.summary,
-          poa_id: activePoaId,
-          poa_version_id: activeVersionId,
-          plan_id: existingPlan.id,
-          error: {
-            stage: 'identity_precheck',
-            code: 'SEQUENCE_IDENTITY_CONFLICT',
-            counts: {
-              key_or_date_mismatch: keyOrDateMismatchCount,
-              missing_in_plan: missingInPlanCount,
-              extra_in_plan: extraInPlanCount,
-            },
-            sample: conflictsList.slice(0, 50),
-            truncated: conflictsList.length > 50,
-          },
-          status: 'FAILED',
-        }
-      );
-      throw new Error(
-        `SEQUENCE_IDENTITY_CONFLICT: Conflicto de identidad detectado en plan existente (${totalConflicts} discrepancias: ${keyOrDateMismatchCount} mismatches, ${missingInPlanCount} faltantes en plan, ${extraInPlanCount} extras en plan)`
-      );
-    }
-
-    // Plan existente con ítems IDÉNTICOS -> CERO escrituras y retornar el estado existente
     return {
       weeklyPlan: {
         id: existingPlan.id,
@@ -1094,6 +1030,8 @@ export async function ensureWeeklyPlanMaterialized(
       totalItems: existingItems.length,
       carryoverIn: projection.carryoverIn,
       carryoverNextMonth: projection.carryoverNextMonth,
+      carryoverNextMonthProjection: projection.carryoverNextMonthProjection,
+      carryoverFromThisWeek: projection.carryoverFromThisWeek,
       recurrentExceedsCapacity: projection.recurrentExceedsCapacity,
     };
   }
