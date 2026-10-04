@@ -14,6 +14,10 @@ import { findPossibleVisualDuplicatesTool } from './findPossibleVisualDuplicates
 import { generateExecutionObservationsTool } from './generateExecutionObservations';
 import { getProactiveAdvisoriesTool } from './getProactiveAdvisories';
 import { getOperationalActivitiesTool } from './getOperationalActivities';
+import { getSiteWeekPlanTool } from './getSiteWeekPlan';
+import { getOperationalFrequenciesTool } from './getOperationalFrequencies';
+import { getTractorRouteTool } from './getTractorRoute';
+import { getMonthCarryoverTool } from './getMonthCarryover';
 
 // La whitelist. Si un tool no está aquí, el modelo no puede usarlo — el
 // Orchestrator valida el nombre contra este registro independientemente de
@@ -25,6 +29,8 @@ import { getOperationalActivitiesTool } from './getOperationalActivities';
 // Catálogo mínimo (prioridad del usuario): get_board_summary (punto de
 //   entrada), get_delayed_weekly_plans (lo más preguntado operativamente),
 //   get_execution_summary (estado de certificaciones).
+// Fase 2 (planificación): get_site_week_plan, get_operational_frequencies,
+//   get_tractor_route, get_month_carryover.
 export const AI_TOOL_REGISTRY: Record<string, AiToolDefinition> = {
   [getCurrentBoardTool.name]: getCurrentBoardTool,
   [getActaTotalsTool.name]: getActaTotalsTool,
@@ -41,6 +47,10 @@ export const AI_TOOL_REGISTRY: Record<string, AiToolDefinition> = {
   [generateExecutionObservationsTool.name]: generateExecutionObservationsTool,
   [getProactiveAdvisoriesTool.name]: getProactiveAdvisoriesTool,
   [getOperationalActivitiesTool.name]: getOperationalActivitiesTool,
+  [getSiteWeekPlanTool.name]: getSiteWeekPlanTool,
+  [getOperationalFrequenciesTool.name]: getOperationalFrequenciesTool,
+  [getTractorRouteTool.name]: getTractorRouteTool,
+  [getMonthCarryoverTool.name]: getMonthCarryoverTool,
 };
 
 export function getToolDefinition(name: string): AiToolDefinition | undefined {

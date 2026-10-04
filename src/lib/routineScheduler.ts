@@ -237,6 +237,66 @@ export function getMonthlyCandidateWeeks(targetMondayInput: Date | string): Cand
 export const TRACTOR_PACKAGE_ACTIVITIES = ['1.10', '1.11', '1.12', '1.13', '1.14'] as const;
 
 /**
+ * Construye las unidades de tractor a partir de los grupos del tablero y las frecuencias de la actividad 1.15.
+ * Empareja Country y Sabanilla 2 como una sola unidad tractor si ambas existen en el tablero.
+ */
+export function buildTractorUnits(
+  boardGroups: Array<{ id: string; title: string }>,
+  tractorRows: Array<{ group_id: string; visits_per_month: number | string }>
+): { tractorUnits: TractorUnit[]; tractorPairUnresolved: boolean } {
+  const groupTitleById = new Map<string, string>();
+  for (const g of boardGroups || []) {
+    groupTitleById.set(g.id, g.title);
+  }
+
+  const countryGroup = (boardGroups || []).find(
+    (g: any) => g.title && g.title.trim().toUpperCase() === 'PLAYA DEL COUNTRY'
+  );
+  const sabanillaGroup = (boardGroups || []).find(
+    (g: any) => g.title && g.title.trim().toUpperCase() === 'PLAYA DE SABANILLA 2'
+  );
+
+  const rows = tractorRows || [];
+  const countryRow = countryGroup ? rows.find((r: any) => r.group_id === countryGroup.id) : undefined;
+  const sabanillaRow = sabanillaGroup ? rows.find((r: any) => r.group_id === sabanillaGroup.id) : undefined;
+
+  const tractorUnits: TractorUnit[] = [];
+  const processedGroupIds = new Set<string>();
+  let tractorPairUnresolved = false;
+
+  if (countryRow && sabanillaRow && countryGroup && sabanillaGroup) {
+    const pairIds = [countryGroup.id, sabanillaGroup.id].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    const maxVisits = Math.max(Number(countryRow.visits_per_month), Number(sabanillaRow.visits_per_month));
+    tractorUnits.push({
+      unitKey: pairIds[0],
+      groupIds: pairIds,
+      visitsPerMonth: maxVisits,
+      groupTitles: [countryGroup.title, sabanillaGroup.title],
+      isPair: true,
+    });
+    processedGroupIds.add(countryGroup.id);
+    processedGroupIds.add(sabanillaGroup.id);
+  } else {
+    tractorPairUnresolved = true;
+  }
+
+  for (const r of rows) {
+    if (processedGroupIds.has(r.group_id)) continue;
+    const gTitle = groupTitleById.get(r.group_id) || r.group_id;
+    tractorUnits.push({
+      unitKey: r.group_id,
+      groupIds: [r.group_id],
+      visitsPerMonth: Number(r.visits_per_month),
+      groupTitles: [gTitle],
+      isPair: false,
+    });
+    processedGroupIds.add(r.group_id);
+  }
+
+  return { tractorUnits, tractorPairUnresolved };
+}
+
+/**
  * Decisión D31 (Tomás, 2026-10-03): Cálculo determinista de la ruta semanal del tractor con barber.
  *
  * Asigna los días de visita del único tractor disponible a las unidades de playa,

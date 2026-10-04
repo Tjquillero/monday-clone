@@ -12,6 +12,7 @@ import {
   generateRoutineScheduleForWeek,
   getMonthlyCandidateWeeks,
   computeTractorRouteForWeek,
+  buildTractorUnits,
   TractorUnit,
   TractorRouteResult,
   TRACTOR_PACKAGE_ACTIVITIES,
@@ -542,52 +543,12 @@ export async function ensureWeeklyPlanMaterialized(
       throw new Error(`TRACTOR_ROUTE_READ_FAILED: ${boardGroupsErr.message || 'Error al consultar groups para la ruta del tractor'}`);
     }
 
-    const groupTitleById = new Map<string, string>();
-    for (const g of boardGroups || []) {
-      groupTitleById.set(g.id, g.title);
-    }
-
-    const countryGroup = (boardGroups || []).find(
-      (g: any) => g.title && g.title.trim().toUpperCase() === 'PLAYA DEL COUNTRY'
+    const { tractorUnits, tractorPairUnresolved: pairUnresolved } = buildTractorUnits(
+      boardGroups || [],
+      tractorFreqRows || []
     );
-    const sabanillaGroup = (boardGroups || []).find(
-      (g: any) => g.title && g.title.trim().toUpperCase() === 'PLAYA DE SABANILLA 2'
-    );
-
-    const tractorRows = tractorFreqRows || [];
-    const countryRow = countryGroup ? tractorRows.find((r: any) => r.group_id === countryGroup.id) : undefined;
-    const sabanillaRow = sabanillaGroup ? tractorRows.find((r: any) => r.group_id === sabanillaGroup.id) : undefined;
-
-    const tractorUnits: TractorUnit[] = [];
-    const processedGroupIds = new Set<string>();
-
-    if (countryRow && sabanillaRow && countryGroup && sabanillaGroup) {
-      const pairIds = [countryGroup.id, sabanillaGroup.id].sort(compareStringsCode);
-      const maxVisits = Math.max(Number(countryRow.visits_per_month), Number(sabanillaRow.visits_per_month));
-      tractorUnits.push({
-        unitKey: pairIds[0],
-        groupIds: pairIds,
-        visitsPerMonth: maxVisits,
-        groupTitles: [countryGroup.title, sabanillaGroup.title],
-        isPair: true,
-      });
-      processedGroupIds.add(countryGroup.id);
-      processedGroupIds.add(sabanillaGroup.id);
-    } else {
+    if (pairUnresolved) {
       tractorPairUnresolved = true;
-    }
-
-    for (const r of tractorRows) {
-      if (processedGroupIds.has(r.group_id)) continue;
-      const gTitle = groupTitleById.get(r.group_id) || r.group_id;
-      tractorUnits.push({
-        unitKey: r.group_id,
-        groupIds: [r.group_id],
-        visitsPerMonth: Number(r.visits_per_month),
-        groupTitles: [gTitle],
-        isPair: false,
-      });
-      processedGroupIds.add(r.group_id);
     }
 
     const tractorRouteResult = computeTractorRouteForWeek(

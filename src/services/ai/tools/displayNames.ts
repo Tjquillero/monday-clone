@@ -18,6 +18,10 @@ export const TOOL_DISPLAY_NAMES: Record<string, string> = {
   generate_execution_observations: 'Observaciones de la jornada',
   get_proactive_advisories: 'Recomendaciones operacionales proactivas',
   get_operational_activities: 'Actividades operativas y alcance contractual',
+  get_site_week_plan: 'Cronograma semanal del sitio',
+  get_operational_frequencies: 'Frecuencias operativas del contrato',
+  get_tractor_route: 'Ruta semanal del tractor',
+  get_month_carryover: 'Arrastre proyectado al mes siguiente',
 };
 
 export function getToolDisplayName(tool: string): string {

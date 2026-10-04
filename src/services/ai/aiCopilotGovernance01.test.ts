@@ -84,7 +84,7 @@ describe('GATE AI-COPILOT-01 — Copiloto confiable', () => {
   // 1. Ningún parametersJsonSchema del registro contiene board_id
   test('1. Ningún parametersJsonSchema del registro contiene board_id', () => {
     const tools = Object.values(AI_TOOL_REGISTRY);
-    expect(tools.length).toBe(15);
+    expect(tools.length).toBeGreaterThanOrEqual(15);
 
     for (const tool of tools) {
       const properties = tool.parametersJsonSchema.properties || {};

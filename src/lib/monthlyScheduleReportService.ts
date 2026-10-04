@@ -179,6 +179,55 @@ export async function fetchAllRows<T>(
 }
 
 /**
+ * Extrae y clasifica el arrastre al mes siguiente a partir de los eventos de materialización.
+ * Reutilizada por el reporte mensual (PDF) y por el copiloto de IA (get_month_carryover).
+ */
+export function extractCarryoverFromEvents(
+  matEvents: any[] | null | undefined,
+  activityMetaMap: Map<string, { description: string; unit: string }>
+): Map<string, { status: 'NO_DATA' | 'NONE' | 'ITEMS'; items: CarryoverMonthItem[] }> {
+  const carryoverByGroup = new Map<
+    string,
+    { status: 'NO_DATA' | 'NONE' | 'ITEMS'; items: CarryoverMonthItem[] }
+  >();
+
+  for (const ev of matEvents || []) {
+    if (ev.status === 'FAILED') continue;
+    if (carryoverByGroup.has(ev.group_id)) continue;
+
+    const payload = ev.payload as any;
+    const rawCarry =
+      payload?.carryover_next_month_projection ?? payload?.carryover_next_month;
+
+    // Solo considerar si el payload tiene carryover_next_month_projection (o alias) como arreglo (C1)
+    if (!Array.isArray(rawCarry)) {
+      continue;
+    }
+
+    if (rawCarry.length === 0) {
+      carryoverByGroup.set(ev.group_id, { status: 'NONE', items: [] });
+    } else {
+      const items: CarryoverMonthItem[] = rawCarry.map((c: any) => {
+        const meta = activityMetaMap.get(c.activity_key) || {
+          description: c.activity_key,
+          unit: 'UND',
+        };
+        return {
+          activity_key: c.activity_key,
+          description: meta.description,
+          unit: meta.unit,
+          qty: Number(c.qty || 0),
+          jr: Number(c.jr || 0),
+        };
+      });
+      carryoverByGroup.set(ev.group_id, { status: 'ITEMS', items });
+    }
+  }
+
+  return carryoverByGroup;
+}
+
+/**
  * Recopila todos los datos requeridos para el reporte mensual del cronograma a partir de la base de datos viva.
  */
 export async function buildMonthlyScheduleReportData(
@@ -380,43 +429,7 @@ export async function buildMonthlyScheduleReportData(
     throw new Error(`SCHEDULE_REPORT_READ_FAILED: materialization_events: ${matErr.message}`);
   }
 
-  const carryoverByGroup = new Map<
-    string,
-    { status: 'NO_DATA' | 'NONE' | 'ITEMS'; items: CarryoverMonthItem[] }
-  >();
-
-  for (const ev of matEvents || []) {
-    if (ev.status === 'FAILED') continue;
-    if (carryoverByGroup.has(ev.group_id)) continue;
-
-    const payload = ev.payload as any;
-    const rawCarry =
-      payload?.carryover_next_month_projection ?? payload?.carryover_next_month;
-
-    // Solo considerar si el payload tiene carryover_next_month_projection (o alias) como arreglo (C1)
-    if (!Array.isArray(rawCarry)) {
-      continue;
-    }
-
-    if (rawCarry.length === 0) {
-      carryoverByGroup.set(ev.group_id, { status: 'NONE', items: [] });
-    } else {
-      const items: CarryoverMonthItem[] = rawCarry.map((c: any) => {
-        const meta = activityMetaMap.get(c.activity_key) || {
-          description: c.activity_key,
-          unit: 'UND',
-        };
-        return {
-          activity_key: c.activity_key,
-          description: meta.description,
-          unit: meta.unit,
-          qty: Number(c.qty || 0),
-          jr: Number(c.jr || 0),
-        };
-      });
-      carryoverByGroup.set(ev.group_id, { status: 'ITEMS', items });
-    }
-  }
+  const carryoverByGroup = extractCarryoverFromEvents(matEvents, activityMetaMap);
 
   // 9. Construir estructura de reporte por cada sitio
   const holidays = getColombianHolidays(year).filter((h) => {
