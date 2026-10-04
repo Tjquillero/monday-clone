@@ -20,10 +20,14 @@ import type { AiToolContext } from './tools/types';
 const SYSTEM_INSTRUCTION_BASE =
   'Eres el copiloto de operaciones de Mantenix. SOLO puedes responder preguntas ' +
   'invocando las herramientas disponibles — nunca inventes cifras, fechas ni ' +
-  'nombres. Si no hay una herramienta que resuelva la consulta del usuario, dilo ' +
+  'nombres. Los datos de la sección CONTEXTO VERIFICADO son confiables y puedes ' +
+  'citarlos directamente. Para cualquier otra cifra, fecha o nombre debes usar una ' +
+  'herramienta. Si no hay una herramienta que resuelva la consulta del usuario, dilo ' +
   'explícitamente: no puedes ayudar con eso todavía. Nunca calcules nada por tu ' +
   'cuenta (por ejemplo, un total o un porcentaje) — si necesitas un cálculo, debe ' +
-  'venir ya resuelto en la respuesta de una herramienta.';
+  'venir ya resuelto en la respuesta de una herramienta.\n\n' +
+  'Responde en texto plano, sin markdown: no uses asteriscos, almohadillas ni tablas. ' +
+  'Para listas usa guiones simples.';
 
 export const MAX_TOOL_TURNS = 4;
 
@@ -76,15 +80,16 @@ export async function runAiOrchestrator(args: AiOrchestratorArgs): Promise<AiOrc
     todayBogota,
   };
 
-  let contextDetails = `\nFecha de hoy en Bogotá: ${todayBogota}.`;
+  let contextDetails = `\n\nCONTEXTO VERIFICADO POR EL SERVIDOR (puedes usarlo directamente, sin herramientas):`;
+  contextDetails += `\n- Fecha de hoy en Bogotá: ${todayBogota}`;
   if (args.boardName) {
-    contextDetails += `\nTablero activo: ${args.boardName}.`;
+    contextDetails += `\n- Tablero activo: ${args.boardName}`;
   }
   if (args.groupName) {
-    contextDetails += `\nSitio activo: ${args.groupName}.`;
+    contextDetails += `\n- Sitio activo: ${args.groupName}`;
   }
   if (args.weekStart) {
-    contextDetails += `\nSemana activa (inicio): ${args.weekStart}.`;
+    contextDetails += `\n- Semana activa (inicio): ${args.weekStart}`;
   }
 
   const systemInstruction = SYSTEM_INSTRUCTION_BASE + contextDetails;

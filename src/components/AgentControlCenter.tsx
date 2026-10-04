@@ -52,6 +52,13 @@ function formatWeekHeader(weekStartStr: string | null | undefined): string | nul
   return `semana del ${dayStr}-${monthStr}`;
 }
 
+export function cleanMarkdownText(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/__(.*?)__/g, '$1');
+}
+
 // Sin board seleccionado (vistas globales) usa su propio balde de memoria —
 // nunca comparte historial con un board real.
 const NO_BOARD_KEY = '__no_board__';
@@ -59,16 +66,19 @@ const NO_BOARD_KEY = '__no_board__';
 interface BoardChatState {
   messages: Message[];
   conversation: ConversationState;
+  serverGroupName?: string | null;
 }
 
 export default function AgentControlCenter() {
   const searchParams = useSearchParams();
   const boardId = searchParams?.get('boardId') ?? null;
+  const urlGroupId = searchParams?.get('groupId') ?? null;
   const boardKey = boardId ?? NO_BOARD_KEY;
   const plannerContext = useCopilotPlannerContext();
 
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [serverGroupName, setServerGroupName] = useState<string | null>(null);
   const [input, setInput] = useState('');
   // Por board, igual que messages/conversation: un useState global aquí
   // dejaba "cargando" atascado para siempre si el usuario cambiaba de board
@@ -97,7 +107,9 @@ export default function AgentControlCenter() {
 
   useEffect(() => {
     boardKeyRef.current = boardKey;
-    setMessages(chatStoreRef.current.get(boardKey)?.messages ?? []);
+    const store = chatStoreRef.current.get(boardKey);
+    setMessages(store?.messages ?? []);
+    setServerGroupName(store?.serverGroupName ?? null);
   }, [boardKey]);
 
   useEffect(() => {
@@ -121,7 +133,11 @@ export default function AgentControlCenter() {
     const targetBoardKey = boardKeyRef.current;
     const before = chatStoreRef.current.get(targetBoardKey) ?? { messages: [], conversation: EMPTY_CONVERSATION };
     const withUserMsg: Message[] = [...before.messages, { role: 'user', content: textToSend }];
-    chatStoreRef.current.set(targetBoardKey, { messages: withUserMsg, conversation: before.conversation });
+    chatStoreRef.current.set(targetBoardKey, {
+      messages: withUserMsg,
+      conversation: before.conversation,
+      serverGroupName: before.serverGroupName,
+    });
     if (boardKeyRef.current === targetBoardKey) setMessages(withUserMsg);
     setLoadingBoards((prev) => new Set(prev).add(targetBoardKey));
 
@@ -130,6 +146,7 @@ export default function AgentControlCenter() {
       // Orchestrator también recorta defensivamente al recibirlo, así que
       // un cliente que no recortara no rompería nada, solo enviaría de más.
       const historyToSend = trimConversationState(before.conversation);
+      const effectiveGroupId = plannerContext.groupId ?? urlGroupId;
 
       const res = await fetch('/api/ai/ask', {
         method: 'POST',
@@ -137,12 +154,17 @@ export default function AgentControlCenter() {
         body: JSON.stringify({
           message: textToSend,
           boardId: targetBoardKey === NO_BOARD_KEY ? null : targetBoardKey,
-          groupId: plannerContext.groupId,
+          groupId: effectiveGroupId,
           weekStart: plannerContext.weekStart,
           history: historyToSend,
         }),
       });
       const data = await res.json();
+
+      const groupNameFromServer = data.context?.groupName ?? before.serverGroupName ?? null;
+      if (res.ok && data.context?.groupName && boardKeyRef.current === targetBoardKey) {
+        setServerGroupName(data.context.groupName);
+      }
 
       const latest = chatStoreRef.current.get(targetBoardKey) ?? { messages: withUserMsg, conversation: before.conversation };
       const newMessages: Message[] = res.ok
@@ -158,7 +180,11 @@ export default function AgentControlCenter() {
           ];
       const newConversation: ConversationState = res.ok && data.history ? data.history : latest.conversation;
 
-      chatStoreRef.current.set(targetBoardKey, { messages: newMessages, conversation: newConversation });
+      chatStoreRef.current.set(targetBoardKey, {
+        messages: newMessages,
+        conversation: newConversation,
+        serverGroupName: groupNameFromServer,
+      });
       if (boardKeyRef.current === targetBoardKey) setMessages(newMessages);
     } catch {
       const latest = chatStoreRef.current.get(targetBoardKey) ?? { messages: withUserMsg, conversation: before.conversation };
@@ -189,8 +215,9 @@ export default function AgentControlCenter() {
   let headerSubtitle = boardId ? 'Tablero activo' : 'Sin board seleccionado';
   if (boardId) {
     const parts = ['Tablero activo'];
-    if (plannerContext.groupTitle) {
-      parts.push(plannerContext.groupTitle);
+    const activeSiteName = plannerContext.groupTitle || serverGroupName;
+    if (activeSiteName) {
+      parts.push(activeSiteName);
     }
     const formattedWeek = formatWeekHeader(plannerContext.weekStart);
     if (formattedWeek) {
@@ -288,7 +315,9 @@ export default function AgentControlCenter() {
                         </span>
                         <div className="h-[1px] flex-1 bg-current opacity-20" />
                       </div>
-                      <div className="whitespace-pre-wrap">{m.content}</div>
+                      <div className="whitespace-pre-wrap">
+                        {m.role === 'assistant' ? cleanMarkdownText(m.content) : m.content}
+                      </div>
                       {m.role === 'assistant' && m.errorCode === 'AI_UNAVAILABLE' && m.retryMessage && (
                         <button
                           type="button"

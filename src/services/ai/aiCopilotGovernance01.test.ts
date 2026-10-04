@@ -145,8 +145,8 @@ describe('GATE AI-COPILOT-01 — Copiloto confiable', () => {
     expect(mockRpc).toHaveBeenCalledWith('get_current_board', { p_board_id: serverBoardId });
   });
 
-  // 3. systemInstruction no contiene ningún UUID
-  test('3. systemInstruction no contiene ningún UUID', async () => {
+  // 3. systemInstruction contiene "CONTEXTO VERIFICADO", la fecha de hoy, el nombre del sitio, la regla de texto plano y no contiene ningún UUID
+  test('3. systemInstruction contiene CONTEXTO VERIFICADO, fecha, sitio, texto plano y ningún UUID', async () => {
     const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
     let capturedConfig: any = null;
@@ -171,9 +171,12 @@ describe('GATE AI-COPILOT-01 — Copiloto confiable', () => {
 
     expect(capturedConfig).toBeDefined();
     expect(capturedConfig.systemInstruction).toBeDefined();
+    expect(capturedConfig.systemInstruction).toContain('CONTEXTO VERIFICADO');
+    expect(capturedConfig.systemInstruction).toMatch(/Fecha de hoy en Bogotá:/);
     expect(capturedConfig.systemInstruction).toMatch(/Tablero activo: Tablero Principal de Playas/);
     expect(capturedConfig.systemInstruction).toMatch(/Sitio activo: Playa Country/);
     expect(capturedConfig.systemInstruction).toMatch(/Semana activa \(inicio\): 2026-10-05/);
+    expect(capturedConfig.systemInstruction).toMatch(/texto plano, sin markdown/i);
     expect(capturedConfig.systemInstruction).not.toMatch(uuidRegex);
   });
 
@@ -253,8 +256,8 @@ describe('GATE AI-COPILOT-01 — Copiloto confiable', () => {
     expect(request400).toHaveBeenCalledTimes(MODELS_TO_TRY.length);
   });
 
-  // 6. La ruta responde 403 AI_FORBIDDEN si el usuario no está en board_members; ignora groupId de otro board
-  test('6. La ruta responde 403 AI_FORBIDDEN si no es miembro y valida pertenencia de groupId', async () => {
+  // 6. La ruta responde 403 AI_FORBIDDEN si no es miembro y devuelve context con groupName solo si groupId pertenece al tablero
+  test('6. La ruta responde 403 AI_FORBIDDEN si no es miembro y valida pertenencia de groupId devolviendo context', async () => {
     // 6a: No autenticado
     mockGetUser.mockResolvedValueOnce({ data: { user: null } });
     const req1 = new NextRequest('http://localhost:3000/api/ai/ask', {
@@ -290,6 +293,76 @@ describe('GATE AI-COPILOT-01 — Copiloto confiable', () => {
     const data2 = await res2.json();
     expect(data2.code).toBe('AI_FORBIDDEN');
     expect(data2.error).toBe('No tienes acceso a este tablero.');
+
+    // 6c: Usuario miembro del board con groupId válido
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'board_members') {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: { id: 'bm-1' }, error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === 'boards') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: { name: 'Tablero Playas' }, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === 'groups') {
+        return {
+          select: () => ({
+            eq: (col: string, val: string) => ({
+              eq: () => ({
+                maybeSingle: async () => {
+                  if (val === 'group-valid') {
+                    return { data: { id: 'group-valid', title: 'Sector Central' }, error: null };
+                  }
+                  return { data: null, error: null };
+                },
+              }),
+            }),
+          }),
+        };
+      }
+      return {};
+    });
+
+    mockGenerateContent.mockResolvedValueOnce({
+      candidates: [{ content: { role: 'model', parts: [{ text: 'OK' }] } }],
+    });
+
+    const reqValidGroup = new NextRequest('http://localhost:3000/api/ai/ask', {
+      method: 'POST',
+      body: JSON.stringify({ message: 'hola', boardId: 'board-member', groupId: 'group-valid' }),
+    });
+    const resValid = await POST(reqValidGroup);
+    expect(resValid.status).toBe(200);
+    const dataValid = await resValid.json();
+    expect(dataValid.context).toBeDefined();
+    expect(dataValid.context.groupName).toBe('Sector Central');
+
+    // 6d: Usuario miembro del board pero groupId pertenece a otro board (o no existe)
+    mockGenerateContent.mockResolvedValueOnce({
+      candidates: [{ content: { role: 'model', parts: [{ text: 'OK' }] } }],
+    });
+
+    const reqInvalidGroup = new NextRequest('http://localhost:3000/api/ai/ask', {
+      method: 'POST',
+      body: JSON.stringify({ message: 'hola', boardId: 'board-member', groupId: 'group-other-board' }),
+    });
+    const resInvalid = await POST(reqInvalidGroup);
+    expect(resInvalid.status).toBe(200);
+    const dataInvalid = await resInvalid.json();
+    expect(dataInvalid.context).toBeDefined();
+    expect(dataInvalid.context.groupName).toBeNull();
   });
 
   // 7. Presupuesto de tiempo total: con deadlineMs insuficiente tras 503, aborta de inmediato sin esperas ni reintentos

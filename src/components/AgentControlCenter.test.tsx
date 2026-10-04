@@ -1,6 +1,6 @@
 /// <reference types="@testing-library/jest-dom" />
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import AgentControlCenter from './AgentControlCenter';
 
 // Memoria conversacional por board: el widget vive montado globalmente y
@@ -11,9 +11,19 @@ import AgentControlCenter from './AgentControlCenter';
 // una llamada real a Gemini.
 
 let currentBoardId: string | null = 'board-a';
+let currentGroupId: string | null = null;
 jest.mock('next/navigation', () => ({
-  useSearchParams: () => ({ get: (key: string) => (key === 'boardId' ? currentBoardId : null) }),
+  useSearchParams: () => ({
+    get: (key: string) => {
+      if (key === 'boardId') return currentBoardId;
+      if (key === 'groupId') return currentGroupId;
+      return null;
+    },
+  }),
 }));
+
+import { setCopilotPlannerContext, clearCopilotPlannerContext } from '@/lib/copilotContext';
+import { cleanMarkdownText } from './AgentControlCenter';
 
 // La sugerencia proactiva se prueba aparte (useAiProactiveSummary.test.ts) —
 // aquí se mockea para no requerir credenciales reales de Supabase (el hook
@@ -336,5 +346,136 @@ describe('AgentControlCenter — sugerencia proactiva', () => {
 
     await waitFor(() => expect(screen.getByText('Respuesta real')).toBeInTheDocument());
     expect(screen.queryByText('Aviso automático')).not.toBeInTheDocument();
+  });
+});
+
+describe('AgentControlCenter — resolución de groupId y contexto de sitio (URL vs plannerContext)', () => {
+  beforeEach(() => {
+    currentBoardId = 'board-x';
+    currentGroupId = null;
+    act(() => {
+      clearCopilotPlannerContext();
+    });
+    mockProactiveSummary = null;
+    (global as any).fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    act(() => {
+      clearCopilotPlannerContext();
+    });
+    jest.resetAllMocks();
+  });
+
+  async function openWidget() {
+    const toggleButton = screen.getAllByRole('button')[0];
+    fireEvent.click(toggleButton);
+    return screen.findByPlaceholderText(/Pregunta algo/i);
+  }
+
+  it('2. con ?boardId=X&groupId=Y en la URL y sin contexto del planificador, envía groupId: Y en el body', async () => {
+    currentBoardId = 'board-x';
+    currentGroupId = 'group-y';
+
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        text: 'Respuesta con contexto de sitio Y',
+        citations: [],
+        history: { contents: [] },
+        context: { boardName: 'Board X', groupName: 'Sitio Y', weekStart: null, todayBogota: '2026-10-03' },
+      }),
+    });
+
+    render(<AgentControlCenter />);
+    const input = await openWidget();
+
+    fireEvent.change(input, { target: { value: '¿Qué tareas hay en este sitio?' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => expect(screen.getByText('Respuesta con contexto de sitio Y')).toBeInTheDocument());
+
+    expect((global.fetch as jest.Mock)).toHaveBeenCalledTimes(1);
+    const sentBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(sentBody.boardId).toBe('board-x');
+    expect(sentBody.groupId).toBe('group-y');
+    expect(sentBody.weekStart).toBeNull();
+  });
+
+  it('3. con contexto del planificador (groupId: Z) y ?groupId=Y en la URL, envía Z', async () => {
+    currentBoardId = 'board-x';
+    currentGroupId = 'group-y';
+
+    act(() => {
+      setCopilotPlannerContext({
+        groupId: 'group-z',
+        groupTitle: 'Sitio Z',
+        weekStart: '2026-10-05',
+      });
+    });
+
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        text: 'Respuesta con contexto de planificador Z',
+        citations: [],
+        history: { contents: [] },
+      }),
+    });
+
+    render(<AgentControlCenter />);
+    const input = await openWidget();
+
+    fireEvent.change(input, { target: { value: '¿Cuál es el avance semanal?' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => expect(screen.getByText('Respuesta con contexto de planificador Z')).toBeInTheDocument());
+
+    expect((global.fetch as jest.Mock)).toHaveBeenCalledTimes(1);
+    const sentBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(sentBody.boardId).toBe('board-x');
+    expect(sentBody.groupId).toBe('group-z'); // Prevalece Z sobre Y
+    expect(sentBody.weekStart).toBe('2026-10-05');
+  });
+});
+
+describe('AgentControlCenter — limpieza de markdown en respuestas del asistente', () => {
+  beforeEach(() => {
+    currentBoardId = 'board-a';
+    currentGroupId = null;
+    (global as any).fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  async function openWidget() {
+    const toggleButton = screen.getAllByRole('button')[0];
+    fireEvent.click(toggleButton);
+    return screen.findByPlaceholderText(/Pregunta algo/i);
+  }
+
+  it('4. función cleanMarkdownText y renderizado en UI eliminan asteriscos y guiones bajos dobles', async () => {
+    const rawMarkdown = 'Hola **Tablero** y __sitio__';
+    expect(cleanMarkdownText(rawMarkdown)).toBe('Hola Tablero y sitio');
+
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        text: rawMarkdown,
+        citations: [],
+        history: { contents: [] },
+      }),
+    });
+
+    render(<AgentControlCenter />);
+    const input = await openWidget();
+
+    fireEvent.change(input, { target: { value: 'saludo' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => expect(screen.getByText('Hola Tablero y sitio')).toBeInTheDocument());
+    expect(screen.queryByText(/Hola \*\*Tablero\*\*/)).not.toBeInTheDocument();
   });
 });

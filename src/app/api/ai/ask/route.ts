@@ -97,7 +97,15 @@ export async function POST(req: NextRequest) {
       history: history && Array.isArray(history.contents) ? (history as ConversationState) : undefined,
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      ...result,
+      context: {
+        boardName: boardName ?? null,
+        groupName: groupName ?? null,
+        weekStart: validatedWeekStart ?? null,
+        todayBogota,
+      },
+    });
   } catch (error: any) {
     console.error('Error en /api/ai/ask:', error);
 
