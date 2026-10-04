@@ -1,8 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 
-declare const vi: any;
-
 import {
   resetWeeklyPlan,
   translateResetErrorCode,
@@ -14,7 +12,7 @@ describe('GATE PLAN-REDO-01 — Reprogramar semana gobernada', () => {
   describe('1. resetWeeklyPlan — Traducción de códigos de error y propagación', () => {
     it('traduce RESET_DENIED: no autenticado', async () => {
       const mockSupabase = {
-        rpc: vi.fn().mockResolvedValue({
+        rpc: jest.fn().mockResolvedValue({
           data: null,
           error: { message: 'RESET_DENIED: no autenticado' },
         }),
@@ -34,7 +32,7 @@ describe('GATE PLAN-REDO-01 — Reprogramar semana gobernada', () => {
 
     it('traduce RESET_DENIED genérico (permisos)', async () => {
       const mockSupabase = {
-        rpc: vi.fn().mockResolvedValue({
+        rpc: jest.fn().mockResolvedValue({
           data: null,
           error: { message: 'RESET_DENIED' },
         }),
@@ -47,7 +45,7 @@ describe('GATE PLAN-REDO-01 — Reprogramar semana gobernada', () => {
 
     it('traduce RESET_REASON_REQUIRED', async () => {
       const mockSupabase = {
-        rpc: vi.fn().mockResolvedValue({
+        rpc: jest.fn().mockResolvedValue({
           data: null,
           error: { message: 'RESET_REASON_REQUIRED' },
         }),
@@ -60,7 +58,7 @@ describe('GATE PLAN-REDO-01 — Reprogramar semana gobernada', () => {
 
     it('traduce RESET_PLAN_NOT_FOUND', async () => {
       const mockSupabase = {
-        rpc: vi.fn().mockResolvedValue({
+        rpc: jest.fn().mockResolvedValue({
           data: null,
           error: { message: 'RESET_PLAN_NOT_FOUND' },
         }),
@@ -73,7 +71,7 @@ describe('GATE PLAN-REDO-01 — Reprogramar semana gobernada', () => {
 
     it('traduce RESET_INVALID_STATUS con el estado actual', async () => {
       const mockSupabase = {
-        rpc: vi.fn().mockResolvedValue({
+        rpc: jest.fn().mockResolvedValue({
           data: null,
           error: { message: 'RESET_INVALID_STATUS: in_progress' },
         }),
@@ -86,7 +84,7 @@ describe('GATE PLAN-REDO-01 — Reprogramar semana gobernada', () => {
 
     it('traduce RESET_WEEK_STARTED', async () => {
       const mockSupabase = {
-        rpc: vi.fn().mockResolvedValue({
+        rpc: jest.fn().mockResolvedValue({
           data: null,
           error: { message: 'RESET_WEEK_STARTED' },
         }),
@@ -99,7 +97,7 @@ describe('GATE PLAN-REDO-01 — Reprogramar semana gobernada', () => {
 
     it('traduce RESET_HAS_EXECUTIONS', async () => {
       const mockSupabase = {
-        rpc: vi.fn().mockResolvedValue({
+        rpc: jest.fn().mockResolvedValue({
           data: null,
           error: { message: 'RESET_HAS_EXECUTIONS' },
         }),
@@ -112,7 +110,7 @@ describe('GATE PLAN-REDO-01 — Reprogramar semana gobernada', () => {
 
     it('retorna la cantidad de ítems eliminados en caso de éxito', async () => {
       const mockSupabase = {
-        rpc: vi.fn().mockResolvedValue({
+        rpc: jest.fn().mockResolvedValue({
           data: 42,
           error: null,
         }),
@@ -229,9 +227,9 @@ describe('GATE PLAN-REDO-01 — Reprogramar semana gobernada', () => {
   describe('3. Flujo orquestado: Reset y re-materialización', () => {
     it('dispara la materialización exactamente 1 vez tras un reset exitoso', async () => {
       const mockSupabase = {
-        rpc: vi.fn().mockResolvedValue({ data: 30, error: null }),
+        rpc: jest.fn().mockResolvedValue({ data: 30, error: null }),
       };
-      const mockMaterialize = vi.fn().mockResolvedValue({ notOperational: false });
+      const mockMaterialize = jest.fn().mockResolvedValue({ notOperational: false });
 
       // Simulación del handler handleResetPlan
       const boardId = 'board-1';
@@ -252,12 +250,12 @@ describe('GATE PLAN-REDO-01 — Reprogramar semana gobernada', () => {
 
     it('NO dispara la materialización si el reset falla', async () => {
       const mockSupabase = {
-        rpc: vi.fn().mockResolvedValue({
+        rpc: jest.fn().mockResolvedValue({
           data: null,
           error: { message: 'RESET_WEEK_STARTED' },
         }),
       };
-      const mockMaterialize = vi.fn();
+      const mockMaterialize = jest.fn();
 
       let caughtError: any = null;
       try {

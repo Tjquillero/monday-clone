@@ -484,6 +484,7 @@ export async function ensureWeeklyPlanMaterialized(
   let tractorRoute: Record<string, string[]> = {};
   let tractorDeficits: Array<{ unitKey: string; missingVisits: number }> = [];
   let tractorPairUnresolved = false;
+  let tractorSiteNotInRoute = false;
 
   if (operationalFreqMap.has('1.15')) {
     const { data: tractorFreqRows, error: tractorFreqErr } = await supabase
@@ -557,7 +558,14 @@ export async function ensureWeeklyPlanMaterialized(
       options.customNonWorkingDays
     );
 
-    tractorDaysForSite = tractorRouteResult.daysByGroup.get(gId) ?? [];
+    // Si el sitio no está en ninguna unidad de la ruta, una lista vacía haría
+    // desaparecer la 1.15 de toda la semana sin aviso: se programa como antes de D31.
+    if (!tractorUnits.some((u) => u.groupIds.includes(gId))) {
+      tractorSiteNotInRoute = true;
+      tractorDaysForSite = undefined;
+    } else {
+      tractorDaysForSite = tractorRouteResult.daysByGroup.get(gId) ?? [];
+    }
     tractorRoute = tractorRouteResult.routeByDate || {};
     tractorDeficits = tractorRouteResult.deficits;
   }
@@ -1354,6 +1362,7 @@ export async function ensureWeeklyPlanMaterialized(
     tractor_day_over_capacity: projection.tractor_day_over_capacity || [],
     tractor_package_not_aligned: projection.tractor_package_not_aligned || [],
     ...(tractorPairUnresolved ? { tractor_pair_unresolved: true } : {}),
+    ...(tractorSiteNotInRoute ? { tractor_site_not_in_route: true } : {}),
   };
   let finalStatus = classification.status;
 

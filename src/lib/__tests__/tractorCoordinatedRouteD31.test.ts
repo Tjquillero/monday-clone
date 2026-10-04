@@ -12,11 +12,6 @@
  * 8. Error leyendo operational_frequencies para la ruta -> evento FAILED en etapa tractor_route_read.
  */
 
-if (typeof (globalThis as any).jest === 'undefined' && typeof (globalThis as any).vi !== 'undefined') {
-  (globalThis as any).jest = (globalThis as any).vi;
-}
-const vi = (globalThis as any).vi || (globalThis as any).jest;
-
 import {
   computeTractorRouteForWeek,
   generateRoutineScheduleForWeek,
@@ -26,9 +21,9 @@ import {
 import { ensureWeeklyPlanMaterialized } from '../scheduleMaterializationService';
 import { syncWeeklyPlanForBoard } from '../weeklyPlanService';
 
-vi.mock('../weeklyPlanService', () => ({
+jest.mock('../weeklyPlanService', () => ({
   __esModule: true,
-  syncWeeklyPlanForBoard: vi.fn().mockResolvedValue({ success: true, count: 1 }),
+  syncWeeklyPlanForBoard: jest.fn().mockResolvedValue({ success: true, count: 1 }),
 }));
 
 describe('GATE FREQ-OP-06 — Decisión D31: Un solo tractor coordinado entre playas', () => {
@@ -275,14 +270,14 @@ describe('GATE FREQ-OP-06 — Decisión D31: Un solo tractor coordinado entre pl
   test('8. Error leyendo operational_frequencies para la ruta -> evento FAILED en tractor_route_read sin escrituras', async () => {
     function createMockQuery(data: any = null, error: any = null) {
       const obj: any = {};
-      obj.select = vi.fn(() => obj);
-      obj.eq = vi.fn(() => obj);
-      obj.is = vi.fn(() => obj);
-      obj.in = vi.fn(() => obj);
-      obj.order = vi.fn(() => obj);
-      obj.limit = vi.fn(() => obj);
-      obj.maybeSingle = vi.fn().mockResolvedValue({ data, error });
-      obj.single = vi.fn().mockResolvedValue({ data, error });
+      obj.select = jest.fn(() => obj);
+      obj.eq = jest.fn(() => obj);
+      obj.is = jest.fn(() => obj);
+      obj.in = jest.fn(() => obj);
+      obj.order = jest.fn(() => obj);
+      obj.limit = jest.fn(() => obj);
+      obj.maybeSingle = jest.fn().mockResolvedValue({ data, error });
+      obj.single = jest.fn().mockResolvedValue({ data, error });
       obj.then = (resolve: any) => Promise.resolve({ data, count: Array.isArray(data) ? data.length : 0, error }).then(resolve);
       return obj;
     }
@@ -291,12 +286,12 @@ describe('GATE FREQ-OP-06 — Decisión D31: Un solo tractor coordinado entre pl
     let syncRpcCalled = false;
 
     const mockSupabase: any = {
-      from: vi.fn((table: string) => {
+      from: jest.fn((table: string) => {
         if (table === 'operational_frequencies') {
           return {
-            select: vi.fn(() => ({
-              eq: vi.fn((field1: string, val1: any) => ({
-                eq: vi.fn((field2: string, val2: any) => {
+            select: jest.fn(() => ({
+              eq: jest.fn((field1: string, val1: any) => ({
+                eq: jest.fn((field2: string, val2: any) => {
                   if (field2 === 'activity_key' && val2 === '1.15') {
                     return createMockQuery(null, { message: 'Database query timeout reading 1.15 frequencies' });
                   }
@@ -334,7 +329,7 @@ describe('GATE FREQ-OP-06 — Decisión D31: Un solo tractor coordinado entre pl
         }
         return createMockQuery([]);
       }),
-      rpc: vi.fn((rpcName: string, params: any) => {
+      rpc: jest.fn((rpcName: string, params: any) => {
         if (rpcName === 'log_materialization_event_rpc') {
           loggedEvents.push(params);
           return Promise.resolve({ data: 'evt_1', error: null });
@@ -495,6 +490,124 @@ describe('GATE FREQ-OP-06 — Decisión D31: Un solo tractor coordinado entre pl
       expect(items[0].dateStr).not.toBe('2026-10-12'); // No cae en el festivo
       // Debe caer en un día hábil de esa semana (martes 13 a sábado 17)
       expect(['2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17']).toContain(items[0].dateStr);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // FREQ-OP-06c: la 1.15 no desaparece si el sitio no queda en la ruta del tractor
+  // ---------------------------------------------------------------------------
+  describe('FREQ-OP-06c — Sitio fuera de la ruta vs. déficit dentro de la ruta', () => {
+    const BOARD = 'b1';
+
+    function createChainQuery(data: any) {
+      const q: any = {
+        select: () => q,
+        eq: () => q,
+        in: () => q,
+        is: () => q,
+        order: () => q,
+        limit: () => q,
+        maybeSingle: () => Promise.resolve({ data, error: null }),
+        single: () => Promise.resolve({ data, error: null }),
+        then: (resolve: any) => resolve({ data, error: null, count: Array.isArray(data) ? data.length : data ? 1 : 0 }),
+      };
+      return q;
+    }
+
+    // operational_frequencies: la lectura de la ruta filtra por activity_key; la del sitio no.
+    function createOpFreqQuery(siteRows: any[], routeRows: any[]) {
+      let isRouteRead = false;
+      const q: any = {
+        select: () => q,
+        eq: (field: string) => {
+          if (field === 'activity_key') isRouteRead = true;
+          return q;
+        },
+        then: (resolve: any) => {
+          const data = isRouteRead ? routeRows : siteRows;
+          return resolve({ data, error: null, count: data.length });
+        },
+      };
+      return q;
+    }
+
+    async function materialize(siteId: string, weekStart: string, routeRows: any[], groups: any[]) {
+      const syncedItems: any[] = [];
+      const loggedEvents: any[] = [];
+
+      const mockSupabase: any = {
+        from: jest.fn((table: string) => {
+          if (table === 'operational_frequencies') {
+            return createOpFreqQuery(
+              [{ activity_key: '1.15', visits_per_month: 4, source: 'CRONOGRAMA' }],
+              routeRows
+            );
+          }
+          if (table === 'groups') return createChainQuery(groups);
+          if (table === 'poa') return createChainQuery([{ id: 'poa_1', board_id: BOARD }]);
+          if (table === 'poa_versions') return createChainQuery([{ id: 'poa_v1', poa_id: 'poa_1', status: 'active' }]);
+          if (table === 'poa_activities') return createChainQuery([{ id: 'pa_1', poa_version_id: 'poa_v1', activity_key: '1.15', frecuencia: 4 }]);
+          if (table === 'poa_activity_zones') return createChainQuery([{ id: 'paz_1', poa_activity_id: 'pa_1', zone_id: siteId, cantidad_contratada: 5000 }]);
+          if (table === 'board_activity_standards') {
+            return createChainQuery([{ id: 'std_1', board_id: BOARD, activity_key: '1.15', name: 'Tractor', category: 'Playas', unit: 'M2', rendimiento: 10000, requiere_rendimiento: true }]);
+          }
+          if (table === 'weekly_plan_items') return createChainQuery([]);
+          return createChainQuery(null);
+        }),
+        rpc: jest.fn((rpcName: string, params: any) => {
+          if (rpcName === 'log_materialization_event_rpc') {
+            loggedEvents.push(params);
+            return Promise.resolve({ data: 'evt_1', error: null });
+          }
+          if (rpcName === 'ensure_weekly_plan_header') {
+            return Promise.resolve({ data: 'wp_1', error: null });
+          }
+          if (rpcName === 'sync_weekly_plan_items_rpc') {
+            const rows = (params.p_items || []).map((i: any) => ({ id: `row_${i.planned_sequence}`, plan_id: params.p_plan_id, ...i }));
+            syncedItems.push(...rows);
+            return Promise.resolve({ data: rows, error: null });
+          }
+          return Promise.resolve({ data: null, error: null });
+        }),
+      };
+
+      await ensureWeeklyPlanMaterialized(mockSupabase, BOARD, siteId, weekStart);
+      const summary = loggedEvents.find((e) => e.p_event_type === 'SITE_MATERIALIZATION_SUMMARY');
+      return { syncedItems, summary };
+    }
+
+    test('06c.1: sitio con 1.15 fuera de las filas de la ruta -> la 1.15 se programa con su frecuencia normal y se avisa', async () => {
+      const { syncedItems, summary } = await materialize(
+        'g1',
+        '2026-10-05',
+        [{ group_id: 'g_otro', visits_per_month: 4 }],
+        [{ id: 'g1', title: 'SITIO UNO' }, { id: 'g_otro', title: 'OTRO' }]
+      );
+
+      const items115 = syncedItems.filter((i) => i.activity_key === '1.15');
+      expect(items115).toHaveLength(1); // frecuencia 4 = 1 visita semanal, sin perderla
+
+      expect(summary).toBeDefined();
+      expect(summary.p_payload.tractor_site_not_in_route).toBe(true);
+      expect(summary.p_payload.tractor_days).toBeUndefined();
+    });
+
+    test('06c.2: sitio dentro de la ruta con déficit que le quita su única visita -> la 1.15 no se programa y el déficit queda reportado', async () => {
+      // 6 unidades de 1 visita en la semana 12-oct (festivo lunes: 5 días hábiles) -> g_z (mayor clave) pierde su visita
+      const siteIds = ['g_a', 'g_b', 'g_c', 'g_d', 'g_e', 'g_z'];
+      const { syncedItems, summary } = await materialize(
+        'g_z',
+        '2026-10-12',
+        siteIds.map((id) => ({ group_id: id, visits_per_month: 4 })),
+        siteIds.map((id) => ({ id, title: id.toUpperCase() }))
+      );
+
+      expect(syncedItems.filter((i) => i.activity_key === '1.15')).toHaveLength(0);
+
+      expect(summary).toBeDefined();
+      expect(summary.p_payload.tractor_days).toEqual([]);
+      expect(summary.p_payload.tractor_deficits).toEqual([{ unitKey: 'g_z', missingVisits: 1 }]);
+      expect(summary.p_payload.tractor_site_not_in_route).toBeUndefined();
     });
   });
 });

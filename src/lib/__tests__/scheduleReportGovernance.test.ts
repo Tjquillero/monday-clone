@@ -1,23 +1,64 @@
-declare const vi: any;
-
 let mockUser: any = null;
 let mockBoardMemberResult: any = null;
 
-vi.mock('next/headers', () => ({
-  cookies: vi.fn().mockResolvedValue({
+if (typeof (globalThis as any).Request === 'undefined') {
+  (globalThis as any).Request = class MockRequest {
+    url: string;
+    method: string;
+    body: any;
+    headers: any;
+    constructor(url: string, init?: any) {
+      this.url = url;
+      this.method = init?.method || 'GET';
+      this.body = init?.body;
+      this.headers = new Map(Object.entries(init?.headers || {}));
+    }
+    async json() {
+      return typeof this.body === 'string' ? JSON.parse(this.body) : this.body;
+    }
+  } as any;
+}
+
+jest.mock('next/server', () => ({
+  NextRequest: class MockNextRequest {
+    url: string;
+    method: string;
+    body: any;
+    headers: any;
+    constructor(url: string, init?: any) {
+      this.url = url;
+      this.method = init?.method || 'GET';
+      this.body = init?.body;
+      this.headers = new Map(Object.entries(init?.headers || {}));
+    }
+    async json() {
+      return typeof this.body === 'string' ? JSON.parse(this.body) : this.body;
+    }
+  },
+  NextResponse: {
+    json: (data: any, init?: any) => ({
+      status: init?.status || 200,
+      json: async () => data,
+      data,
+    }),
+  },
+}));
+
+jest.mock('next/headers', () => ({
+  cookies: jest.fn().mockResolvedValue({
     getAll: () => [],
     set: () => {},
   }),
 }));
 
-vi.mock('@supabase/ssr', () => ({
-  createServerClient: vi.fn().mockImplementation(() => ({
+jest.mock('@supabase/ssr', () => ({
+  createServerClient: jest.fn().mockImplementation(() => ({
     auth: {
-      getUser: vi.fn().mockImplementation(async () => ({
+      getUser: jest.fn().mockImplementation(async () => ({
         data: { user: mockUser },
         error: mockUser ? null : { message: 'No user session' },
       })),
-      getSession: vi.fn().mockImplementation(async () => ({
+      getSession: jest.fn().mockImplementation(async () => ({
         data: { session: mockUser ? { user: mockUser } : null },
         error: null,
       })),
@@ -28,7 +69,7 @@ vi.mock('@supabase/ssr', () => ({
           select: () => ({
             eq: () => ({
               eq: () => ({
-                maybeSingle: vi.fn().mockImplementation(async () => ({
+                maybeSingle: jest.fn().mockImplementation(async () => ({
                   data: mockBoardMemberResult,
                   error: null,
                 })),

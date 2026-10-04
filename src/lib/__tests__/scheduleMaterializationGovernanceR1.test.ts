@@ -11,15 +11,9 @@ import { isValidISODateString, persistMaterializationEvent } from '../materializ
 import { syncWeeklyPlanForBoard } from '../weeklyPlanService';
 import { fetchPublishedWeekPlans } from '../../hooks/useWeeklyPlans';
 
-if (typeof (globalThis as any).jest === 'undefined' && typeof (globalThis as any).vi !== 'undefined') {
-  (globalThis as any).jest = (globalThis as any).vi;
-}
-
-const vi = (globalThis as any).vi || (globalThis as any).jest;
-
-vi.mock('../weeklyPlanService', () => ({
+jest.mock('../weeklyPlanService', () => ({
   __esModule: true,
-  syncWeeklyPlanForBoard: ((globalThis as any).vi || (globalThis as any).jest)?.fn().mockResolvedValue({ success: true, count: 1 }),
+  syncWeeklyPlanForBoard: jest.fn().mockResolvedValue({ success: true, count: 1 }),
 }));
 
 describe('Gobernanza R1-b0 + R1-c: Materialización e Integridad de Planes Semanales', () => {

@@ -1,16 +1,10 @@
-if (typeof (globalThis as any).jest === 'undefined' && typeof (globalThis as any).vi !== 'undefined') {
-  (globalThis as any).jest = (globalThis as any).vi;
-}
-
-const mockRunner: any = (globalThis as any).vi || (globalThis as any).jest;
-
 import { launchReportBrowser } from '../reportBrowser';
 
 describe('GATE RPT-01 — launchReportBrowser Governance', () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
-    mockRunner.resetModules?.();
+    jest.resetModules();
     process.env = { ...originalEnv };
   });
 
@@ -22,12 +16,12 @@ describe('GATE RPT-01 — launchReportBrowser Governance', () => {
     delete process.env.VERCEL;
 
     const mockBrowser = {
-      close: mockRunner.fn().mockResolvedValue(undefined),
-      newPage: mockRunner.fn().mockResolvedValue({}),
+      close: jest.fn().mockResolvedValue(undefined),
+      newPage: jest.fn().mockResolvedValue({}),
     };
-    const mockLaunch = mockRunner.fn().mockResolvedValue(mockBrowser);
+    const mockLaunch = jest.fn().mockResolvedValue(mockBrowser);
 
-    mockRunner.doMock('puppeteer', () => ({
+    jest.doMock('puppeteer', () => ({
       __esModule: true,
       default: {
         launch: mockLaunch,
@@ -50,18 +44,18 @@ describe('GATE RPT-01 — launchReportBrowser Governance', () => {
     process.env.VERCEL = '1';
 
     const mockBrowser = {
-      close: mockRunner.fn().mockResolvedValue(undefined),
-      newPage: mockRunner.fn().mockResolvedValue({}),
+      close: jest.fn().mockResolvedValue(undefined),
+      newPage: jest.fn().mockResolvedValue({}),
     };
-    const mockCoreLaunch = mockRunner.fn().mockResolvedValue(mockBrowser);
+    const mockCoreLaunch = jest.fn().mockResolvedValue(mockBrowser);
 
     const mockChromium = {
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--single-process'],
-      executablePath: mockRunner.fn().mockResolvedValue('/tmp/chromium'),
+      executablePath: jest.fn().mockResolvedValue('/tmp/chromium'),
       headless: true,
     };
 
-    mockRunner.doMock('puppeteer-core', () => ({
+    jest.doMock('puppeteer-core', () => ({
       __esModule: true,
       default: {
         launch: mockCoreLaunch,
@@ -69,7 +63,7 @@ describe('GATE RPT-01 — launchReportBrowser Governance', () => {
       launch: mockCoreLaunch,
     }));
 
-    mockRunner.doMock('@sparticuz/chromium', () => ({
+    jest.doMock('@sparticuz/chromium', () => ({
       __esModule: true,
       default: mockChromium,
       ...mockChromium,
@@ -91,9 +85,9 @@ describe('GATE RPT-01 — launchReportBrowser Governance', () => {
   test('3. Launch failures in either environment wrap error with code PDF_BROWSER_LAUNCH_FAILED', async () => {
     delete process.env.VERCEL;
 
-    const mockLaunch = mockRunner.fn().mockRejectedValue(new Error('Failed to start Chrome binary'));
+    const mockLaunch = jest.fn().mockRejectedValue(new Error('Failed to start Chrome binary'));
 
-    mockRunner.doMock('puppeteer', () => ({
+    jest.doMock('puppeteer', () => ({
       __esModule: true,
       default: {
         launch: mockLaunch,
@@ -108,20 +102,20 @@ describe('GATE RPT-01 — launchReportBrowser Governance', () => {
     delete process.env.VERCEL;
 
     const mockPage = {
-      setContent: mockRunner.fn().mockRejectedValue(new Error('DOM content loading timed out')),
-      pdf: mockRunner.fn(),
+      setContent: jest.fn().mockRejectedValue(new Error('DOM content loading timed out')),
+      pdf: jest.fn(),
     };
     const mockBrowser = {
-      newPage: mockRunner.fn().mockResolvedValue(mockPage),
-      close: mockRunner.fn().mockResolvedValue(undefined),
+      newPage: jest.fn().mockResolvedValue(mockPage),
+      close: jest.fn().mockResolvedValue(undefined),
     };
 
-    mockRunner.doMock('puppeteer', () => ({
+    jest.doMock('puppeteer', () => ({
       __esModule: true,
       default: {
-        launch: mockRunner.fn().mockResolvedValue(mockBrowser),
+        launch: jest.fn().mockResolvedValue(mockBrowser),
       },
-      launch: mockRunner.fn().mockResolvedValue(mockBrowser),
+      launch: jest.fn().mockResolvedValue(mockBrowser),
     }));
 
     let browser: any = null;

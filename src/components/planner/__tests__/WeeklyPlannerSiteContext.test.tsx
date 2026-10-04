@@ -68,6 +68,13 @@ jest.mock('next/navigation', () => ({
   }),
 }));
 
+jest.mock('@tanstack/react-query', () => ({
+  ...jest.requireActual('@tanstack/react-query'),
+  useQueryClient: () => ({
+    invalidateQueries: jest.fn(),
+  }),
+}));
+
 const mockSiteA: Group = {
   id: 'site-1',
   title: 'Playa del Country',
